@@ -130,6 +130,41 @@ export interface CssSpoofers {
 }
 
 /**
+ * Speech spoofer settings
+ */
+export interface SpeechSpoofers {
+  synthesis: ProtectionMode;
+}
+
+/**
+ * Permissions spoofer settings
+ */
+export interface PermissionsSpoofers {
+  query: ProtectionMode;
+}
+
+/**
+ * Storage spoofer settings
+ */
+export interface StorageSpoofers {
+  estimate: ProtectionMode;
+}
+
+/**
+ * Math spoofer settings
+ */
+export interface MathSpoofers {
+  functions: ProtectionMode;
+}
+
+/**
+ * Keyboard spoofer settings
+ */
+export interface KeyboardSpoofers {
+  layout: ProtectionMode;
+}
+
+/**
  * All spoofer settings organized by category
  */
 export interface SpooferSettings {
@@ -142,6 +177,11 @@ export interface SpooferSettings {
   network: NetworkSpoofers;
   timing: TimingSpoofers;
   css: CssSpoofers;
+  speech: SpeechSpoofers;
+  permissions: PermissionsSpoofers;
+  storage: StorageSpoofers;
+  math: MathSpoofers;
+  keyboard: KeyboardSpoofers;
 }
 
 /**
@@ -269,7 +309,22 @@ export function createDefaultSettings(): ContainerSettings {
         performance: 'noise',
       },
       css: {
-        mediaQueries: 'off',
+        mediaQueries: 'noise',
+      },
+      speech: {
+        synthesis: 'noise',
+      },
+      permissions: {
+        query: 'noise',
+      },
+      storage: {
+        estimate: 'noise',
+      },
+      math: {
+        functions: 'noise',
+      },
+      keyboard: {
+        layout: 'noise',
       },
     },
     domainRules: {},

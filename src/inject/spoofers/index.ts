@@ -36,6 +36,30 @@ import { initWebRTCSpoofer } from './network/webrtc';
 // Import spoofer modules - Timing
 import { initPerformanceSpoofer } from './timing/performance';
 
+// Import spoofer modules - CSS
+import { initCSSSpoofer } from './css/media-queries';
+
+// Import spoofer modules - Speech
+import { initSpeechSpoofer } from './speech/synthesis';
+
+// Import spoofer modules - Permissions
+import { initPermissionsSpoofer } from './permissions/permissions';
+
+// Import spoofer modules - Storage
+import { initStorageSpoofer } from './storage/storage-estimate';
+
+// Import spoofer modules - Codecs
+import { initCodecSpoofer } from './codecs/codecs';
+
+// Import spoofer modules - Math
+import { initMathSpoofer } from './math/math';
+
+// Import spoofer modules - Network (connection)
+import { initNetworkSpoofer } from './network/connection';
+
+// Import spoofer modules - Keyboard
+import { initKeyboardSpoofer } from './keyboard/keyboard';
+
 /**
  * Global PRNG instance for this page
  * Seeded with container seed + domain for consistent results
@@ -154,5 +178,45 @@ export function initializeSpoofers(config: InjectConfig): void {
     initPerformanceSpoofer(settings.timing.performance, pagePRNG);
   }
 
-  console.log('[ChameleonContainers] Spoofers initialized');
+  // Initialize CSS spoofers - Media Queries
+  if (settings.css.mediaQueries !== 'off') {
+    initCSSSpoofer(settings.css.mediaQueries, pagePRNG);
+  }
+
+  // Initialize speech spoofers - SpeechSynthesis
+  if (settings.speech.synthesis !== 'off') {
+    initSpeechSpoofer(settings.speech.synthesis, pagePRNG);
+  }
+
+  // Initialize permissions spoofers
+  if (settings.permissions.query !== 'off') {
+    initPermissionsSpoofer(settings.permissions.query, pagePRNG);
+  }
+
+  // Initialize storage spoofers
+  if (settings.storage.estimate !== 'off') {
+    initStorageSpoofer(settings.storage.estimate, pagePRNG);
+  }
+
+  // Initialize codec spoofers
+  if (settings.audio.codecs !== 'off') {
+    initCodecSpoofer(settings.audio.codecs, pagePRNG);
+  }
+
+  // Initialize math spoofers
+  if (settings.math.functions !== 'off') {
+    initMathSpoofer(settings.math.functions, pagePRNG);
+  }
+
+  // Initialize network connection spoofers
+  if (settings.network.connection !== 'off') {
+    initNetworkSpoofer(settings.network.connection, pagePRNG);
+  }
+
+  // Initialize keyboard spoofers
+  if (settings.keyboard.layout !== 'off') {
+    initKeyboardSpoofer(settings.keyboard.layout, pagePRNG);
+  }
+
+  console.log('[ContainerShield] All spoofers initialized');
 }

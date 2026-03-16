@@ -11,18 +11,31 @@ Each Firefox container gets a unique, cryptographically-isolated fingerprint tha
 - **Profile uniqueness**: No two containers share the same fingerprint signature
 - **IP isolation**: Warns when accessing the same IP from different containers
 
-### Fingerprint Spoofing (15+ APIs)
+### Fingerprint Spoofing (25+ APIs)
 
 | Category | Spoofed APIs |
 |----------|-------------|
 | **Graphics** | Canvas 2D, WebGL, WebGL2, SVG, DOMRect, TextMetrics |
-| **Audio** | AudioContext, AnalyserNode |
+| **Audio** | AudioContext, AnalyserNode, Codec detection |
 | **Hardware** | Screen dimensions, deviceMemory, hardwareConcurrency, Battery, MediaDevices |
 | **Navigator** | User-Agent, Platform, Languages, Plugins, Client Hints |
 | **Timezone** | Date.getTimezoneOffset, Intl.DateTimeFormat |
 | **Fonts** | Font enumeration detection |
-| **Network** | WebRTC IP leak protection |
+| **Network** | WebRTC IP leak, NetworkInformation API |
 | **Timing** | performance.now() precision reduction |
+| **CSS** | Media queries (prefers-color-scheme, etc.) |
+| **Speech** | SpeechSynthesis voices |
+| **Permissions** | Permissions API queries |
+| **Storage** | StorageManager.estimate() |
+| **Math** | Math function precision |
+| **Keyboard** | Keyboard layout detection |
+
+### Fingerprint Access Monitor
+Container Shield tracks which fingerprinting APIs websites try to access:
+- Real-time logging of API access attempts
+- Categorized by fingerprinting technique
+- Shows whether each access was blocked or spoofed
+- Helps identify tracking scripts
 
 ### Protection Modes
 - **Off**: No protection
