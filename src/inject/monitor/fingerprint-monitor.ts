@@ -43,6 +43,8 @@ export const API_CATEGORIES: Record<string, string> = {
   'AudioContext.createAnalyser': 'Audio',
   'AudioContext.createOscillator': 'Audio',
   'AnalyserNode.getFloatFrequencyData': 'Audio',
+  'AudioContext.baseLatency': 'Audio Latency',
+  'AudioContext.outputLatency': 'Audio Latency',
   'OfflineAudioContext.startRendering': 'Offline Audio',
   'OfflineAudioContext': 'Offline Audio',
 
@@ -53,6 +55,15 @@ export const API_CATEGORIES: Record<string, string> = {
   'window.devicePixelRatio': 'Screen',
   'window.innerWidth': 'Screen',
   'window.innerHeight': 'Screen',
+  'window.screenX': 'Screen Frame',
+  'window.screenY': 'Screen Frame',
+  'window.screenLeft': 'Screen Frame',
+  'window.screenTop': 'Screen Frame',
+  'window.outerWidth': 'Screen Frame',
+  'window.outerHeight': 'Screen Frame',
+  'screen.orientation': 'Screen Orientation',
+  'screen.orientation.type': 'Screen Orientation',
+  'screen.orientation.angle': 'Screen Orientation',
 
   // Navigator
   'navigator.userAgent': 'Navigator',
@@ -101,10 +112,44 @@ export const API_CATEGORIES: Record<string, string> = {
   'StorageManager.estimate': 'Storage',
   'IDBFactory.databases': 'IndexedDB',
   'indexedDB.databases': 'IndexedDB',
+  'openDatabase': 'WebSQL',
 
   // Permissions
   'navigator.permissions.query': 'Permissions',
   'Permissions.query': 'Permissions',
+  'Notification.permission': 'Notification',
+  'Notification.requestPermission': 'Notification',
+  'Notification.maxActions': 'Notification',
+
+  // Clipboard
+  'navigator.clipboard': 'Clipboard',
+  'navigator.clipboard.readText': 'Clipboard',
+  'navigator.clipboard.read': 'Clipboard',
+  'navigator.clipboard.writeText': 'Clipboard',
+  'navigator.clipboard.write': 'Clipboard',
+
+  // Vibration
+  'navigator.vibrate': 'Vibration',
+
+  // Sensors
+  'Accelerometer': 'Sensors',
+  'Accelerometer.constructor': 'Sensors',
+  'Accelerometer.start': 'Sensors',
+  'LinearAccelerationSensor': 'Sensors',
+  'GravitySensor': 'Sensors',
+  'Gyroscope': 'Sensors',
+  'Magnetometer': 'Sensors',
+  'AbsoluteOrientationSensor': 'Sensors',
+  'RelativeOrientationSensor': 'Sensors',
+  'AmbientLightSensor': 'Sensors',
+  'DeviceMotionEvent': 'Sensors',
+  'DeviceOrientationEvent': 'Sensors',
+
+  // Payment
+  'ApplePaySession.canMakePayments': 'Apple Pay',
+  'ApplePaySession.canMakePaymentsWithActiveCard': 'Apple Pay',
+  'ApplePaySession.supportsVersion': 'Apple Pay',
+  'PaymentRequest': 'Apple Pay',
 
   // Network
   'navigator.connection': 'Network',
@@ -225,6 +270,15 @@ export const CATEGORY_TO_SETTING: Record<string, { category: string; setting: st
   'Serial': { category: 'devices', setting: 'serial' },
   'HID': { category: 'devices', setting: 'hid' },
   'Features': { category: 'features', setting: 'detection' },
+  'Screen Frame': { category: 'hardware', setting: 'screenFrame' },
+  'Screen Orientation': { category: 'hardware', setting: 'orientation' },
+  'Sensors': { category: 'hardware', setting: 'sensors' },
+  'Audio Latency': { category: 'audio', setting: 'latency' },
+  'Clipboard': { category: 'navigator', setting: 'clipboard' },
+  'Vibration': { category: 'navigator', setting: 'vibration' },
+  'Notification': { category: 'permissions', setting: 'notification' },
+  'WebSQL': { category: 'storage', setting: 'webSQL' },
+  'Apple Pay': { category: 'payment', setting: 'applePay' },
 };
 
 /**

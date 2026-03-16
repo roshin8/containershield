@@ -18,16 +18,22 @@ import { initSVGSpoofer } from './graphics/svg';
 // Import spoofer modules - Audio
 import { initAudioSpoofer } from './audio/audio-context';
 import { initOfflineAudioSpoofer } from './audio/offline-audio';
+import { initAudioLatencySpoofer } from './audio/audio-latency';
 
 // Import spoofer modules - Hardware
 import { initScreenSpoofer } from './hardware/screen';
+import { initScreenFrameSpoofer } from './hardware/screen-frame';
+import { initScreenOrientationSpoofer } from './hardware/screen-orientation';
 import { initDeviceSpoofer } from './hardware/device';
 import { initBatterySpoofer } from './hardware/battery';
 import { initMediaDevicesSpoofer } from './hardware/media-devices';
 import { initTouchSpoofer } from './hardware/touch';
+import { initSensorSpoofer } from './hardware/sensors';
 
 // Import spoofer modules - Navigator
 import { initNavigatorSpoofer } from './navigator/user-agent';
+import { initClipboardSpoofer } from './navigator/clipboard';
+import { initVibrationSpoofer } from './navigator/vibration';
 
 // Import spoofer modules - Timezone
 import { initTimezoneSpoofer } from './timezone/intl';
@@ -51,10 +57,12 @@ import { initSpeechSpoofer } from './speech/synthesis';
 
 // Import spoofer modules - Permissions
 import { initPermissionsSpoofer } from './permissions/permissions';
+import { initNotificationSpoofer } from './permissions/notification';
 
 // Import spoofer modules - Storage
 import { initStorageSpoofer } from './storage/storage-estimate';
 import { initIndexedDBSpoofer } from './storage/indexeddb';
+import { initWebSQLSpoofer } from './storage/websql';
 
 // Import spoofer modules - Codecs
 import { initCodecSpoofer } from './codecs/codecs';
@@ -89,6 +97,9 @@ import { initUSBSpoofer, initSerialSpoofer, initHIDSpoofer } from './devices/usb
 
 // Import spoofer modules - Features
 import { initFeatureSpoofer } from './features/feature-detection';
+
+// Import spoofer modules - Payment
+import { initApplePaySpoofer } from './payment/apple-pay';
 
 // Import fingerprint monitor
 import { initFingerprintMonitor, getAccessLog, getRecommendations } from '../monitor/fingerprint-monitor';
@@ -343,10 +354,55 @@ export function initializeSpoofers(config: InjectConfig): void {
     initFeatureSpoofer(settings.features.detection, pagePRNG);
   }
 
+  // Initialize new spoofers - Screen Frame
+  if (settings.hardware.screenFrame !== 'off') {
+    initScreenFrameSpoofer(settings.hardware.screenFrame, pagePRNG);
+  }
+
+  // Initialize new spoofers - Screen Orientation
+  if (settings.hardware.orientation !== 'off') {
+    initScreenOrientationSpoofer(settings.hardware.orientation, pagePRNG);
+  }
+
+  // Initialize new spoofers - Sensors
+  if (settings.hardware.sensors !== 'off') {
+    initSensorSpoofer(settings.hardware.sensors, pagePRNG);
+  }
+
+  // Initialize new spoofers - Audio Latency
+  if (settings.audio.latency !== 'off') {
+    initAudioLatencySpoofer(settings.audio.latency, pagePRNG);
+  }
+
+  // Initialize new spoofers - Clipboard
+  if (settings.navigator.clipboard !== 'off') {
+    initClipboardSpoofer(settings.navigator.clipboard, pagePRNG);
+  }
+
+  // Initialize new spoofers - Vibration
+  if (settings.navigator.vibration !== 'off') {
+    initVibrationSpoofer(settings.navigator.vibration, pagePRNG);
+  }
+
+  // Initialize new spoofers - Notification
+  if (settings.permissions.notification !== 'off') {
+    initNotificationSpoofer(settings.permissions.notification, pagePRNG);
+  }
+
+  // Initialize new spoofers - WebSQL
+  if (settings.storage.webSQL !== 'off') {
+    initWebSQLSpoofer(settings.storage.webSQL, pagePRNG);
+  }
+
+  // Initialize new spoofers - Apple Pay
+  if (settings.payment.applePay !== 'off') {
+    initApplePaySpoofer(settings.payment.applePay, pagePRNG);
+  }
+
   // Initialize fingerprint access monitor
   initFingerprintMonitor();
 
-  console.log('[ContainerShield] All spoofers initialized (40+ APIs protected)');
+  console.log('[ContainerShield] All spoofers initialized (50+ APIs protected)');
 }
 
 /**

@@ -71,6 +71,7 @@ export interface GraphicsSpoofers {
 export interface AudioSpoofers {
   audioContext: ProtectionMode;
   offlineAudio: ProtectionMode;
+  latency: ProtectionMode;
   codecs: ProtectionMode;
 }
 
@@ -79,12 +80,15 @@ export interface AudioSpoofers {
  */
 export interface HardwareSpoofers {
   screen: ProtectionMode;
+  screenFrame: ProtectionMode;
+  orientation: ProtectionMode;
   deviceMemory: ProtectionMode;
   hardwareConcurrency: ProtectionMode;
   mediaDevices: ProtectionMode;
   battery: ProtectionMode;
   gpu: ProtectionMode;
   touch: ProtectionMode;
+  sensors: ProtectionMode;
 }
 
 /**
@@ -95,6 +99,8 @@ export interface NavigatorSpoofers {
   languages: ProtectionMode;
   plugins: ProtectionMode;
   clientHints: ProtectionMode;
+  clipboard: ProtectionMode;
+  vibration: ProtectionMode;
 }
 
 /**
@@ -147,6 +153,7 @@ export interface SpeechSpoofers {
  */
 export interface PermissionsSpoofers {
   query: ProtectionMode;
+  notification: ProtectionMode;
 }
 
 /**
@@ -155,6 +162,7 @@ export interface PermissionsSpoofers {
 export interface StorageSpoofers {
   estimate: ProtectionMode;
   indexedDB: ProtectionMode;
+  webSQL: ProtectionMode;
 }
 
 /**
@@ -227,6 +235,13 @@ export interface FeaturesSpoofers {
 }
 
 /**
+ * Payment spoofer settings
+ */
+export interface PaymentSpoofers {
+  applePay: ProtectionMode;
+}
+
+/**
  * All spoofer settings organized by category
  */
 export interface SpooferSettings {
@@ -251,6 +266,7 @@ export interface SpooferSettings {
   crypto: CryptoSpoofers;
   devices: DevicesSpoofers;
   features: FeaturesSpoofers;
+  payment: PaymentSpoofers;
 }
 
 /**
@@ -351,22 +367,28 @@ export function createDefaultSettings(): ContainerSettings {
       audio: {
         audioContext: 'noise',
         offlineAudio: 'noise',
+        latency: 'noise',
         codecs: 'off',
       },
       hardware: {
         screen: 'noise',
+        screenFrame: 'noise',
+        orientation: 'noise',
         deviceMemory: 'noise',
         hardwareConcurrency: 'noise',
         mediaDevices: 'noise',
         battery: 'block',
         gpu: 'noise',
         touch: 'noise',
+        sensors: 'block',
       },
       navigator: {
         userAgent: 'noise',
         languages: 'noise',
         plugins: 'noise',
         clientHints: 'noise',
+        clipboard: 'block',
+        vibration: 'noise',
       },
       timezone: {
         intl: 'noise',
@@ -391,10 +413,12 @@ export function createDefaultSettings(): ContainerSettings {
       },
       permissions: {
         query: 'noise',
+        notification: 'noise',
       },
       storage: {
         estimate: 'noise',
         indexedDB: 'noise',
+        webSQL: 'block',
       },
       math: {
         functions: 'noise',
@@ -428,6 +452,9 @@ export function createDefaultSettings(): ContainerSettings {
       },
       features: {
         detection: 'noise',
+      },
+      payment: {
+        applePay: 'block',
       },
     },
     domainRules: {},
