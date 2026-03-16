@@ -23,7 +23,8 @@ export const API_CATEGORIES: Record<string, string> = {
   'HTMLCanvasElement.toDataURL': 'Canvas',
   'HTMLCanvasElement.toBlob': 'Canvas',
   'CanvasRenderingContext2D.getImageData': 'Canvas',
-  'OffscreenCanvas.convertToBlob': 'Canvas',
+  'OffscreenCanvas.convertToBlob': 'OffscreenCanvas',
+  'OffscreenCanvas.getContext': 'OffscreenCanvas',
 
   // WebGL
   'WebGLRenderingContext.getParameter': 'WebGL',
@@ -31,12 +32,19 @@ export const API_CATEGORIES: Record<string, string> = {
   'WebGLRenderingContext.getExtension': 'WebGL',
   'WebGLRenderingContext.getSupportedExtensions': 'WebGL',
   'WEBGL_debug_renderer_info': 'WebGL',
+  'WebGLRenderingContext.getShaderPrecisionFormat': 'WebGL Shaders',
+  'WebGL2RenderingContext.getShaderPrecisionFormat': 'WebGL Shaders',
+
+  // WebGPU
+  'navigator.gpu.requestAdapter': 'WebGPU',
+  'GPUAdapter.requestAdapterInfo': 'WebGPU',
 
   // Audio
   'AudioContext.createAnalyser': 'Audio',
   'AudioContext.createOscillator': 'Audio',
   'AnalyserNode.getFloatFrequencyData': 'Audio',
-  'OfflineAudioContext.startRendering': 'Audio',
+  'OfflineAudioContext.startRendering': 'Offline Audio',
+  'OfflineAudioContext': 'Offline Audio',
 
   // Screen/Display
   'screen.width': 'Screen',
@@ -56,6 +64,14 @@ export const API_CATEGORIES: Record<string, string> = {
   'navigator.mimeTypes': 'Navigator',
   'navigator.userAgentData': 'Client Hints',
   'navigator.userAgentData.getHighEntropyValues': 'Client Hints',
+  'navigator.maxTouchPoints': 'Touch',
+  'navigator.webdriver': 'Features',
+  'navigator.doNotTrack': 'Features',
+  'navigator.globalPrivacyControl': 'Features',
+  'navigator.cookieEnabled': 'Features',
+  'navigator.onLine': 'Features',
+  'navigator.javaEnabled': 'Features',
+  'navigator.pdfViewerEnabled': 'Features',
 
   // Timing
   'performance.now': 'Timing',
@@ -69,6 +85,7 @@ export const API_CATEGORIES: Record<string, string> = {
   // Fonts
   'FontFace': 'Fonts',
   'document.fonts': 'Fonts',
+  'CSS font detection': 'CSS Fonts',
 
   // Media
   'navigator.mediaDevices.enumerateDevices': 'Media Devices',
@@ -82,6 +99,8 @@ export const API_CATEGORIES: Record<string, string> = {
   // Storage
   'navigator.storage.estimate': 'Storage',
   'StorageManager.estimate': 'Storage',
+  'IDBFactory.databases': 'IndexedDB',
+  'indexedDB.databases': 'IndexedDB',
 
   // Permissions
   'navigator.permissions.query': 'Permissions',
@@ -98,18 +117,114 @@ export const API_CATEGORIES: Record<string, string> = {
   // Intl
   'Intl.DateTimeFormat': 'Timezone',
   'Intl.DateTimeFormat.resolvedOptions': 'Timezone',
+  'Intl.ListFormat': 'Intl',
+  'Intl.RelativeTimeFormat': 'Intl',
+  'Intl.PluralRules': 'Intl',
+  'Intl.Segmenter': 'Intl',
+  'Intl.DisplayNames': 'Intl',
+  'Intl.supportedValuesOf': 'Intl',
 
   // Math
   'Math.tan': 'Math',
   'Math.sin': 'Math',
   'Math.cos': 'Math',
+  'Math.exp': 'Math',
+  'Math.log': 'Math',
+  'Math.acos': 'Math',
 
   // CSS
   'matchMedia': 'CSS',
   'getComputedStyle': 'CSS',
+  'CSS.supports': 'Features',
+  'document.implementation.hasFeature': 'Features',
 
   // Keyboard
   'navigator.keyboard.getLayoutMap': 'Keyboard',
+
+  // Touch
+  'TouchEvent': 'Touch',
+
+  // Workers
+  'Worker': 'Workers',
+  'SharedWorker': 'Workers',
+
+  // Errors
+  'Error.stack': 'Errors',
+
+  // Rendering
+  'emoji rendering': 'Emoji',
+  'MathML rendering': 'MathML',
+
+  // Crypto
+  'crypto.subtle.digest': 'Crypto',
+  'crypto.getRandomValues': 'Crypto',
+
+  // Devices
+  'navigator.getGamepads': 'Gamepad',
+  'Gamepad': 'Gamepad',
+  'navigator.requestMIDIAccess': 'MIDI',
+  'MIDIAccess': 'MIDI',
+  'navigator.bluetooth': 'Bluetooth',
+  'navigator.bluetooth.getAvailability': 'Bluetooth',
+  'navigator.bluetooth.requestDevice': 'Bluetooth',
+  'navigator.bluetooth.getDevices': 'Bluetooth',
+  'navigator.usb': 'USB',
+  'navigator.usb.getDevices': 'USB',
+  'navigator.usb.requestDevice': 'USB',
+  'navigator.serial': 'Serial',
+  'navigator.serial.getPorts': 'Serial',
+  'navigator.serial.requestPort': 'Serial',
+  'navigator.hid': 'HID',
+  'navigator.hid.getDevices': 'HID',
+  'navigator.hid.requestDevice': 'HID',
+};
+
+// Map API categories to settings paths
+export const CATEGORY_TO_SETTING: Record<string, { category: string; setting: string }> = {
+  'Canvas': { category: 'graphics', setting: 'canvas' },
+  'OffscreenCanvas': { category: 'graphics', setting: 'offscreenCanvas' },
+  'WebGL': { category: 'graphics', setting: 'webgl' },
+  'WebGL Shaders': { category: 'graphics', setting: 'webglShaders' },
+  'WebGPU': { category: 'graphics', setting: 'webgpu' },
+  'DOMRect': { category: 'graphics', setting: 'domRect' },
+  'TextMetrics': { category: 'graphics', setting: 'textMetrics' },
+  'SVG': { category: 'graphics', setting: 'svg' },
+  'Audio': { category: 'audio', setting: 'audioContext' },
+  'Offline Audio': { category: 'audio', setting: 'offlineAudio' },
+  'Codecs': { category: 'audio', setting: 'codecs' },
+  'Screen': { category: 'hardware', setting: 'screen' },
+  'Hardware': { category: 'hardware', setting: 'deviceMemory' },
+  'Media Devices': { category: 'hardware', setting: 'mediaDevices' },
+  'Battery': { category: 'hardware', setting: 'battery' },
+  'Touch': { category: 'hardware', setting: 'touch' },
+  'Navigator': { category: 'navigator', setting: 'userAgent' },
+  'Client Hints': { category: 'navigator', setting: 'clientHints' },
+  'Timezone': { category: 'timezone', setting: 'intl' },
+  'Fonts': { category: 'fonts', setting: 'enumeration' },
+  'CSS Fonts': { category: 'fonts', setting: 'cssDetection' },
+  'WebRTC': { category: 'network', setting: 'webrtc' },
+  'Network': { category: 'network', setting: 'connection' },
+  'Timing': { category: 'timing', setting: 'performance' },
+  'CSS': { category: 'css', setting: 'mediaQueries' },
+  'Speech': { category: 'speech', setting: 'synthesis' },
+  'Permissions': { category: 'permissions', setting: 'query' },
+  'Storage': { category: 'storage', setting: 'estimate' },
+  'IndexedDB': { category: 'storage', setting: 'indexedDB' },
+  'Math': { category: 'math', setting: 'functions' },
+  'Keyboard': { category: 'keyboard', setting: 'layout' },
+  'Workers': { category: 'workers', setting: 'fingerprint' },
+  'Errors': { category: 'errors', setting: 'stackTrace' },
+  'Emoji': { category: 'rendering', setting: 'emoji' },
+  'MathML': { category: 'rendering', setting: 'mathml' },
+  'Intl': { category: 'intl', setting: 'apis' },
+  'Crypto': { category: 'crypto', setting: 'webCrypto' },
+  'Gamepad': { category: 'devices', setting: 'gamepad' },
+  'MIDI': { category: 'devices', setting: 'midi' },
+  'Bluetooth': { category: 'devices', setting: 'bluetooth' },
+  'USB': { category: 'devices', setting: 'usb' },
+  'Serial': { category: 'devices', setting: 'serial' },
+  'HID': { category: 'devices', setting: 'hid' },
+  'Features': { category: 'features', setting: 'detection' },
 };
 
 /**
@@ -212,3 +327,69 @@ setInterval(() => {
 window.addEventListener('beforeunload', () => {
   reportToBackground();
 });
+
+/**
+ * Get recommendations for spoofers that should be enabled
+ * Returns APIs that were accessed but have protection disabled
+ */
+export function getRecommendations(
+  settings: any
+): { api: string; category: string; setting: string }[] {
+  const recommendations: { api: string; category: string; setting: string }[] = [];
+  const seenCategories = new Set<string>();
+
+  for (const access of accessLog) {
+    // Skip if we've already recommended this category
+    if (seenCategories.has(access.category)) continue;
+
+    const settingInfo = CATEGORY_TO_SETTING[access.category];
+    if (!settingInfo) continue;
+
+    // Check if the spoofer is disabled
+    const { category, setting } = settingInfo;
+    const spooferSettings = settings[category];
+    if (spooferSettings && spooferSettings[setting] === 'off') {
+      recommendations.push({
+        api: access.api,
+        category: access.category,
+        setting: `${category}.${setting}`,
+      });
+      seenCategories.add(access.category);
+    }
+  }
+
+  return recommendations;
+}
+
+/**
+ * Get unique accessed categories for quick overview
+ */
+export function getAccessedCategories(): string[] {
+  const categories = new Set<string>();
+  for (const access of accessLog) {
+    categories.add(access.category);
+  }
+  return Array.from(categories);
+}
+
+/**
+ * Initialize the fingerprint monitor
+ */
+export function initFingerprintMonitor(): void {
+  console.log('[ContainerShield] Fingerprint access monitor initialized');
+
+  // Listen for requests from popup/content script
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'CONTAINER_SHIELD_GET_REPORT') {
+      reportToBackground();
+    }
+    if (event.data?.type === 'CONTAINER_SHIELD_GET_RECOMMENDATIONS') {
+      const recommendations = getRecommendations(event.data.settings);
+      window.postMessage({
+        type: 'CONTAINER_SHIELD_RECOMMENDATIONS',
+        recommendations,
+        accessedCategories: getAccessedCategories(),
+      }, '*');
+    }
+  });
+}

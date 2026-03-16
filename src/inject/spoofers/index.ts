@@ -7,19 +7,24 @@ import { PRNG, base64ToUint8Array } from '@/lib/crypto';
 
 // Import spoofer modules - Graphics
 import { initCanvasSpoofer } from './graphics/canvas';
+import { initOffscreenCanvasSpoofer } from './canvas/offscreen';
 import { initWebGLSpoofer } from './graphics/webgl';
+import { initWebGLShaderSpoofer } from './graphics/webgl-shaders';
+import { initWebGPUSpoofer } from './graphics/webgpu';
 import { initDOMRectSpoofer } from './graphics/domrect';
 import { initTextMetricsSpoofer } from './graphics/text-metrics';
 import { initSVGSpoofer } from './graphics/svg';
 
 // Import spoofer modules - Audio
 import { initAudioSpoofer } from './audio/audio-context';
+import { initOfflineAudioSpoofer } from './audio/offline-audio';
 
 // Import spoofer modules - Hardware
 import { initScreenSpoofer } from './hardware/screen';
 import { initDeviceSpoofer } from './hardware/device';
 import { initBatterySpoofer } from './hardware/battery';
 import { initMediaDevicesSpoofer } from './hardware/media-devices';
+import { initTouchSpoofer } from './hardware/touch';
 
 // Import spoofer modules - Navigator
 import { initNavigatorSpoofer } from './navigator/user-agent';
@@ -29,9 +34,11 @@ import { initTimezoneSpoofer } from './timezone/intl';
 
 // Import spoofer modules - Fonts
 import { initFontSpoofer } from './fonts/font-enum';
+import { initCSSFontSpoofer } from './fonts/css-fonts';
 
 // Import spoofer modules - Network
 import { initWebRTCSpoofer } from './network/webrtc';
+import { initNetworkSpoofer } from './network/connection';
 
 // Import spoofer modules - Timing
 import { initPerformanceSpoofer } from './timing/performance';
@@ -47,6 +54,7 @@ import { initPermissionsSpoofer } from './permissions/permissions';
 
 // Import spoofer modules - Storage
 import { initStorageSpoofer } from './storage/storage-estimate';
+import { initIndexedDBSpoofer } from './storage/indexeddb';
 
 // Import spoofer modules - Codecs
 import { initCodecSpoofer } from './codecs/codecs';
@@ -54,11 +62,36 @@ import { initCodecSpoofer } from './codecs/codecs';
 // Import spoofer modules - Math
 import { initMathSpoofer } from './math/math';
 
-// Import spoofer modules - Network (connection)
-import { initNetworkSpoofer } from './network/connection';
-
 // Import spoofer modules - Keyboard
 import { initKeyboardSpoofer } from './keyboard/keyboard';
+
+// Import spoofer modules - Workers
+import { initWorkerSpoofer } from './workers/worker-fingerprint';
+
+// Import spoofer modules - Errors
+import { initErrorSpoofer } from './errors/stack-trace';
+
+// Import spoofer modules - Rendering
+import { initEmojiSpoofer } from './rendering/emoji';
+import { initMathMLSpoofer } from './rendering/mathml';
+
+// Import spoofer modules - Intl
+import { initIntlSpoofer } from './intl/intl-apis';
+
+// Import spoofer modules - Crypto
+import { initCryptoSpoofer } from './crypto/webcrypto';
+
+// Import spoofer modules - Devices
+import { initGamepadSpoofer } from './devices/gamepad';
+import { initMIDISpoofer } from './devices/midi';
+import { initBluetoothSpoofer } from './devices/bluetooth';
+import { initUSBSpoofer, initSerialSpoofer, initHIDSpoofer } from './devices/usb-serial';
+
+// Import spoofer modules - Features
+import { initFeatureSpoofer } from './features/feature-detection';
+
+// Import fingerprint monitor
+import { initFingerprintMonitor, getAccessLog, getRecommendations } from '../monitor/fingerprint-monitor';
 
 /**
  * Global PRNG instance for this page
@@ -218,5 +251,117 @@ export function initializeSpoofers(config: InjectConfig): void {
     initKeyboardSpoofer(settings.keyboard.layout, pagePRNG);
   }
 
-  console.log('[ContainerShield] All spoofers initialized');
+  // Initialize new spoofers - Graphics (OffscreenCanvas, WebGL Shaders, WebGPU)
+  if (settings.graphics.offscreenCanvas !== 'off') {
+    initOffscreenCanvasSpoofer(settings.graphics.offscreenCanvas, pagePRNG);
+  }
+
+  if (settings.graphics.webglShaders !== 'off') {
+    initWebGLShaderSpoofer(settings.graphics.webglShaders, pagePRNG);
+  }
+
+  if (settings.graphics.webgpu !== 'off') {
+    initWebGPUSpoofer(settings.graphics.webgpu, pagePRNG);
+  }
+
+  // Initialize audio spoofers - OfflineAudioContext
+  if (settings.audio.offlineAudio !== 'off') {
+    initOfflineAudioSpoofer(settings.audio.offlineAudio, pagePRNG);
+  }
+
+  // Initialize hardware spoofers - Touch
+  if (settings.hardware.touch !== 'off') {
+    initTouchSpoofer(settings.hardware.touch, pagePRNG);
+  }
+
+  // Initialize font spoofers - CSS detection
+  if (settings.fonts.cssDetection !== 'off') {
+    initCSSFontSpoofer(settings.fonts.cssDetection, pagePRNG);
+  }
+
+  // Initialize storage spoofers - IndexedDB
+  if (settings.storage.indexedDB !== 'off') {
+    initIndexedDBSpoofer(settings.storage.indexedDB, pagePRNG);
+  }
+
+  // Initialize worker spoofers
+  if (settings.workers.fingerprint !== 'off') {
+    initWorkerSpoofer(settings.workers.fingerprint, pagePRNG);
+  }
+
+  // Initialize error spoofers
+  if (settings.errors.stackTrace !== 'off') {
+    initErrorSpoofer(settings.errors.stackTrace, pagePRNG);
+  }
+
+  // Initialize rendering spoofers - Emoji and MathML
+  if (settings.rendering.emoji !== 'off') {
+    initEmojiSpoofer(settings.rendering.emoji, pagePRNG);
+  }
+
+  if (settings.rendering.mathml !== 'off') {
+    initMathMLSpoofer(settings.rendering.mathml, pagePRNG);
+  }
+
+  // Initialize Intl spoofers
+  if (settings.intl.apis !== 'off') {
+    initIntlSpoofer(settings.intl.apis, pagePRNG);
+  }
+
+  // Initialize crypto spoofers
+  if (settings.crypto.webCrypto !== 'off') {
+    initCryptoSpoofer(settings.crypto.webCrypto, pagePRNG);
+  }
+
+  // Initialize device spoofers - Gamepad, MIDI, Bluetooth, USB, Serial, HID
+  if (settings.devices.gamepad !== 'off') {
+    initGamepadSpoofer(settings.devices.gamepad, pagePRNG);
+  }
+
+  if (settings.devices.midi !== 'off') {
+    initMIDISpoofer(settings.devices.midi, pagePRNG);
+  }
+
+  if (settings.devices.bluetooth !== 'off') {
+    initBluetoothSpoofer(settings.devices.bluetooth, pagePRNG);
+  }
+
+  if (settings.devices.usb !== 'off') {
+    initUSBSpoofer(settings.devices.usb, pagePRNG);
+  }
+
+  if (settings.devices.serial !== 'off') {
+    initSerialSpoofer(settings.devices.serial, pagePRNG);
+  }
+
+  if (settings.devices.hid !== 'off') {
+    initHIDSpoofer(settings.devices.hid, pagePRNG);
+  }
+
+  // Initialize feature detection spoofers
+  if (settings.features.detection !== 'off') {
+    initFeatureSpoofer(settings.features.detection, pagePRNG);
+  }
+
+  // Initialize fingerprint access monitor
+  initFingerprintMonitor();
+
+  console.log('[ContainerShield] All spoofers initialized (40+ APIs protected)');
+}
+
+/**
+ * Get fingerprint access recommendations
+ * Returns APIs that were accessed but have protection disabled
+ */
+export function getSpoofingRecommendations(
+  settings: InjectConfig['settings']
+): { api: string; category: string; setting: string }[] {
+  return getRecommendations(settings);
+}
+
+/**
+ * Get all fingerprint access logs for the current page
+ */
+export function getFingerprintAccessLog() {
+  return getAccessLog();
 }

@@ -55,8 +55,11 @@ export interface HeaderConfig {
  */
 export interface GraphicsSpoofers {
   canvas: ProtectionMode;
+  offscreenCanvas: ProtectionMode;
   webgl: ProtectionMode;
   webgl2: ProtectionMode;
+  webglShaders: ProtectionMode;
+  webgpu: ProtectionMode;
   svg: ProtectionMode;
   domRect: ProtectionMode;
   textMetrics: ProtectionMode;
@@ -67,6 +70,7 @@ export interface GraphicsSpoofers {
  */
 export interface AudioSpoofers {
   audioContext: ProtectionMode;
+  offlineAudio: ProtectionMode;
   codecs: ProtectionMode;
 }
 
@@ -80,6 +84,7 @@ export interface HardwareSpoofers {
   mediaDevices: ProtectionMode;
   battery: ProtectionMode;
   gpu: ProtectionMode;
+  touch: ProtectionMode;
 }
 
 /**
@@ -105,6 +110,7 @@ export interface TimezoneSpoofers {
  */
 export interface FontSpoofers {
   enumeration: ProtectionMode;
+  cssDetection: ProtectionMode;
 }
 
 /**
@@ -148,6 +154,7 @@ export interface PermissionsSpoofers {
  */
 export interface StorageSpoofers {
   estimate: ProtectionMode;
+  indexedDB: ProtectionMode;
 }
 
 /**
@@ -162,6 +169,61 @@ export interface MathSpoofers {
  */
 export interface KeyboardSpoofers {
   layout: ProtectionMode;
+}
+
+/**
+ * Workers spoofer settings
+ */
+export interface WorkersSpoofers {
+  fingerprint: ProtectionMode;
+}
+
+/**
+ * Errors spoofer settings
+ */
+export interface ErrorsSpoofers {
+  stackTrace: ProtectionMode;
+}
+
+/**
+ * Rendering spoofer settings
+ */
+export interface RenderingSpoofers {
+  emoji: ProtectionMode;
+  mathml: ProtectionMode;
+}
+
+/**
+ * Intl spoofer settings
+ */
+export interface IntlSpoofers {
+  apis: ProtectionMode;
+}
+
+/**
+ * Crypto spoofer settings
+ */
+export interface CryptoSpoofers {
+  webCrypto: ProtectionMode;
+}
+
+/**
+ * Devices spoofer settings
+ */
+export interface DevicesSpoofers {
+  gamepad: ProtectionMode;
+  midi: ProtectionMode;
+  bluetooth: ProtectionMode;
+  usb: ProtectionMode;
+  serial: ProtectionMode;
+  hid: ProtectionMode;
+}
+
+/**
+ * Features spoofer settings
+ */
+export interface FeaturesSpoofers {
+  detection: ProtectionMode;
 }
 
 /**
@@ -182,6 +244,13 @@ export interface SpooferSettings {
   storage: StorageSpoofers;
   math: MathSpoofers;
   keyboard: KeyboardSpoofers;
+  workers: WorkersSpoofers;
+  errors: ErrorsSpoofers;
+  rendering: RenderingSpoofers;
+  intl: IntlSpoofers;
+  crypto: CryptoSpoofers;
+  devices: DevicesSpoofers;
+  features: FeaturesSpoofers;
 }
 
 /**
@@ -270,14 +339,18 @@ export function createDefaultSettings(): ContainerSettings {
     spoofers: {
       graphics: {
         canvas: 'noise',
+        offscreenCanvas: 'noise',
         webgl: 'noise',
         webgl2: 'noise',
+        webglShaders: 'noise',
+        webgpu: 'noise',
         svg: 'noise',
         domRect: 'noise',
         textMetrics: 'noise',
       },
       audio: {
         audioContext: 'noise',
+        offlineAudio: 'noise',
         codecs: 'off',
       },
       hardware: {
@@ -287,6 +360,7 @@ export function createDefaultSettings(): ContainerSettings {
         mediaDevices: 'noise',
         battery: 'block',
         gpu: 'noise',
+        touch: 'noise',
       },
       navigator: {
         userAgent: 'noise',
@@ -300,6 +374,7 @@ export function createDefaultSettings(): ContainerSettings {
       },
       fonts: {
         enumeration: 'noise',
+        cssDetection: 'noise',
       },
       network: {
         webrtc: 'public_only',
@@ -319,12 +394,40 @@ export function createDefaultSettings(): ContainerSettings {
       },
       storage: {
         estimate: 'noise',
+        indexedDB: 'noise',
       },
       math: {
         functions: 'noise',
       },
       keyboard: {
         layout: 'noise',
+      },
+      workers: {
+        fingerprint: 'noise',
+      },
+      errors: {
+        stackTrace: 'noise',
+      },
+      rendering: {
+        emoji: 'noise',
+        mathml: 'noise',
+      },
+      intl: {
+        apis: 'noise',
+      },
+      crypto: {
+        webCrypto: 'noise',
+      },
+      devices: {
+        gamepad: 'block',
+        midi: 'block',
+        bluetooth: 'block',
+        usb: 'block',
+        serial: 'block',
+        hid: 'block',
+      },
+      features: {
+        detection: 'noise',
       },
     },
     domainRules: {},
