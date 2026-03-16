@@ -541,6 +541,320 @@ Container Shield ensures consistent font availability per profile.
 
 ---
 
+## Website Compatibility
+
+<details>
+<summary><h3>⚠️ What Can Break Websites</h3></summary>
+
+Some spoofing techniques can cause websites to malfunction:
+
+#### High Risk of Breaking
+
+| Spoofed API | What Breaks | Examples |
+|-------------|-------------|----------|
+| **WebRTC (Block)** | Video/audio calls, P2P connections | Zoom, Google Meet, Discord, Teams |
+| **Canvas (Block)** | CAPTCHAs, image editors, games | reCAPTCHA, hCaptcha, Photopea |
+| **WebGL (Block)** | 3D graphics, maps, games | Google Maps 3D, Three.js sites |
+| **MediaDevices (Block)** | Camera/microphone access | Video calls, QR scanners |
+| **Clipboard (Block)** | Copy/paste functionality | "Copy to clipboard" buttons |
+
+#### Medium Risk
+
+| Spoofed API | What Breaks | Why |
+|-------------|-------------|-----|
+| **Screen dimensions** | Responsive layouts | Site may serve wrong layout for spoofed resolution |
+| **User-Agent** | Feature detection | Site serves mobile version to desktop UA |
+| **Timezone** | Scheduling, calendars | Appointments display wrong times |
+| **Client Hints** | Modern sites | UA-CH dependent features fail |
+| **Gamepad/MIDI** | Browser games, music apps | Controllers won't be detected |
+
+#### Low Risk (Usually Safe)
+
+| Spoofed API | Why It's Safe |
+|-------------|---------------|
+| **Canvas (Noise)** | Imperceptible ±1-2 RGB pixel changes |
+| **Audio (Noise)** | Inaudible frequency variations |
+| **Fonts** | Slightly different text measurements |
+| **performance.now()** | Timing slightly less precise |
+| **Math functions** | Only affects edge cases |
+
+#### Common Breakage Scenarios
+
+**Banking Sites:**
+```
+Symptom:  Account locked, extra verification, transactions blocked
+Cause:    Fraud detection flags spoofed fingerprint as suspicious
+Solution: Add bank domains to exceptions
+```
+
+**Streaming (Netflix, Hulu, Disney+):**
+```
+Symptom:  "Can't play this title", lower quality, errors
+Cause:    DRM (Widevine) checks hardware consistency
+Solution: Whitelist streaming domains
+```
+
+**E-commerce Checkout:**
+```
+Symptom:  Payment fails, infinite loading, "try again"
+Cause:    Bot detection (Stripe, PayPal) flags inconsistencies
+Solution: Add checkout domains to exceptions
+```
+
+**Video Conferencing:**
+```
+Symptom:  "Can't access camera", "Connection failed"
+Cause:    WebRTC blocked = no audio/video possible
+Solution: Set WebRTC to "Public Only" or whitelist
+```
+
+**Google Services:**
+```
+Symptom:  Endless CAPTCHA loops, "verify you're human"
+Cause:    reCAPTCHA scores spoofed browsers as bot-like
+Solution: Whitelist google.com, gstatic.com
+```
+
+</details>
+
+<details>
+<summary><h3>🔍 How Websites Detect Spoofing</h3></summary>
+
+Sophisticated fingerprinting scripts don't just collect data—they also detect if values are being spoofed. Here's how they do it and how Container Shield defends against it:
+
+#### 1. Consistency Checks
+
+Websites cross-reference multiple APIs to find contradictions:
+
+```javascript
+// Detection: User-Agent says iPhone but screen is 1920x1080?
+if (navigator.userAgent.includes('iPhone') && screen.width > 500) {
+  console.log('Spoofing detected: Screen too large for iPhone');
+}
+
+// Detection: 16 CPU cores but only 2GB RAM?
+if (navigator.hardwareConcurrency > 8 && navigator.deviceMemory < 4) {
+  console.log('Spoofing detected: Impossible hardware combination');
+}
+```
+
+**Container Shield defense:** Profile Manager assigns realistic, internally-consistent profiles. iPhone UA gets iPhone screen size, RAM, and CPU cores.
+
+#### 2. Impossible Values
+
+Some values only exist in specific combinations:
+
+```javascript
+// deviceMemory only returns: 0.25, 0.5, 1, 2, 4, 8
+// Returning 3 or 6 = obvious spoofing
+if (![0.25, 0.5, 1, 2, 4, 8].includes(navigator.deviceMemory)) {
+  console.log('Spoofing detected: Invalid deviceMemory');
+}
+```
+
+**Container Shield defense:** Only returns values that real browsers return.
+
+#### 3. Canvas Consistency
+
+If canvas noise is random, multiple reads will differ:
+
+```javascript
+// Read canvas hash twice
+const hash1 = canvas.toDataURL();
+const hash2 = canvas.toDataURL();
+
+if (hash1 !== hash2) {
+  console.log('Spoofing detected: Canvas values inconsistent');
+}
+```
+
+**Container Shield defense:** Noise is deterministic. Same seed + same domain = same noise. Multiple reads return identical results.
+
+#### 4. Prototype & Function Inspection
+
+Scripts check if native functions were modified:
+
+```javascript
+// Check if toDataURL was wrapped
+const fn = HTMLCanvasElement.prototype.toDataURL;
+if (fn.toString().includes('[native code]') === false) {
+  console.log('Spoofing detected: toDataURL was modified');
+}
+
+// Check prototype chain
+if (canvas.toDataURL !== HTMLCanvasElement.prototype.toDataURL) {
+  console.log('Spoofing detected: Prototype mismatch');
+}
+```
+
+**Container Shield defense:** Wrapped functions preserve `toString()` output and prototype chain integrity.
+
+#### 5. Timing Analysis
+
+Spoofed APIs may be slower than native ones:
+
+```javascript
+// Native canvas should be fast
+const start = performance.now();
+for (let i = 0; i < 100; i++) {
+  canvas.toDataURL();
+}
+const elapsed = performance.now() - start;
+
+if (elapsed > 500) {  // Too slow?
+  console.log('Spoofing detected: Canvas operations unusually slow');
+}
+```
+
+**Container Shield defense:** Minimal overhead in hot paths. Noise is computed efficiently.
+
+#### 6. Error Fingerprinting
+
+Stack traces can reveal extension presence:
+
+```javascript
+try {
+  throw new Error();
+} catch (e) {
+  if (e.stack.includes('extension://') || e.stack.includes('moz-extension://')) {
+    console.log('Spoofing detected: Extension found in stack trace');
+  }
+}
+```
+
+**Container Shield defense:** Stack trace spoofer normalizes filenames and line numbers.
+
+#### 7. Feature Detection Contradictions
+
+Blocking an API vs spoofing it has different signatures:
+
+```javascript
+// If WebGL is blocked, getContext returns null
+const gl = canvas.getContext('webgl');
+if (gl === null && navigator.userAgent.includes('Chrome')) {
+  console.log('Spoofing detected: Chrome should support WebGL');
+}
+
+// If we spoof WebGL vendor but getContext fails:
+if (gl === null && somewhereWeReturnedAVendorString) {
+  console.log('Spoofing detected: Contradictory WebGL state');
+}
+```
+
+**Container Shield defense:** "Noise" mode modifies values but keeps APIs functional. "Block" mode is consistent (returns null/undefined everywhere).
+
+#### 8. Lie Detection (CreepJS technique)
+
+Advanced scripts detect "lies" - values that are technically valid but statistically unlikely:
+
+```javascript
+// Real browsers have consistent renderer/vendor pairs
+const validPairs = [
+  ['Google Inc.', 'ANGLE (Intel'],
+  ['Google Inc.', 'ANGLE (NVIDIA'],
+  ['Apple Inc.', 'Apple GPU'],
+  // ...
+];
+
+const vendor = gl.getParameter(gl.VENDOR);
+const renderer = gl.getParameter(debugExt.UNMASKED_RENDERER_WEBGL);
+
+if (!validPairs.some(([v, r]) => vendor.includes(v) && renderer.includes(r))) {
+  console.log('Spoofing detected: Invalid vendor/renderer pair');
+}
+```
+
+**Container Shield defense:** GPU combinations are taken from real browser data.
+
+#### Detection Summary
+
+| Detection Method | How Sites Use It | Container Shield Defense |
+|------------------|------------------|--------------------------|
+| Consistency checks | Cross-reference UA, screen, hardware | Realistic profile bundles |
+| Impossible values | Check for invalid enum values | Only valid values used |
+| Canvas consistency | Multiple reads should match | Deterministic noise |
+| Prototype inspection | Check native function signatures | Preserve `toString()` |
+| Timing analysis | Spoofed APIs may be slower | Efficient implementation |
+| Stack traces | Look for extension paths | Stack normalization |
+| Feature detection | Blocked vs spoofed signatures | Consistent API states |
+| Lie detection | Statistical analysis of values | Real-world value sets |
+
+</details>
+
+<details>
+<summary><h3>🛠️ Troubleshooting Broken Sites</h3></summary>
+
+When a website breaks, follow these steps:
+
+#### Step 1: Confirm It's the Extension
+
+1. Open the site in a **new container with protection disabled**
+2. If it works → Container Shield is the cause
+3. If still broken → Different issue
+
+#### Step 2: Check the Fingerprint Monitor
+
+1. Click the Container Shield icon
+2. Go to **Monitor** tab
+3. See which APIs the site accessed
+4. Look for **blocked** (red) entries
+
+#### Step 3: Try Less Aggressive Settings
+
+```
+Current Setting    →    Try Instead
+─────────────────────────────────────
+Block              →    Noise
+Noise              →    Off (for that API)
+WebRTC: Block      →    WebRTC: Public Only
+```
+
+#### Step 4: Add Domain Exception
+
+1. Click Container Shield icon
+2. Go to **Exceptions** tab
+3. Add the domain (e.g., `example.com`)
+4. Reload the page
+
+#### Step 5: Use Preset Categories
+
+For common site types, enable preset exceptions:
+
+| If broken site is... | Enable preset... |
+|---------------------|------------------|
+| Bank, financial | Banking |
+| Netflix, Hulu, etc. | Streaming |
+| Zoom, Meet, Teams | Video Conferencing |
+| Amazon, eBay, etc. | Shopping |
+| Steam, Epic Games | Gaming |
+
+#### Safe Default Settings
+
+These settings rarely break sites:
+
+```
+✅ Recommended (rarely breaks):
+   Graphics:     Noise
+   Audio:        Noise
+   Hardware:     Noise
+   Navigator:    Noise
+   Timezone:     Noise
+   Fonts:        Noise
+   Network:      WebRTC: Public Only, Connection: Noise
+   Timing:       Noise
+
+⚠️ Use with caution (may break):
+   WebRTC:       Block
+   Canvas:       Block
+   WebGL:        Block
+   MediaDevices: Block
+   Clipboard:    Block
+```
+
+</details>
+
+---
+
 ## Project Structure
 
 <details>
