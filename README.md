@@ -13,25 +13,136 @@ Each Firefox container gets a unique, cryptographically-isolated fingerprint tha
 
 ### Fingerprint Spoofing (50+ APIs)
 
-| Category | Spoofed APIs |
-|----------|-------------|
-| **Graphics** | Canvas 2D, WebGL, WebGL2, WebGPU, SVG, DOMRect, TextMetrics, OffscreenCanvas |
-| **Audio** | AudioContext, OfflineAudioContext, AnalyserNode, Audio Latency, Codec detection |
-| **Hardware** | Screen dimensions, Screen Frame, Orientation, deviceMemory, hardwareConcurrency, Battery, MediaDevices, Sensors |
-| **Navigator** | User-Agent, Platform, Languages, Plugins, Client Hints, Clipboard, Vibration |
-| **Timezone** | Date.getTimezoneOffset, Intl.DateTimeFormat |
-| **Fonts** | Font enumeration, CSS font detection |
-| **Network** | WebRTC IP leak, NetworkInformation API |
-| **Timing** | performance.now() precision reduction |
-| **CSS** | Media queries (prefers-color-scheme, etc.) |
-| **Speech** | SpeechSynthesis voices |
-| **Permissions** | Permissions API, Notification.permission |
-| **Storage** | StorageManager.estimate(), IndexedDB, WebSQL |
-| **Math** | Math function precision |
-| **Keyboard** | Keyboard layout detection |
-| **Devices** | Gamepad, MIDI, Bluetooth, USB, Serial, HID |
-| **Rendering** | Emoji, MathML |
-| **Payment** | Apple Pay detection |
+Container Shield protects against 50+ fingerprinting vectors across 17 categories:
+
+#### Graphics (8 APIs)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Canvas 2D** | `toDataURL()`, `toBlob()`, `getImageData()` | High |
+| **WebGL** | `getParameter()`, `getExtension()`, `UNMASKED_VENDOR_WEBGL`, `UNMASKED_RENDERER_WEBGL` | High |
+| **WebGL2** | Same as WebGL + WebGL2-specific extensions | High |
+| **WebGPU** | `requestAdapter()`, adapter info | High |
+| **SVG** | SVG filter rendering fingerprint | Medium |
+| **DOMRect** | `getBoundingClientRect()`, `getClientRects()` | Medium |
+| **TextMetrics** | `measureText()` width/height | Medium |
+| **OffscreenCanvas** | `convertToBlob()`, worker canvas | Medium |
+| **WebGL Shaders** | Shader compilation fingerprinting | Medium |
+
+#### Audio (4 APIs)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **AudioContext** | `createOscillator()`, `createDynamicsCompressor()`, `createAnalyser()` | High |
+| **OfflineAudioContext** | `startRendering()`, `getChannelData()` | High |
+| **Audio Latency** | `baseLatency`, `outputLatency` | Low |
+| **Codec Detection** | `canPlayType()` for audio/video formats | Medium |
+
+#### Hardware (9 APIs)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Screen** | `screen.width`, `height`, `availWidth`, `availHeight`, `colorDepth`, `pixelDepth` | High |
+| **Screen Frame** | `screenX`, `screenY`, `outerWidth`, `outerHeight` | Medium |
+| **Orientation** | `screen.orientation.type`, `angle` | Low |
+| **Device Memory** | `navigator.deviceMemory` | Medium |
+| **Hardware Concurrency** | `navigator.hardwareConcurrency` | Medium |
+| **Battery** | `navigator.getBattery()` - level, charging, times | Medium |
+| **Media Devices** | `navigator.mediaDevices.enumerateDevices()` | High |
+| **Touch** | `navigator.maxTouchPoints`, touch events | Medium |
+| **Sensors** | Accelerometer, Gyroscope, Magnetometer, AbsoluteOrientationSensor | Medium |
+
+#### Navigator (6 APIs)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **User-Agent** | `navigator.userAgent`, `appVersion`, `platform`, `vendor` | High |
+| **Languages** | `navigator.language`, `languages` | Medium |
+| **Plugins** | `navigator.plugins`, `mimeTypes` | Medium |
+| **Client Hints** | `navigator.userAgentData.getHighEntropyValues()` | High |
+| **Clipboard** | `navigator.clipboard.read()`, `readText()` | Low |
+| **Vibration** | `navigator.vibrate()` | Low |
+
+#### Timezone (2 APIs)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Intl** | `Intl.DateTimeFormat().resolvedOptions().timeZone` | High |
+| **Date** | `Date.getTimezoneOffset()`, `toLocaleString()` | High |
+
+#### Fonts (2 APIs)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Font Enumeration** | Canvas-based font detection, `document.fonts` | High |
+| **CSS Font Detection** | CSS font-family availability probing | High |
+
+#### Network (2 APIs)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **WebRTC** | `RTCPeerConnection` ICE candidates, local IP leak | Critical |
+| **Connection** | `navigator.connection` - type, effectiveType, downlink, rtt | Medium |
+
+#### Timing (1 API)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Performance** | `performance.now()` - precision reduced to 100μs | Medium |
+
+#### CSS (1 API)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Media Queries** | `matchMedia()` - prefers-color-scheme, prefers-reduced-motion, forced-colors | Medium |
+
+#### Speech (1 API)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Speech Synthesis** | `speechSynthesis.getVoices()` | Medium |
+
+#### Permissions (2 APIs)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Permissions** | `navigator.permissions.query()` | Low |
+| **Notification** | `Notification.permission` | Low |
+
+#### Storage (3 APIs)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Storage Estimate** | `navigator.storage.estimate()` - quota, usage | Medium |
+| **IndexedDB** | Database enumeration fingerprinting | Low |
+| **WebSQL** | `openDatabase()` availability | Low |
+
+#### Math (1 API)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Math Functions** | `Math.tan()`, `Math.sin()`, `Math.cos()` edge case precision | Low |
+
+#### Keyboard (1 API)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Keyboard Layout** | `navigator.keyboard.getLayoutMap()` | Medium |
+
+#### Devices (6 APIs)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Gamepad** | `navigator.getGamepads()` | Low |
+| **MIDI** | `navigator.requestMIDIAccess()` | Low |
+| **Bluetooth** | `navigator.bluetooth.requestDevice()`, `getDevices()` | Medium |
+| **USB** | `navigator.usb.getDevices()`, `requestDevice()` | Medium |
+| **Serial** | `navigator.serial.getPorts()`, `requestPort()` | Medium |
+| **HID** | `navigator.hid.getDevices()`, `requestDevice()` | Medium |
+
+#### Rendering (2 APIs)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Emoji** | Emoji rendering characteristics | Medium |
+| **MathML** | MathML rendering fingerprint | Low |
+
+#### Payment (1 API)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **Apple Pay** | `ApplePaySession.canMakePayments()` | Low |
+
+#### Other (4 APIs)
+| Signal | Methods Spoofed | Entropy |
+|--------|-----------------|---------|
+| **WebCrypto** | `crypto.getRandomValues()` entropy analysis | Low |
+| **Workers** | Worker/SharedWorker fingerprinting | Medium |
+| **Error Stack** | Stack trace filename/line normalization | Low |
+| **Feature Detection** | API availability probing | Medium |
 
 ### Fingerprint Access Monitor
 Container Shield tracks which fingerprinting APIs websites try to access:
