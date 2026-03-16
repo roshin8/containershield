@@ -8,10 +8,12 @@ import {
   MSG_GET_SETTINGS,
   MSG_SET_SETTINGS,
 } from '@/constants';
+import { popupLogger } from '@/lib/logger';
 import ContainerSelector from './components/ContainerSelector';
 import ProtectionLevel from './components/ProtectionLevel';
 import CategoryToggle from './components/CategoryToggle';
 import FingerprintMonitor from './components/FingerprintMonitor';
+import ErrorBoundary from './components/ErrorBoundary';
 
 interface ContainerInfo {
   containerId: string;
@@ -51,7 +53,7 @@ export default function App() {
         }) as ContainerSettings;
         setSettings(containerSettings);
       } catch (error) {
-        console.error('Failed to initialize popup:', error);
+        popupLogger.error('Failed to initialize popup:', error);
       } finally {
         setLoading(false);
       }
@@ -72,7 +74,7 @@ export default function App() {
         }) as ContainerSettings;
         setSettings(containerSettings);
       } catch (error) {
-        console.error('Failed to load settings:', error);
+        popupLogger.error('Failed to load settings:', error);
       }
     }
 
@@ -93,7 +95,7 @@ export default function App() {
         settings: updates,
       });
     } catch (error) {
-      console.error('Failed to save settings:', error);
+      popupLogger.error('Failed to save settings:', error);
     }
   };
 
@@ -124,14 +126,15 @@ export default function App() {
   const selectedContainerInfo = containers.find(c => c.cookieStoreId === selectedContainer);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <header className="px-4 py-3 bg-gray-800 border-b border-gray-700">
-        <h1 className="text-lg font-semibold flex items-center gap-2">
-          <span className="text-2xl">🦎</span>
-          Chameleon Containers
-        </h1>
-      </header>
+    <ErrorBoundary>
+      <div className="flex flex-col h-full">
+        {/* Header */}
+        <header className="px-4 py-3 bg-gray-800 border-b border-gray-700">
+          <h1 className="text-lg font-semibold flex items-center gap-2">
+            <span className="text-2xl">🛡️</span>
+            Container Shield
+          </h1>
+        </header>
 
       {/* Container Selector */}
       <div className="px-4 py-3 bg-gray-800/50">
@@ -264,5 +267,6 @@ export default function App() {
         </div>
       </footer>
     </div>
+    </ErrorBoundary>
   );
 }
