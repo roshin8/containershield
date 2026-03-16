@@ -1,0 +1,50 @@
+{
+  "name": "chameleon-containers",
+  "version": "0.1.0",
+  "description": "Firefox extension combining Chameleon's fingerprint spoofing with JShelter's API protection, with per-container isolation",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build:dev && npm run copy-assets",
+    "build:dev": "vite build --mode development",
+    "build": "vite build && npm run copy-assets && npm run fix-html",
+    "build:prod": "vite build --mode production && npm run copy-assets && npm run fix-html",
+    "copy-assets": "cp manifest.json dist/ && cp -r public/icons dist/",
+    "fix-html": "mv dist/src/popup/index.html dist/popup/ 2>/dev/null || true && mv dist/src/pages/ip-warning.html dist/pages/ 2>/dev/null || true && rm -rf dist/src 2>/dev/null || true",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext ts,tsx",
+    "test": "vitest",
+    "package": "npm run build:prod && cd dist && zip -r ../chameleon-containers.zip ."
+  },
+  "keywords": [
+    "firefox",
+    "extension",
+    "privacy",
+    "fingerprinting",
+    "containers",
+    "webextension"
+  ],
+  "author": "",
+  "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/webextension-polyfill": "^0.12.5",
+    "@vitejs/plugin-react": "^6.0.1",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.0",
+    "webextension-polyfill": "^0.12.0"
+  }
+}

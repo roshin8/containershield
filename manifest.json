@@ -1,0 +1,58 @@
+{
+  "manifest_version": 2,
+  "name": "Chameleon Containers",
+  "version": "0.1.0",
+  "description": "Per-container fingerprint spoofing and privacy protection for Firefox Multi-Account Containers",
+
+  "author": "",
+  "homepage_url": "",
+
+  "icons": {
+    "48": "icons/icon-48.svg"
+  },
+
+  "permissions": [
+    "contextualIdentities",
+    "cookies",
+    "tabs",
+    "storage",
+    "webRequest",
+    "webRequestBlocking",
+    "webNavigation",
+    "privacy",
+    "<all_urls>"
+  ],
+
+  "background": {
+    "scripts": ["background/index.js"],
+    "persistent": true
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/index.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+
+  "web_accessible_resources": [
+    "inject/index.js"
+  ],
+
+  "browser_action": {
+    "default_icon": {
+      "48": "icons/icon-48.svg"
+    },
+    "default_title": "Chameleon Containers",
+    "default_popup": "popup/index.html"
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "chameleon-containers@example.com",
+      "strict_min_version": "91.0"
+    }
+  }
+}
