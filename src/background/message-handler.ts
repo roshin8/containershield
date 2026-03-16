@@ -6,24 +6,32 @@ import browser from 'webextension-polyfill';
 import type { SettingsStore } from './settings-store';
 import type { ContainerManager } from './container-manager';
 import type { IPIsolation } from './ip-isolation';
-import type { ExtensionMessage, InjectConfig, AssignedProfileData } from '@/types';
+import type {
+  ExtensionMessage,
+  InjectConfig,
+  AssignedProfileData,
+  FingerprintReportMessage,
+  GetFingerprintDataMessage,
+  GetRecommendationsMessage,
+  FingerprintData,
+  SpooferRecommendation,
+  RecommendationsResponse,
+} from '@/types';
 import { ensureUniqueProfile, type AssignedProfile } from './profile-manager';
+import {
+  MSG_GET_SETTINGS,
+  MSG_SET_SETTINGS,
+  MSG_GET_ENTROPY,
+  MSG_GET_CONTAINER_INFO,
+  MSG_GET_ALL_CONTAINERS,
+  MSG_IP_CONFLICT_CHECK,
+  MSG_INJECT_CONFIG,
+  MSG_FINGERPRINT_REPORT,
+  MSG_GET_FINGERPRINT_DATA,
+  MSG_GET_RECOMMENDATIONS,
+} from '@/constants';
 
-/**
- * Fingerprint access data stored per tab
- */
-interface FingerprintData {
-  summary: Record<string, { count: number; blocked: number; spoofed: number }>;
-  detail: Array<{
-    api: string;
-    category: string;
-    timestamp: number;
-    blocked: boolean;
-    spoofed: boolean;
-  }>;
-  url: string;
-  lastUpdated: number;
-}
+// FingerprintData is now imported from @/types
 
 export class MessageHandler {
   private settingsStore: SettingsStore;
@@ -65,34 +73,34 @@ export class MessageHandler {
     sender: browser.Runtime.MessageSender
   ): Promise<unknown> {
     switch (message.type) {
-      case 'GET_SETTINGS':
+      case MSG_GET_SETTINGS:
         return this.handleGetSettings(message);
 
-      case 'SET_SETTINGS':
+      case MSG_SET_SETTINGS:
         return this.handleSetSettings(message);
 
-      case 'GET_ENTROPY':
+      case MSG_GET_ENTROPY:
         return this.handleGetEntropy(message);
 
-      case 'GET_CONTAINER_INFO':
+      case MSG_GET_CONTAINER_INFO:
         return this.handleGetContainerInfo(message, sender);
 
-      case 'GET_ALL_CONTAINERS':
+      case MSG_GET_ALL_CONTAINERS:
         return this.handleGetAllContainers();
 
-      case 'IP_CONFLICT_CHECK':
+      case MSG_IP_CONFLICT_CHECK:
         return this.handleIPConflictCheck(message);
 
-      case 'INJECT_CONFIG':
+      case MSG_INJECT_CONFIG:
         return this.handleGetInjectConfig(sender);
 
-      case 'FINGERPRINT_REPORT':
+      case MSG_FINGERPRINT_REPORT:
         return this.handleFingerprintReport(message, sender);
 
-      case 'GET_FINGERPRINT_DATA':
+      case MSG_GET_FINGERPRINT_DATA:
         return this.handleGetFingerprintData(message, sender);
 
-      case 'GET_RECOMMENDATIONS':
+      case MSG_GET_RECOMMENDATIONS:
         return this.handleGetRecommendations(message, sender);
 
       default:
@@ -246,9 +254,9 @@ export class MessageHandler {
    * Handle FINGERPRINT_REPORT - store fingerprint access data from content script
    */
   private handleFingerprintReport(
-    message: any,
+    message: FingerprintReportMessage,
     sender: browser.Runtime.MessageSender
-  ) {
+  ): { success: boolean } | null {
     const tabId = sender.tab?.id;
     if (!tabId) return null;
 
@@ -266,9 +274,9 @@ export class MessageHandler {
    * Handle GET_FINGERPRINT_DATA - retrieve fingerprint access data for a tab
    */
   private handleGetFingerprintData(
-    message: any,
+    message: GetFingerprintDataMessage,
     sender: browser.Runtime.MessageSender
-  ) {
+  ): FingerprintData | null {
     const tabId = message.tabId ?? sender.tab?.id;
     if (!tabId) return null;
 
@@ -279,9 +287,9 @@ export class MessageHandler {
    * Handle GET_RECOMMENDATIONS - get spoofer recommendations based on accessed APIs
    */
   private async handleGetRecommendations(
-    message: any,
+    message: GetRecommendationsMessage,
     sender: browser.Runtime.MessageSender
-  ) {
+  ): Promise<RecommendationsResponse> {
     const tabId = message.tabId ?? sender.tab?.id;
     if (!tabId) return { recommendations: [], accessedCategories: [] };
 
@@ -347,12 +355,7 @@ export class MessageHandler {
       'Apple Pay': { category: 'payment', setting: 'applePay' },
     };
 
-    const recommendations: Array<{
-      api: string;
-      category: string;
-      settingPath: string;
-      currentValue: string;
-    }> = [];
+    const recommendations: SpooferRecommendation[] = [];
 
     const accessedCategories = Object.keys(data.summary);
     const seenCategories = new Set<string>();

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import browser from 'webextension-polyfill';
+import { MSG_GET_RECOMMENDATIONS, POPUP_REFRESH_INTERVAL_MS } from '@/constants';
 
 interface Recommendation {
   api: string;
@@ -33,7 +34,7 @@ export default function FingerprintMonitor({ onEnableSpoofer }: Props) {
 
         // Get recommendations from background
         const result = await browser.runtime.sendMessage({
-          type: 'GET_RECOMMENDATIONS',
+          type: MSG_GET_RECOMMENDATIONS,
           tabId: tab.id,
         }) as FingerprintData;
 
@@ -47,8 +48,8 @@ export default function FingerprintMonitor({ onEnableSpoofer }: Props) {
 
     loadData();
 
-    // Refresh every 5 seconds
-    const interval = setInterval(loadData, 5000);
+    // Refresh periodically
+    const interval = setInterval(loadData, POPUP_REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
 

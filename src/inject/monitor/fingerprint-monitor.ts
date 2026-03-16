@@ -5,6 +5,17 @@
  * Sends reports back to the background script for display in the popup.
  */
 
+import {
+  PAGE_MSG_FINGERPRINT_REPORT,
+  PAGE_MSG_GET_REPORT,
+  PAGE_MSG_GET_RECOMMENDATIONS,
+  PAGE_MSG_RECOMMENDATIONS,
+  FINGERPRINT_REPORT_INTERVAL_MS,
+  FINGERPRINT_MAX_LOG_SIZE,
+  FINGERPRINT_STACK_TRACE_LINES,
+  LOG_PREFIX,
+} from '@/constants';
+
 export interface FingerprintAccess {
   api: string;
   category: string;
@@ -304,7 +315,10 @@ export function logAccess(
       const stack = new Error().stack;
       if (stack) {
         // Remove the first two lines (Error and this function)
-        access.stackTrace = stack.split('\n').slice(2, 6).join('\n');
+        access.stackTrace = stack
+          .split('\n')
+          .slice(2, 2 + FINGERPRINT_STACK_TRACE_LINES)
+          .join('\n');
       }
     } catch {
       // Stack trace not available
@@ -314,7 +328,7 @@ export function logAccess(
   accessLog.push(access);
 
   // Keep log size manageable
-  if (accessLog.length > 1000) {
+  if (accessLog.length > FINGERPRINT_MAX_LOG_SIZE) {
     accessLog.shift();
   }
 }
@@ -360,14 +374,14 @@ export function reportToBackground(): void {
 
   // Use postMessage to send to content script, which forwards to background
   window.postMessage({
-    type: 'CONTAINER_SHIELD_FINGERPRINT_REPORT',
+    type: PAGE_MSG_FINGERPRINT_REPORT,
     summary,
     detail,
     url: window.location.href,
   }, '*');
 }
 
-// Auto-report every 5 seconds if there are new accesses
+// Auto-report periodically if there are new accesses
 let lastReportedCount = 0;
 
 setInterval(() => {
@@ -375,7 +389,7 @@ setInterval(() => {
     reportToBackground();
     lastReportedCount = accessLog.length;
   }
-}, 5000);
+}, FINGERPRINT_REPORT_INTERVAL_MS);
 
 // Also report on page unload
 window.addEventListener('beforeunload', () => {
@@ -387,7 +401,7 @@ window.addEventListener('beforeunload', () => {
  * Returns APIs that were accessed but have protection disabled
  */
 export function getRecommendations(
-  settings: any
+  settings: Record<string, Record<string, string>>
 ): { api: string; category: string; setting: string }[] {
   const recommendations: { api: string; category: string; setting: string }[] = [];
   const seenCategories = new Set<string>();
@@ -430,17 +444,17 @@ export function getAccessedCategories(): string[] {
  * Initialize the fingerprint monitor
  */
 export function initFingerprintMonitor(): void {
-  console.log('[ContainerShield] Fingerprint access monitor initialized');
+  console.log(`${LOG_PREFIX} Fingerprint access monitor initialized`);
 
   // Listen for requests from popup/content script
   window.addEventListener('message', (event) => {
-    if (event.data?.type === 'CONTAINER_SHIELD_GET_REPORT') {
+    if (event.data?.type === PAGE_MSG_GET_REPORT) {
       reportToBackground();
     }
-    if (event.data?.type === 'CONTAINER_SHIELD_GET_RECOMMENDATIONS') {
+    if (event.data?.type === PAGE_MSG_GET_RECOMMENDATIONS) {
       const recommendations = getRecommendations(event.data.settings);
       window.postMessage({
-        type: 'CONTAINER_SHIELD_RECOMMENDATIONS',
+        type: PAGE_MSG_RECOMMENDATIONS,
         recommendations,
         accessedCategories: getAccessedCategories(),
       }, '*');

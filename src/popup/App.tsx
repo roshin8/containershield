@@ -2,6 +2,12 @@ import React, { useEffect, useState } from 'react';
 import browser from 'webextension-polyfill';
 import type { ContainerIdentity, ContainerSettings } from '@/types';
 import { createDefaultSettings } from '@/types/settings';
+import {
+  MSG_GET_ALL_CONTAINERS,
+  MSG_GET_CONTAINER_INFO,
+  MSG_GET_SETTINGS,
+  MSG_SET_SETTINGS,
+} from '@/constants';
 import ContainerSelector from './components/ContainerSelector';
 import ProtectionLevel from './components/ProtectionLevel';
 import CategoryToggle from './components/CategoryToggle';
@@ -27,20 +33,20 @@ export default function App() {
       try {
         // Get all containers
         const allContainers = await browser.runtime.sendMessage({
-          type: 'GET_ALL_CONTAINERS',
+          type: MSG_GET_ALL_CONTAINERS,
         }) as ContainerIdentity[];
         setContainers(allContainers);
 
         // Get current tab's container
         const containerInfo = await browser.runtime.sendMessage({
-          type: 'GET_CONTAINER_INFO',
+          type: MSG_GET_CONTAINER_INFO,
         }) as ContainerInfo;
         setCurrentContainer(containerInfo);
         setSelectedContainer(containerInfo.containerId);
 
         // Load settings for current container
         const containerSettings = await browser.runtime.sendMessage({
-          type: 'GET_SETTINGS',
+          type: MSG_GET_SETTINGS,
           containerId: containerInfo.containerId,
         }) as ContainerSettings;
         setSettings(containerSettings);
@@ -61,7 +67,7 @@ export default function App() {
 
       try {
         const containerSettings = await browser.runtime.sendMessage({
-          type: 'GET_SETTINGS',
+          type: MSG_GET_SETTINGS,
           containerId: selectedContainer,
         }) as ContainerSettings;
         setSettings(containerSettings);
@@ -82,7 +88,7 @@ export default function App() {
 
     try {
       await browser.runtime.sendMessage({
-        type: 'SET_SETTINGS',
+        type: MSG_SET_SETTINGS,
         containerId: selectedContainer,
         settings: updates,
       });

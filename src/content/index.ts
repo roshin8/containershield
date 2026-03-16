@@ -9,6 +9,15 @@
 
 import browser from 'webextension-polyfill';
 import type { InjectConfig } from '@/types';
+import {
+  MSG_INJECT_CONFIG,
+  MSG_FINGERPRINT_REPORT,
+  MSG_GET_FINGERPRINT_REPORT,
+  MSG_GET_RECOMMENDATIONS,
+  PAGE_MSG_FINGERPRINT_REPORT,
+  PAGE_MSG_GET_REPORT,
+  PAGE_MSG_GET_RECOMMENDATIONS,
+} from '@/constants';
 
 /**
  * Get inject configuration from background script
@@ -16,11 +25,11 @@ import type { InjectConfig } from '@/types';
 async function getInjectConfig(): Promise<InjectConfig | null> {
   try {
     const config = await browser.runtime.sendMessage({
-      type: 'INJECT_CONFIG',
+      type: MSG_INJECT_CONFIG,
     });
     return config as InjectConfig | null;
   } catch (error) {
-    console.error('[ChameleonContainers Content] Failed to get inject config:', error);
+    console.error('[ContainerShield Content] Failed to get inject config:', error);
     return null;
   }
 }
@@ -77,10 +86,10 @@ window.addEventListener('message', async (event) => {
   const { type, ...data } = event.data || {};
 
   // Forward fingerprint reports to background
-  if (type === 'CONTAINER_SHIELD_FINGERPRINT_REPORT') {
+  if (type === PAGE_MSG_FINGERPRINT_REPORT) {
     try {
       await browser.runtime.sendMessage({
-        type: 'FINGERPRINT_REPORT',
+        type: MSG_FINGERPRINT_REPORT,
         summary: data.summary,
         detail: data.detail,
         url: data.url,
@@ -91,7 +100,7 @@ window.addEventListener('message', async (event) => {
   }
 
   // Handle request for recommendations
-  if (type === 'CONTAINER_SHIELD_GET_RECOMMENDATIONS') {
+  if (type === PAGE_MSG_GET_RECOMMENDATIONS) {
     // The page script will handle this internally
   }
 });
@@ -100,16 +109,16 @@ window.addEventListener('message', async (event) => {
  * Listen for messages from the popup requesting fingerprint data
  */
 browser.runtime.onMessage.addListener((message, sender) => {
-  if (message.type === 'GET_FINGERPRINT_REPORT') {
+  if (message.type === MSG_GET_FINGERPRINT_REPORT) {
     // Request report from page script
-    window.postMessage({ type: 'CONTAINER_SHIELD_GET_REPORT' }, '*');
+    window.postMessage({ type: PAGE_MSG_GET_REPORT }, '*');
     return true;
   }
 
-  if (message.type === 'GET_RECOMMENDATIONS') {
+  if (message.type === MSG_GET_RECOMMENDATIONS) {
     // Request recommendations from page script with current settings
     window.postMessage({
-      type: 'CONTAINER_SHIELD_GET_RECOMMENDATIONS',
+      type: PAGE_MSG_GET_RECOMMENDATIONS,
       settings: message.settings,
     }, '*');
     return true;

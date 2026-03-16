@@ -12,7 +12,63 @@ export type MessageType =
   | 'GET_ALL_CONTAINERS'
   | 'IP_CONFLICT_CHECK'
   | 'IP_CONFLICT_RESOLVED'
-  | 'INJECT_CONFIG';
+  | 'INJECT_CONFIG'
+  | 'FINGERPRINT_REPORT'
+  | 'GET_FINGERPRINT_DATA'
+  | 'GET_RECOMMENDATIONS';
+
+/**
+ * Fingerprint access record
+ */
+export interface FingerprintAccess {
+  api: string;
+  category: string;
+  timestamp: number;
+  blocked: boolean;
+  spoofed: boolean;
+  stackTrace?: string;
+}
+
+/**
+ * Fingerprint access summary
+ */
+export interface FingerprintSummary {
+  [category: string]: {
+    count: number;
+    blocked: number;
+    spoofed: number;
+  };
+}
+
+/**
+ * Fingerprint data stored per tab
+ */
+export interface FingerprintData {
+  summary: FingerprintSummary;
+  detail: FingerprintAccess[];
+  url: string;
+  lastUpdated: number;
+}
+
+/**
+ * Spoofer recommendation
+ */
+export interface SpooferRecommendation {
+  api: string;
+  category: string;
+  settingPath: string;
+  currentValue: string;
+}
+
+/**
+ * Recommendations response
+ */
+export interface RecommendationsResponse {
+  recommendations: SpooferRecommendation[];
+  accessedCategories: string[];
+  totalAccesses: number;
+  url: string;
+}
 
 /**
  * Base message structure
@@ -124,6 +180,32 @@ export interface InjectConfigMessage extends BaseMessage {
 }
 
 /**
+ * Fingerprint report message
+ */
+export interface FingerprintReportMessage extends BaseMessage {
+  type: 'FINGERPRINT_REPORT';
+  summary: FingerprintSummary;
+  detail: FingerprintAccess[];
+  url: string;
+}
+
+/**
+ * Get fingerprint data message
+ */
+export interface GetFingerprintDataMessage extends BaseMessage {
+  type: 'GET_FINGERPRINT_DATA';
+  tabId?: number;
+}
+
+/**
+ * Get recommendations message
+ */
+export interface GetRecommendationsMessage extends BaseMessage {
+  type: 'GET_RECOMMENDATIONS';
+  tabId?: number;
+}
+
+/**
  * Union of all message types
  */
 export type ExtensionMessage =
@@ -133,7 +215,10 @@ export type ExtensionMessage =
   | GetContainerInfoMessage
   | GetAllContainersMessage
   | IPConflictCheckMessage
-  | InjectConfigMessage;
+  | InjectConfigMessage
+  | FingerprintReportMessage
+  | GetFingerprintDataMessage
+  | GetRecommendationsMessage;
 
 /**
  * Firefox container identity
