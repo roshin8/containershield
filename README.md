@@ -143,33 +143,71 @@ With 25 UAs × 30 screens × 6 cores × 5 RAM × 13 timezones × 14 languages = 
 ```
 containershield/
 ├── src/
-│   ├── background/          # Background service worker
-│   │   ├── container-manager.ts
-│   │   ├── profile-manager.ts   # Ensures unique profiles
-│   │   ├── settings-store.ts
-│   │   ├── header-spoofer.ts
-│   │   └── ip-isolation.ts
+│   ├── background/              # Background service worker
+│   │   ├── index.ts             # Entry point
+│   │   ├── container-manager.ts # Container detection & lifecycle
+│   │   ├── profile-manager.ts   # Ensures unique profiles per container
+│   │   ├── profile-rotation.ts  # Automatic fingerprint rotation
+│   │   ├── settings-store.ts    # Per-container settings storage
+│   │   ├── message-handler.ts   # Extension message routing
+│   │   ├── header-spoofer.ts    # HTTP header modification
+│   │   └── ip-isolation.ts      # Cross-container IP warnings
 │   │
-│   ├── inject/              # Page context injection
-│   │   └── spoofers/        # Fingerprint spoofers
-│   │       ├── graphics/    # Canvas, WebGL, SVG, etc.
-│   │       ├── audio/       # AudioContext
-│   │       ├── hardware/    # Screen, device, battery
-│   │       ├── navigator/   # User-Agent, plugins
-│   │       ├── timezone/    # Intl, Date
-│   │       ├── fonts/       # Font enumeration
-│   │       ├── network/     # WebRTC
-│   │       └── timing/      # performance.now()
+│   ├── content/                 # Content script
+│   │   └── index.ts             # Injects spoofers into pages
 │   │
-│   ├── popup/               # React UI
+│   ├── inject/                  # Page context (MAIN world)
+│   │   ├── index.ts             # Spoofer initialization
+│   │   ├── monitor/             # Fingerprint access monitoring
+│   │   └── spoofers/            # 50+ fingerprint spoofers
+│   │       ├── graphics/        # Canvas, WebGL, WebGPU, SVG, etc.
+│   │       ├── audio/           # AudioContext, codecs
+│   │       ├── hardware/        # Screen, sensors, battery
+│   │       ├── navigator/       # User-Agent, plugins, clipboard
+│   │       ├── timezone/        # Intl, Date
+│   │       ├── fonts/           # Font enumeration
+│   │       ├── network/         # WebRTC, connection
+│   │       ├── timing/          # performance.now()
+│   │       ├── storage/         # IndexedDB, WebSQL
+│   │       ├── devices/         # Gamepad, MIDI, Bluetooth, USB
+│   │       └── ...              # And more
 │   │
-│   └── lib/
-│       ├── crypto.ts        # PRNG, hashing
-│       ├── farbling.ts      # Noise injection
-│       └── profiles/        # UA & screen databases
+│   ├── popup/                   # React UI
+│   │   ├── App.tsx              # Main popup component
+│   │   ├── components/
+│   │   │   ├── ContainerSelector.tsx
+│   │   │   ├── ProtectionLevel.tsx
+│   │   │   ├── CategoryToggle.tsx
+│   │   │   ├── SignalList.tsx        # Individual signal controls
+│   │   │   ├── ProfilePresets.tsx    # Browser profile selection
+│   │   │   ├── ProfileRotation.tsx   # Rotation settings
+│   │   │   ├── DomainExceptions.tsx  # Site whitelisting
+│   │   │   ├── StatisticsDashboard.tsx
+│   │   │   ├── SettingsManager.tsx   # Export/import
+│   │   │   ├── FingerprintMonitor.tsx
+│   │   │   └── ErrorBoundary.tsx
+│   │   └── hooks/
+│   │       ├── useContainers.ts
+│   │       └── useSettings.ts
+│   │
+│   ├── lib/
+│   │   ├── crypto.ts            # PRNG (xorshift128+), SHA-256
+│   │   ├── farbling.ts          # Brave-style noise injection
+│   │   ├── logger.ts            # Configurable logging
+│   │   ├── validation.ts        # Input validation utilities
+│   │   ├── constants.ts         # Shared constants
+│   │   └── profiles/            # Browser profile databases
+│   │
+│   ├── constants/               # Message types, config values
+│   └── types/                   # TypeScript type definitions
 │
-├── manifest.json            # Firefox extension manifest
-└── dist/                    # Built extension
+├── tests/
+│   ├── unit/                    # Vitest unit tests
+│   └── e2e/                     # Playwright E2E tests
+│
+├── public/icons/                # Extension icons (SVG)
+├── manifest.json                # Firefox extension manifest v2
+└── dist/                        # Built extension
 ```
 
 ## Development
