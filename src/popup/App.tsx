@@ -5,6 +5,7 @@ import { createDefaultSettings } from '@/types/settings';
 import ContainerSelector from './components/ContainerSelector';
 import ProtectionLevel from './components/ProtectionLevel';
 import CategoryToggle from './components/CategoryToggle';
+import FingerprintMonitor from './components/FingerprintMonitor';
 
 interface ContainerInfo {
   containerId: string;
@@ -90,6 +91,22 @@ export default function App() {
     }
   };
 
+  // Enable a specific spoofer from recommendation
+  const enableSpoofer = async (settingPath: string) => {
+    const [category, setting] = settingPath.split('.');
+    if (!category || !setting) return;
+
+    const currentSpoofers = { ...settings.spoofers } as any;
+    if (currentSpoofers[category]) {
+      currentSpoofers[category] = {
+        ...currentSpoofers[category],
+        [setting]: 'noise',
+      };
+    }
+
+    await saveSettings({ spoofers: currentSpoofers });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -122,6 +139,9 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        {/* Fingerprint Monitor */}
+        <FingerprintMonitor onEnableSpoofer={enableSpoofer} />
+
         {/* Enable/Disable Toggle */}
         <div className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
           <div>

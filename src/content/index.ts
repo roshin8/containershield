@@ -65,3 +65,53 @@ async function injectSpoofers(): Promise<void> {
 
 // Run injection as early as possible
 injectSpoofers();
+
+/**
+ * Listen for messages from the injected page script
+ * This bridges communication between page context and background
+ */
+window.addEventListener('message', async (event) => {
+  // Only accept messages from the same window
+  if (event.source !== window) return;
+
+  const { type, ...data } = event.data || {};
+
+  // Forward fingerprint reports to background
+  if (type === 'CONTAINER_SHIELD_FINGERPRINT_REPORT') {
+    try {
+      await browser.runtime.sendMessage({
+        type: 'FINGERPRINT_REPORT',
+        summary: data.summary,
+        detail: data.detail,
+        url: data.url,
+      });
+    } catch (error) {
+      // Extension context may be invalidated
+    }
+  }
+
+  // Handle request for recommendations
+  if (type === 'CONTAINER_SHIELD_GET_RECOMMENDATIONS') {
+    // The page script will handle this internally
+  }
+});
+
+/**
+ * Listen for messages from the popup requesting fingerprint data
+ */
+browser.runtime.onMessage.addListener((message, sender) => {
+  if (message.type === 'GET_FINGERPRINT_REPORT') {
+    // Request report from page script
+    window.postMessage({ type: 'CONTAINER_SHIELD_GET_REPORT' }, '*');
+    return true;
+  }
+
+  if (message.type === 'GET_RECOMMENDATIONS') {
+    // Request recommendations from page script with current settings
+    window.postMessage({
+      type: 'CONTAINER_SHIELD_GET_RECOMMENDATIONS',
+      settings: message.settings,
+    }, '*');
+    return true;
+  }
+});
