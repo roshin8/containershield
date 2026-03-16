@@ -1,14 +1,16 @@
 {
   "manifest_version": 2,
-  "name": "Chameleon Containers",
-  "version": "0.1.0",
+  "name": "Container Shield",
+  "version": "0.2.0",
   "description": "Per-container fingerprint spoofing and privacy protection for Firefox Multi-Account Containers",
 
   "author": "",
-  "homepage_url": "",
+  "homepage_url": "https://github.com/yourusername/containershield",
 
   "icons": {
-    "48": "icons/icon-48.svg"
+    "48": "icons/icon-48.svg",
+    "96": "icons/icon-96.svg",
+    "128": "icons/icon-128.svg"
   },
 
   "permissions": [
@@ -43,9 +45,10 @@
 
   "browser_action": {
     "default_icon": {
-      "48": "icons/icon-48.svg"
+      "48": "icons/icon-48.svg",
+      "96": "icons/icon-96.svg"
     },
-    "default_title": "Chameleon Containers",
+    "default_title": "Container Shield",
     "default_popup": "popup/index.html"
   },
 

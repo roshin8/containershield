@@ -11,24 +11,27 @@ Each Firefox container gets a unique, cryptographically-isolated fingerprint tha
 - **Profile uniqueness**: No two containers share the same fingerprint signature
 - **IP isolation**: Warns when accessing the same IP from different containers
 
-### Fingerprint Spoofing (25+ APIs)
+### Fingerprint Spoofing (50+ APIs)
 
 | Category | Spoofed APIs |
 |----------|-------------|
-| **Graphics** | Canvas 2D, WebGL, WebGL2, SVG, DOMRect, TextMetrics |
-| **Audio** | AudioContext, AnalyserNode, Codec detection |
-| **Hardware** | Screen dimensions, deviceMemory, hardwareConcurrency, Battery, MediaDevices |
-| **Navigator** | User-Agent, Platform, Languages, Plugins, Client Hints |
+| **Graphics** | Canvas 2D, WebGL, WebGL2, WebGPU, SVG, DOMRect, TextMetrics, OffscreenCanvas |
+| **Audio** | AudioContext, OfflineAudioContext, AnalyserNode, Audio Latency, Codec detection |
+| **Hardware** | Screen dimensions, Screen Frame, Orientation, deviceMemory, hardwareConcurrency, Battery, MediaDevices, Sensors |
+| **Navigator** | User-Agent, Platform, Languages, Plugins, Client Hints, Clipboard, Vibration |
 | **Timezone** | Date.getTimezoneOffset, Intl.DateTimeFormat |
-| **Fonts** | Font enumeration detection |
+| **Fonts** | Font enumeration, CSS font detection |
 | **Network** | WebRTC IP leak, NetworkInformation API |
 | **Timing** | performance.now() precision reduction |
 | **CSS** | Media queries (prefers-color-scheme, etc.) |
 | **Speech** | SpeechSynthesis voices |
-| **Permissions** | Permissions API queries |
-| **Storage** | StorageManager.estimate() |
+| **Permissions** | Permissions API, Notification.permission |
+| **Storage** | StorageManager.estimate(), IndexedDB, WebSQL |
 | **Math** | Math function precision |
 | **Keyboard** | Keyboard layout detection |
+| **Devices** | Gamepad, MIDI, Bluetooth, USB, Serial, HID |
+| **Rendering** | Emoji, MathML |
+| **Payment** | Apple Pay detection |
 
 ### Fingerprint Access Monitor
 Container Shield tracks which fingerprinting APIs websites try to access:
@@ -41,6 +44,22 @@ Container Shield tracks which fingerprinting APIs websites try to access:
 - **Off**: No protection
 - **Noise**: Adds deterministic noise (recommended)
 - **Block**: Returns fake/empty values
+
+### Profile Rotation
+- **Auto-rotate**: Automatically regenerate fingerprint seeds on schedule
+- **Schedules**: Hourly, Daily, Weekly, or on browser restart
+- **Manual rotation**: Rotate any container's fingerprint instantly
+
+### Statistics Dashboard
+- **Real-time tracking**: Monitor blocked and spoofed API accesses
+- **Category breakdown**: See which fingerprinting techniques are used most
+- **Domain tracking**: Identify which sites fingerprint most aggressively
+- **Protection rate**: View your overall protection percentage
+
+### Settings Management
+- **Export/Import**: Backup and restore all settings
+- **Domain exceptions**: Preset categories for banking, streaming, gaming, etc.
+- **Per-signal control**: Fine-tune each individual API's protection
 
 ### Browser Profiles
 - 25+ realistic browser profiles (Chrome, Firefox, Safari, Edge)
