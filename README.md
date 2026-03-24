@@ -145,20 +145,23 @@ You can also **manually rotate** any container's fingerprint instantly from the 
 <details>
 <summary><h3>👤 Browser Profile Presets</h3></summary>
 
-25+ realistic browser profiles to choose from:
+**35+ realistic browser profiles** to choose from:
 
 **Desktop:**
-- Chrome 121 on Windows 11
-- Chrome 121 on macOS Sonoma
-- Firefox 122 on Windows 11
-- Firefox 122 on Ubuntu Linux
-- Safari 17 on macOS Sonoma
-- Edge 121 on Windows 11
+- Chrome 121/122 on Windows 11
+- Chrome 121/122 on macOS Sonoma
+- Firefox 122/123 on Windows 11
+- Firefox 122/123 on Ubuntu Linux
+- Safari 17/17.3 on macOS Sonoma
+- Edge 121/122 on Windows 11
+- Opera 106 on Windows 11
+- Brave 121 on Windows 11/macOS
 
 **Mobile:**
 - Chrome on Android 14 (Pixel 8)
 - Safari on iOS 17 (iPhone 15)
-- Samsung Internet on Galaxy S24
+- Samsung Internet 23/24 on Galaxy S24
+- Safari on iPadOS 17
 
 Each profile includes:
 - Accurate User-Agent string
@@ -251,6 +254,85 @@ Settings are stored locally using `browser.storage.local`.
 
 </details>
 
+<details>
+<summary><h3>⌨️ Keyboard Shortcuts</h3></summary>
+
+Quick access via keyboard commands:
+
+| Shortcut | Action |
+|----------|--------|
+| **Alt+Shift+P** | Toggle fingerprint protection for current container |
+| **Alt+Shift+R** | Rotate fingerprint (generate new identity) |
+| **Alt+Shift+E** | Toggle site exception for current domain |
+| **Alt+Shift+C** | Open Container Shield popup |
+
+All shortcuts can be customized via Firefox's add-on shortcuts settings (`about:addons` → ⚙️ → Manage Extension Shortcuts).
+
+</details>
+
+<details>
+<summary><h3>🖱️ Context Menu Integration</h3></summary>
+
+Right-click anywhere on a page to access quick actions:
+
+- **Toggle Protection** - Enable/disable for current site
+- **Rotate Fingerprint** - Generate new identity instantly
+- **Add Site Exception** - Whitelist current domain
+- **Open Options** - Access full settings page
+
+The context menu provides the same functionality as keyboard shortcuts for mouse users.
+
+</details>
+
+<details>
+<summary><h3>🌙 Dark Mode</h3></summary>
+
+Full dark mode support for comfortable viewing:
+
+| Mode | Behavior |
+|------|----------|
+| **Auto** | Follows system preference (`prefers-color-scheme`) |
+| **Light** | Always use light theme |
+| **Dark** | Always use dark theme |
+
+Dark mode applies to:
+- Popup interface
+- Options page
+- Onboarding page
+- IP conflict warnings
+
+</details>
+
+<details>
+<summary><h3>🎯 Toolbar Badge</h3></summary>
+
+Real-time feedback in the toolbar icon:
+
+- **Badge Number** - Shows count of blocked/spoofed API accesses for the current tab
+- **Color Coding**:
+  - 🟢 Green badge = Protection active, APIs spoofed
+  - 🔴 Red badge = APIs were blocked
+  - No badge = No fingerprinting detected on this page
+
+Click the icon to see detailed breakdown by category.
+
+</details>
+
+<details>
+<summary><h3>🚀 First-Run Onboarding</h3></summary>
+
+New users are greeted with a comprehensive onboarding page:
+
+1. **Welcome** - Overview of Container Shield's purpose
+2. **How It Works** - Explanation of per-container isolation
+3. **Quick Setup** - Recommended initial settings
+4. **Keyboard Shortcuts** - Learn the quick access commands
+5. **Testing** - Links to verify your protection
+
+The onboarding page only shows once on first install.
+
+</details>
+
 ---
 
 ## Installation
@@ -279,6 +361,22 @@ npm run build
 ### Permanent Installation
 
 For permanent installation, the extension needs to be signed by Mozilla or installed in Firefox Developer/Nightly with `xpinstall.signatures.required` set to `false`.
+
+### Package for Distribution
+
+```bash
+# Create AMO-ready package
+./scripts/package.sh
+
+# Output:
+# packages/containershield-0.3.0.zip  (for AMO submission)
+# packages/containershield-0.3.0.xpi  (for self-distribution)
+```
+
+To submit to Firefox Add-ons (AMO):
+1. Create account at https://addons.mozilla.org/developers/
+2. Upload the `.zip` file
+3. Wait for review and signing
 
 ---
 
@@ -871,7 +969,10 @@ containershield/
 │   │   ├── settings-store.ts          # Per-container settings CRUD
 │   │   ├── message-handler.ts         # Extension message routing
 │   │   ├── header-spoofer.ts          # HTTP header modification (User-Agent, etc.)
-│   │   └── ip-isolation.ts            # Cross-container IP warnings
+│   │   ├── ip-isolation.ts            # Cross-container IP warnings
+│   │   ├── badge-manager.ts           # Toolbar badge with blocked/spoofed count
+│   │   ├── context-menu.ts            # Right-click context menu integration
+│   │   └── keyboard-shortcuts.ts      # Keyboard command handlers
 │   │
 │   ├── content/                       # Content script (ISOLATED world)
 │   │   └── index.ts                   # Injects page script with config
@@ -944,10 +1045,19 @@ containershield/
 │   │   │   ├── StatisticsDashboard.tsx
 │   │   │   ├── SettingsManager.tsx    # Export/import/reset
 │   │   │   ├── FingerprintMonitor.tsx # Live API access log
+│   │   │   ├── PerDomainRules.tsx     # Per-domain custom rules
 │   │   │   └── ErrorBoundary.tsx
 │   │   └── hooks/
 │   │       ├── useContainers.ts       # Container management hook
-│   │       └── useSettings.ts         # Settings management hook
+│   │       ├── useSettings.ts         # Settings management hook
+│   │       └── useDarkMode.ts         # Dark mode preference hook
+│   │
+│   ├── pages/                         # Standalone extension pages
+│   │   ├── onboarding.html            # First-run welcome page
+│   │   ├── options.html               # Full settings page
+│   │   ├── options.tsx                # Options React component
+│   │   ├── ip-warning.html            # IP conflict warning page
+│   │   └── ip-warning.tsx             # IP warning React component
 │   │
 │   ├── lib/
 │   │   ├── crypto.ts                  # PRNG (xorshift128+), SHA-256
@@ -957,7 +1067,7 @@ containershield/
 │   │   ├── constants.ts               # Shared constants
 │   │   └── profiles/
 │   │       ├── index.ts               # Profile manager
-│   │       ├── user-agents.ts         # 25+ browser UA strings
+│   │       ├── user-agents.ts         # 35+ browser UA strings
 │   │       └── screen-sizes.ts        # 30+ screen resolutions
 │   │
 │   ├── constants/
@@ -984,6 +1094,9 @@ containershield/
 │       ├── icon-48.svg
 │       ├── icon-96.svg
 │       └── icon-128.svg
+│
+├── scripts/
+│   └── package.sh                     # AMO packaging script (.zip/.xpi)
 │
 ├── manifest.json                      # Firefox WebExtension manifest v2
 ├── vite.config.ts                     # Vite build configuration
@@ -1070,12 +1183,13 @@ Contributions are welcome! Please see our contributing guidelines:
 
 ### Areas for Contribution
 
-- [ ] Additional browser profiles
-- [ ] More spoofing APIs
-- [ ] Firefox Add-ons signing
+- [x] ~~Additional browser profiles~~ (35+ profiles now included)
+- [ ] E2E tests against fingerprinting sites (CreepJS, BrowserLeaks)
+- [ ] Firefox Add-ons signing and publishing
 - [ ] Chrome/Edge port (Manifest V3)
-- [ ] Documentation improvements
+- [ ] More spoofing APIs (WebGPU, Speech Synthesis)
 - [ ] Bug fixes and testing
+- [ ] Translations/i18n support
 
 ---
 

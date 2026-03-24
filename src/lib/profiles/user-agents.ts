@@ -604,7 +604,148 @@ const ANDROID_CHROME_PROFILES: UserAgentProfile[] = [
   },
 ];
 
-// iOS Safari profiles
+// Samsung Internet profiles
+const SAMSUNG_INTERNET_PROFILES: UserAgentProfile[] = [
+  {
+    id: 'samsung-25',
+    name: 'Samsung Internet 25 (Galaxy S24)',
+    userAgent:
+      'Mozilla/5.0 (Linux; Android 14; SM-S921B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.6167.101 Mobile Safari/537.36',
+    platform: 'Linux armv81',
+    vendor: 'Google Inc.',
+    vendorSub: '',
+    appVersion:
+      '5.0 (Linux; Android 14; SM-S921B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.6167.101 Mobile Safari/537.36',
+    appName: 'Netscape',
+    appCodeName: 'Mozilla',
+    product: 'Gecko',
+    productSub: '20030107',
+    mobile: true,
+    platformName: 'Android',
+    platformVersion: '14.0.0',
+    architecture: '',
+    bitness: '',
+    model: 'SM-S921B',
+    brands: [
+      { brand: 'Not A(Brand', version: '99' },
+      { brand: 'Samsung Internet', version: '25' },
+      { brand: 'Chromium', version: '121' },
+    ],
+  },
+];
+
+// Opera profiles
+const OPERA_PROFILES: UserAgentProfile[] = [
+  {
+    id: 'win-opera-106',
+    name: 'Opera 106 (Windows 11)',
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 OPR/106.0.0.0',
+    platform: 'Win32',
+    vendor: 'Google Inc.',
+    vendorSub: '',
+    appVersion:
+      '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 OPR/106.0.0.0',
+    appName: 'Netscape',
+    appCodeName: 'Mozilla',
+    product: 'Gecko',
+    productSub: '20030107',
+    mobile: false,
+    platformName: 'Windows',
+    platformVersion: '15.0.0',
+    architecture: 'x86',
+    bitness: '64',
+    model: '',
+    brands: [
+      { brand: 'Not A(Brand', version: '99' },
+      { brand: 'Opera', version: '106' },
+      { brand: 'Chromium', version: '121' },
+    ],
+  },
+  {
+    id: 'mac-opera-106',
+    name: 'Opera 106 (macOS)',
+    userAgent:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 OPR/106.0.0.0',
+    platform: 'MacIntel',
+    vendor: 'Google Inc.',
+    vendorSub: '',
+    appVersion:
+      '5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 OPR/106.0.0.0',
+    appName: 'Netscape',
+    appCodeName: 'Mozilla',
+    product: 'Gecko',
+    productSub: '20030107',
+    mobile: false,
+    platformName: 'macOS',
+    platformVersion: '14.3.0',
+    architecture: 'x86',
+    bitness: '64',
+    model: '',
+    brands: [
+      { brand: 'Not A(Brand', version: '99' },
+      { brand: 'Opera', version: '106' },
+      { brand: 'Chromium', version: '121' },
+    ],
+  },
+];
+
+// Brave profiles
+const BRAVE_PROFILES: UserAgentProfile[] = [
+  {
+    id: 'win-brave-121',
+    name: 'Brave 1.62 (Windows 11)',
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    platform: 'Win32',
+    vendor: 'Google Inc.',
+    vendorSub: '',
+    appVersion:
+      '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    appName: 'Netscape',
+    appCodeName: 'Mozilla',
+    product: 'Gecko',
+    productSub: '20030107',
+    mobile: false,
+    platformName: 'Windows',
+    platformVersion: '15.0.0',
+    architecture: 'x86',
+    bitness: '64',
+    model: '',
+    brands: [
+      { brand: 'Not A(Brand', version: '99' },
+      { brand: 'Brave', version: '121' },
+      { brand: 'Chromium', version: '121' },
+    ],
+  },
+  {
+    id: 'mac-brave-121',
+    name: 'Brave 1.62 (macOS)',
+    userAgent:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    platform: 'MacIntel',
+    vendor: 'Google Inc.',
+    vendorSub: '',
+    appVersion:
+      '5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    appName: 'Netscape',
+    appCodeName: 'Mozilla',
+    product: 'Gecko',
+    productSub: '20030107',
+    mobile: false,
+    platformName: 'macOS',
+    platformVersion: '14.3.0',
+    architecture: 'x86',
+    bitness: '64',
+    model: '',
+    brands: [
+      { brand: 'Not A(Brand', version: '99' },
+      { brand: 'Brave', version: '121' },
+      { brand: 'Chromium', version: '121' },
+    ],
+  },
+];
+
 const IOS_SAFARI_PROFILES: UserAgentProfile[] = [
   {
     id: 'ios-safari-17',
@@ -671,7 +812,7 @@ const IOS_SAFARI_PROFILES: UserAgentProfile[] = [
   },
 ];
 
-// All profiles combined
+// All profiles combined (35+ profiles)
 export const ALL_PROFILES: UserAgentProfile[] = [
   ...WINDOWS_CHROME_PROFILES,
   ...WINDOWS_FIREFOX_PROFILES,
@@ -682,6 +823,9 @@ export const ALL_PROFILES: UserAgentProfile[] = [
   ...LINUX_CHROME_PROFILES,
   ...LINUX_FIREFOX_PROFILES,
   ...ANDROID_CHROME_PROFILES,
+  ...SAMSUNG_INTERNET_PROFILES,
+  ...OPERA_PROFILES,
+  ...BRAVE_PROFILES,
   ...IOS_SAFARI_PROFILES,
 ];
 
@@ -708,6 +852,9 @@ export const PROFILES_BY_BROWSER = {
   ],
   safari: [...MACOS_SAFARI_PROFILES, ...IOS_SAFARI_PROFILES],
   edge: [...WINDOWS_EDGE_PROFILES],
+  opera: [...OPERA_PROFILES],
+  brave: [...BRAVE_PROFILES],
+  samsung: [...SAMSUNG_INTERNET_PROFILES],
 };
 
 // Desktop-only profiles (for when mobile doesn't make sense)

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to Container Shield</title>
+  <link rel="stylesheet" href="../popup/index.css">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+      color: #f8fafc;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .logo {
+      width: 96px;
+      height: 96px;
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin: 0 0 10px;
+      background: linear-gradient(135deg, #60a5fa, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 1.2rem;
+      color: #94a3b8;
+    }
+    .steps {
+      display: grid;
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+    .step {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+    .step-number {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #3b82f6, #10b981);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+    .step-content h3 {
+      margin: 0 0 8px;
+      font-size: 1.1rem;
+    }
+    .step-content p {
+      margin: 0;
+      color: #94a3b8;
+      line-height: 1.6;
+    }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .feature {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .feature-icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+    .feature h4 {
+      margin: 0 0 4px;
+      font-size: 0.95rem;
+    }
+    .feature p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+    .cta {
+      text-align: center;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 32px;
+      background: linear-gradient(135deg, #3b82f6, #10b981);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1.1rem;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 40px rgba(59, 130, 246, 0.3);
+    }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      margin-left: 12px;
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: none;
+      transform: none;
+    }
+    .shortcuts {
+      margin-top: 40px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .shortcuts h3 {
+      margin: 0 0 16px;
+      font-size: 1rem;
+      color: #94a3b8;
+    }
+    .shortcut-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 12px;
+    }
+    .shortcut {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+    }
+    .shortcut-key {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+    .footer {
+      margin-top: 60px;
+      text-align: center;
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+    .footer a {
+      color: #60a5fa;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="../icons/icon-96.svg" alt="Container Shield" class="logo">
+      <h1>Welcome to Container Shield</h1>
+      <p class="subtitle">Per-container fingerprint protection for Firefox</p>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>Open a Container Tab</h3>
+          <p>Container Shield works with Firefox Multi-Account Containers. Each container gets its own unique fingerprint that cannot be linked to other containers.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>Click the Shield Icon</h3>
+          <p>Click the Container Shield icon in your toolbar to see protection status, adjust settings, and view which fingerprinting techniques websites are using.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Choose Your Protection Level</h3>
+          <p><strong>Balanced</strong> mode is recommended for most users. It adds noise to fingerprinting APIs without breaking websites. Use <strong>Strict</strong> for maximum privacy.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h3>Browse Privately</h3>
+          <p>That's it! Container Shield now protects 50+ fingerprinting APIs. Each container has a unique, consistent fingerprint that won't change between page loads.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">🎨</div>
+        <h4>Canvas & WebGL</h4>
+        <p>Noise injection</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔊</div>
+        <h4>AudioContext</h4>
+        <p>Audio fingerprint</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">💻</div>
+        <h4>Hardware</h4>
+        <p>Screen, CPU, RAM</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🌐</div>
+        <h4>WebRTC</h4>
+        <p>IP leak protection</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🕐</div>
+        <h4>Timezone</h4>
+        <p>Location masking</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📊</div>
+        <h4>50+ APIs</h4>
+        <p>Comprehensive</p>
+      </div>
+    </div>
+
+    <div class="cta">
+      <button class="btn" id="get-started">Get Started</button>
+      <a href="https://github.com/roshin8/containershield" class="btn btn-secondary" target="_blank">Learn More</a>
+    </div>
+
+    <div class="shortcuts">
+      <h3>Keyboard Shortcuts</h3>
+      <div class="shortcut-list">
+        <div class="shortcut">
+          <span>Toggle protection</span>
+          <span class="shortcut-key">Alt+Shift+P</span>
+        </div>
+        <div class="shortcut">
+          <span>Rotate fingerprint</span>
+          <span class="shortcut-key">Alt+Shift+R</span>
+        </div>
+        <div class="shortcut">
+          <span>Toggle site exception</span>
+          <span class="shortcut-key">Alt+Shift+E</span>
+        </div>
+        <div class="shortcut">
+          <span>Open popup</span>
+          <span class="shortcut-key">Alt+Shift+C</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>Container Shield is open source. <a href="https://github.com/roshin8/containershield">View on GitHub</a></p>
+      <p>Made with care for your privacy.</p>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('get-started').addEventListener('click', () => {
+      // Mark onboarding as complete
+      browser.storage.local.set({ onboardingComplete: true });
+      // Close this tab
+      window.close();
+    });
+  </script>
+</body>
+</html>

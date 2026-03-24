@@ -1,11 +1,14 @@
 /**
- * Background script entry point for Chameleon Containers
+ * Background script entry point for Container Shield
  *
  * This script runs persistently and handles:
  * - Container detection and settings management
  * - Header spoofing via webRequest
  * - IP isolation tracking
  * - Message routing between components
+ * - Toolbar badge updates
+ * - Context menu integration
+ * - Keyboard shortcuts
  */
 
 import browser from 'webextension-polyfill';
@@ -15,6 +18,9 @@ import { HeaderSpoofer } from './header-spoofer';
 import { IPIsolation } from './ip-isolation';
 import { MessageHandler } from './message-handler';
 import { initProfileManager } from './profile-manager';
+import { getBadgeManager } from './badge-manager';
+import { ContextMenuManager } from './context-menu';
+import { KeyboardShortcuts } from './keyboard-shortcuts';
 import { EXTENSION_VERSION, STORAGE_KEYS } from '@/lib/constants';
 
 // Global instances
@@ -23,12 +29,14 @@ let settingsStore: SettingsStore;
 let headerSpoofer: HeaderSpoofer;
 let ipIsolation: IPIsolation;
 let messageHandler: MessageHandler;
+let contextMenuManager: ContextMenuManager;
+let keyboardShortcuts: KeyboardShortcuts;
 
 /**
  * Initialize the extension
  */
 async function init(): Promise<void> {
-  console.log(`[Chameleon Containers] Initializing v${EXTENSION_VERSION}`);
+  console.log(`[Container Shield] Initializing v${EXTENSION_VERSION}`);
 
   try {
     // Initialize settings store first
@@ -58,14 +66,43 @@ async function init(): Promise<void> {
     );
     messageHandler.init();
 
+    // Initialize badge manager
+    const badgeManager = getBadgeManager();
+    await badgeManager.init();
+
+    // Initialize context menu
+    contextMenuManager = new ContextMenuManager(settingsStore, containerManager);
+    await contextMenuManager.init();
+
+    // Initialize keyboard shortcuts
+    keyboardShortcuts = new KeyboardShortcuts(settingsStore);
+    keyboardShortcuts.init();
+
+    // Check for first run and show onboarding
+    await checkFirstRun();
+
     // Store version
     await browser.storage.local.set({
       [STORAGE_KEYS.VERSION]: EXTENSION_VERSION,
     });
 
-    console.log('[Chameleon Containers] Initialization complete');
+    console.log('[Container Shield] Initialization complete');
   } catch (error) {
-    console.error('[Chameleon Containers] Initialization failed:', error);
+    console.error('[Container Shield] Initialization failed:', error);
+  }
+}
+
+/**
+ * Check if this is the first run and show onboarding
+ */
+async function checkFirstRun(): Promise<void> {
+  const { onboardingComplete } = await browser.storage.local.get('onboardingComplete');
+
+  if (!onboardingComplete) {
+    // Open onboarding page
+    await browser.tabs.create({
+      url: browser.runtime.getURL('pages/onboarding.html'),
+    });
   }
 }
 

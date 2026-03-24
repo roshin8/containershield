@@ -23,8 +23,10 @@ export default defineConfig({
         inject: resolve(__dirname, 'src/inject/index.ts'),
         // Popup UI
         popup: resolve(__dirname, 'src/popup/index.html'),
-        // IP warning page
+        // Pages
         'ip-warning': resolve(__dirname, 'src/pages/ip-warning.html'),
+        'onboarding': resolve(__dirname, 'src/pages/onboarding.html'),
+        'options': resolve(__dirname, 'src/pages/options.html'),
       },
       output: {
         entryFileNames: (chunkInfo) => {
@@ -34,6 +36,8 @@ export default defineConfig({
           if (chunkInfo.name === 'inject') return 'inject/index.js';
           if (chunkInfo.name === 'popup') return 'popup/index.js';
           if (chunkInfo.name === 'ip-warning') return 'pages/ip-warning.js';
+          if (chunkInfo.name === 'onboarding') return 'pages/onboarding.js';
+          if (chunkInfo.name === 'options') return 'pages/options.js';
           return '[name].js';
         },
         chunkFileNames: 'chunks/[name]-[hash].js',
