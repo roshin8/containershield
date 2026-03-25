@@ -10,7 +10,30 @@
  * Run with: npx playwright test tests/e2e/fingerprint-sites.test.ts
  */
 
-import { test, expect, firefox, type BrowserContext, type Page } from '@playwright/test';
+/**
+ * Note: These tests require @playwright/test to be installed.
+ * Install with: npm install -D @playwright/test
+ * Then run: npx playwright test tests/e2e/fingerprint-sites.test.ts
+ */
+
+let test: any, expect: any, firefox: any;
+let playwrightAvailable = false;
+
+try {
+  const playwright = require('@playwright/test');
+  test = playwright.test;
+  expect = playwright.expect;
+  firefox = playwright.firefox;
+  playwrightAvailable = true;
+} catch {
+  // Playwright not installed - use vitest with skipped tests
+  const vitest = require('vitest');
+  test = vitest.describe;
+  test.describe = vitest.describe;
+  test.beforeAll = vitest.beforeAll;
+  expect = vitest.expect;
+}
+
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -37,7 +60,10 @@ const TEST_CONFIG = {
  * Note: Playwright's Firefox support for extensions is limited.
  * For full testing, use web-ext or Firefox's about:debugging.
  */
-test.describe('Fingerprint Protection E2E Tests', () => {
+// Skip all E2E tests when running in vitest without Playwright
+const describeOrSkip = playwrightAvailable ? test.describe : test.describe.skip;
+
+describeOrSkip('Fingerprint Protection E2E Tests', () => {
   // Skip if extension not built
   test.beforeAll(async () => {
     if (!fs.existsSync(EXTENSION_PATH)) {
