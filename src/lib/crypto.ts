@@ -131,7 +131,8 @@ export class PRNG {
     const bigInt = this.nextBigInt();
     // Use upper 53 bits for full precision
     const mantissa = Number(bigInt >> 11n);
-    return mantissa / (1 << 53);
+    // Note: Can't use (1 << 53) because JS bit shifts are 32-bit
+    return mantissa / 9007199254740992; // 2^53
   }
 
   /**

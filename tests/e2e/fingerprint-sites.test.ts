@@ -4,36 +4,13 @@
  * Tests the extension against real fingerprinting sites to verify
  * protection is working correctly.
  *
- * NOTE: These tests require manual Firefox setup with the extension loaded.
- * They use Playwright to automate browser interactions.
+ * NOTE: These tests require Playwright and are designed to be run with:
+ *   npx playwright test tests/e2e/fingerprint-sites.test.ts
  *
- * Run with: npx playwright test tests/e2e/fingerprint-sites.test.ts
+ * When run via vitest (npm test), these tests are skipped.
  */
 
-/**
- * Note: These tests require @playwright/test to be installed.
- * Install with: npm install -D @playwright/test
- * Then run: npx playwright test tests/e2e/fingerprint-sites.test.ts
- */
-
-let test: any, expect: any, firefox: any;
-let playwrightAvailable = false;
-
-try {
-  const playwright = require('@playwright/test');
-  test = playwright.test;
-  expect = playwright.expect;
-  firefox = playwright.firefox;
-  playwrightAvailable = true;
-} catch {
-  // Playwright not installed - use vitest with skipped tests
-  const vitest = require('vitest');
-  test = vitest.describe;
-  test.describe = vitest.describe;
-  test.beforeAll = vitest.beforeAll;
-  expect = vitest.expect;
-}
-
+import { describe, it, expect, beforeAll } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -54,25 +31,18 @@ const TEST_CONFIG = {
   timeout: 30000,
 };
 
-/**
- * Test fixture for Firefox with extension
- *
- * Note: Playwright's Firefox support for extensions is limited.
- * For full testing, use web-ext or Firefox's about:debugging.
- */
-// Skip all E2E tests when running in vitest without Playwright
-const describeOrSkip = playwrightAvailable ? test.describe : test.describe.skip;
-
-describeOrSkip('Fingerprint Protection E2E Tests', () => {
+// These E2E tests require Playwright and a real browser
+// Skip when running via vitest
+describe.skip('Fingerprint Protection E2E Tests', () => {
   // Skip if extension not built
-  test.beforeAll(async () => {
+  beforeAll(async () => {
     if (!fs.existsSync(EXTENSION_PATH)) {
       console.warn(`Extension not found at ${EXTENSION_PATH}. Run 'npm run build' first.`);
     }
   });
 
-  test.describe('Canvas Fingerprinting', () => {
-    test('should add noise to canvas fingerprint', async ({ page }) => {
+  describe('Canvas Fingerprinting', () => {
+    it('should add noise to canvas fingerprint', async ({ page }) => {
       // Create a test page with canvas fingerprinting
       await page.setContent(`
         <html>
@@ -104,7 +74,7 @@ describeOrSkip('Fingerprint Protection E2E Tests', () => {
       expect(fp2).toBeDefined();
     });
 
-    test('should modify getImageData results', async ({ page }) => {
+    it('should modify getImageData results', async ({ page }) => {
       await page.setContent(`
         <html>
           <body>
@@ -130,8 +100,8 @@ describeOrSkip('Fingerprint Protection E2E Tests', () => {
     });
   });
 
-  test.describe('WebGL Fingerprinting', () => {
-    test('should expose WebGL context', async ({ page }) => {
+  describe('WebGL Fingerprinting', () => {
+    it('should expose WebGL context', async ({ page }) => {
       await page.setContent(`
         <html>
           <body>
@@ -158,7 +128,7 @@ describeOrSkip('Fingerprint Protection E2E Tests', () => {
       expect(renderer).toBeDefined();
     });
 
-    test('should have UNMASKED extensions', async ({ page }) => {
+    it('should have UNMASKED extensions', async ({ page }) => {
       await page.setContent(`
         <html>
           <body>
@@ -186,8 +156,8 @@ describeOrSkip('Fingerprint Protection E2E Tests', () => {
     });
   });
 
-  test.describe('AudioContext Fingerprinting', () => {
-    test('should create AudioContext', async ({ page }) => {
+  describe('AudioContext Fingerprinting', () => {
+    it('should create AudioContext', async ({ page }) => {
       await page.setContent(`
         <html>
           <body>
@@ -211,8 +181,8 @@ describeOrSkip('Fingerprint Protection E2E Tests', () => {
     });
   });
 
-  test.describe('Navigator Properties', () => {
-    test('should expose navigator properties', async ({ page }) => {
+  describe('Navigator Properties', () => {
+    it('should expose navigator properties', async ({ page }) => {
       await page.goto('about:blank');
 
       const navigatorProps = await page.evaluate(() => ({
@@ -233,8 +203,8 @@ describeOrSkip('Fingerprint Protection E2E Tests', () => {
     });
   });
 
-  test.describe('Screen Properties', () => {
-    test('should expose screen properties', async ({ page }) => {
+  describe('Screen Properties', () => {
+    it('should expose screen properties', async ({ page }) => {
       await page.goto('about:blank');
 
       const screenProps = await page.evaluate(() => ({
@@ -253,8 +223,8 @@ describeOrSkip('Fingerprint Protection E2E Tests', () => {
     });
   });
 
-  test.describe('Timezone', () => {
-    test('should expose timezone information', async ({ page }) => {
+  describe('Timezone', () => {
+    it('should expose timezone information', async ({ page }) => {
       await page.goto('about:blank');
 
       const timezoneInfo = await page.evaluate(() => ({
@@ -267,8 +237,8 @@ describeOrSkip('Fingerprint Protection E2E Tests', () => {
     });
   });
 
-  test.describe('WebRTC', () => {
-    test('should have RTCPeerConnection', async ({ page }) => {
+  describe('WebRTC', () => {
+    it('should have RTCPeerConnection', async ({ page }) => {
       await page.goto('about:blank');
 
       const hasWebRTC = await page.evaluate(() => {
@@ -279,8 +249,8 @@ describeOrSkip('Fingerprint Protection E2E Tests', () => {
     });
   });
 
-  test.describe('Performance API', () => {
-    test('should expose performance.now()', async ({ page }) => {
+  describe('Performance API', () => {
+    it('should expose performance.now()', async ({ page }) => {
       await page.goto('about:blank');
 
       const perfTest = await page.evaluate(() => {

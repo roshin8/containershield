@@ -190,7 +190,7 @@ describe('crypto utilities', () => {
         const result = prng.shuffle(array);
 
         expect(result).toBe(array); // In place
-        expect(array.sort()).toEqual(original); // Same elements
+        expect(array.sort((a, b) => a - b)).toEqual(original); // Same elements
       });
     });
 
