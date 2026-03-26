@@ -1,7 +1,7 @@
 {
-  "name": "chameleon-containers",
-  "version": "0.1.0",
-  "description": "Firefox extension combining Chameleon's fingerprint spoofing with JShelter's API protection, with per-container isolation",
+  "name": "container-shield",
+  "version": "0.3.0",
+  "description": "Per-container fingerprint spoofing and privacy protection for Firefox Multi-Account Containers",
   "type": "module",
   "scripts": {
     "dev": "npm run build:dev && npm run copy-assets",
@@ -14,7 +14,8 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext ts,tsx",
     "test": "vitest",
-    "package": "npm run build:prod && cd dist && zip -r ../chameleon-containers.zip ."
+    "package": "npm run build:prod && cd dist && zip -r ../container-shield.zip .",
+    "package:source": "git archive --format=zip --output=container-shield-source.zip HEAD"
   },
   "keywords": [
     "firefox",

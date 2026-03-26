@@ -90,7 +90,7 @@
 
   "browser_specific_settings": {
     "gecko": {
-      "id": "containershield@example.com",
+      "id": "{b8f9c842-c4d0-4f61-bf3d-9e2a3a9d8f7e}",
       "strict_min_version": "91.0"
     }
   }
