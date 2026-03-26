@@ -4,6 +4,8 @@ import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  // Use relative paths for extension compatibility
+  base: '',
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

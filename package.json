@@ -9,7 +9,7 @@
     "build": "vite build && npm run copy-assets && npm run fix-html",
     "build:prod": "vite build --mode production && npm run copy-assets && npm run fix-html",
     "copy-assets": "cp manifest.json dist/ && cp -r public/icons dist/",
-    "fix-html": "mv dist/src/popup/index.html dist/popup/ 2>/dev/null || true && mv dist/src/pages/*.html dist/pages/ 2>/dev/null || true && rm -rf dist/src 2>/dev/null || true",
+    "fix-html": "mv dist/src/popup/index.html dist/popup/ 2>/dev/null || true && mv dist/src/pages/*.html dist/pages/ 2>/dev/null || true && rm -rf dist/src 2>/dev/null || true && node scripts/fix-paths.js",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext ts,tsx",
