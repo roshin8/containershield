@@ -2,9 +2,8 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
-  // Use relative paths for extension compatibility
   base: '',
   resolve: {
     alias: {
@@ -14,25 +13,21 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    sourcemap: process.env.NODE_ENV === 'development',
+    sourcemap: mode === 'development',
+    minify: mode === 'production',
     rollupOptions: {
       input: {
-        // Background script
         background: resolve(__dirname, 'src/background/index.ts'),
-        // Content script (runs in content script context)
         content: resolve(__dirname, 'src/content/index.ts'),
-        // Inject script (runs in MAIN world / page context)
         inject: resolve(__dirname, 'src/inject/index.ts'),
-        // Popup UI
         popup: resolve(__dirname, 'src/popup/index.html'),
-        // Pages
         'ip-warning': resolve(__dirname, 'src/pages/ip-warning.html'),
-        'onboarding': resolve(__dirname, 'src/pages/onboarding.html'),
-        'options': resolve(__dirname, 'src/pages/options.html'),
+        onboarding: resolve(__dirname, 'src/pages/onboarding.html'),
+        options: resolve(__dirname, 'src/pages/options.html'),
       },
       output: {
+        format: 'es',
         entryFileNames: (chunkInfo) => {
-          // Keep scripts in their respective folders
           if (chunkInfo.name === 'background') return 'background/index.js';
           if (chunkInfo.name === 'content') return 'content/index.js';
           if (chunkInfo.name === 'inject') return 'inject/index.js';
@@ -44,13 +39,23 @@ export default defineConfig({
         },
         chunkFileNames: 'chunks/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
+        // Force content/inject to include all dependencies inline
+        manualChunks(id, { getModuleIds, getModuleInfo }) {
+          // Only create chunks for React (used by popup/pages)
+          if (id.includes('node_modules/react')) {
+            return 'jsx-runtime';
+          }
+          // Everything else gets inlined into the entry point
+          return undefined;
+        },
+      },
+      // Ensure tree-shaking doesn't remove needed code
+      treeshake: {
+        moduleSideEffects: true,
       },
     },
-    // Don't minify for easier debugging during development
-    minify: process.env.NODE_ENV === 'production',
   },
-  // Define globals for the extension environment
   define: {
-    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    'process.env.NODE_ENV': JSON.stringify(mode || 'development'),
   },
-});
+}));

@@ -5,19 +5,31 @@
  * - Requests container settings from background
  * - Injects the spoofer code into the page context (MAIN world)
  * - Bridges communication between page context and background
+ *
+ * NOTE: This file must NOT use ES module imports because Firefox MV2
+ * content scripts cannot use modules. We use the native browser API.
  */
 
-import browser from 'webextension-polyfill';
-import type { InjectConfig } from '@/types';
-import {
-  MSG_INJECT_CONFIG,
-  MSG_FINGERPRINT_REPORT,
-  MSG_GET_FINGERPRINT_REPORT,
-  MSG_GET_RECOMMENDATIONS,
-  PAGE_MSG_FINGERPRINT_REPORT,
-  PAGE_MSG_GET_REPORT,
-  PAGE_MSG_GET_RECOMMENDATIONS,
-} from '@/constants';
+// Message type constants (inlined to avoid imports)
+const MSG_INJECT_CONFIG = 'GET_INJECT_CONFIG';
+const MSG_FINGERPRINT_REPORT = 'FINGERPRINT_REPORT';
+const MSG_GET_FINGERPRINT_REPORT = 'GET_FINGERPRINT_REPORT';
+const MSG_GET_RECOMMENDATIONS = 'GET_RECOMMENDATIONS';
+const PAGE_MSG_FINGERPRINT_REPORT = 'CONTAINER_SHIELD_FINGERPRINT_REPORT';
+const PAGE_MSG_GET_REPORT = 'CONTAINER_SHIELD_GET_REPORT';
+const PAGE_MSG_GET_RECOMMENDATIONS = 'CONTAINER_SHIELD_GET_RECOMMENDATIONS';
+
+// Use the native browser API (Firefox has it built-in)
+declare const browser: typeof chrome;
+
+interface InjectConfig {
+  containerId: string;
+  domain: string;
+  seed: string;
+  settings: unknown;
+  profile: unknown;
+  assignedProfile: unknown;
+}
 
 /**
  * Get inject configuration from background script
@@ -42,18 +54,15 @@ async function injectSpoofers(): Promise<void> {
   const config = await getInjectConfig();
 
   if (!config) {
-    console.log('[ChameleonContainers Content] No config available, skipping injection');
+    console.log('[ContainerShield Content] No config available, skipping injection');
     return;
   }
-
-  // Skip if protection is disabled (check via spoofers being mostly 'off')
-  // The actual check is done in the injected script
 
   // Create a script element to inject into the page
   const script = document.createElement('script');
   script.src = browser.runtime.getURL('inject/index.js');
 
-  // Pass configuration via a data attribute on the document element
+  // Pass configuration via a meta tag
   // This is read by the injected script before any page scripts run
   const configElement = document.createElement('meta');
   configElement.name = 'chameleon-containers-config';
@@ -69,7 +78,7 @@ async function injectSpoofers(): Promise<void> {
     script.remove();
   };
 
-  console.log('[ChameleonContainers Content] Spoofers injected for container:', config.containerId);
+  console.log('[ContainerShield Content] Spoofers injected for container:', config.containerId);
 }
 
 // Run injection as early as possible
@@ -94,21 +103,16 @@ window.addEventListener('message', async (event) => {
         detail: data.detail,
         url: data.url,
       });
-    } catch (error) {
+    } catch {
       // Extension context may be invalidated
     }
-  }
-
-  // Handle request for recommendations
-  if (type === PAGE_MSG_GET_RECOMMENDATIONS) {
-    // The page script will handle this internally
   }
 });
 
 /**
  * Listen for messages from the popup requesting fingerprint data
  */
-browser.runtime.onMessage.addListener((message, sender) => {
+browser.runtime.onMessage.addListener((message: { type: string; settings?: unknown }) => {
   if (message.type === MSG_GET_FINGERPRINT_REPORT) {
     // Request report from page script
     window.postMessage({ type: PAGE_MSG_GET_REPORT }, '*');
@@ -123,4 +127,6 @@ browser.runtime.onMessage.addListener((message, sender) => {
     }, '*');
     return true;
   }
+
+  return false;
 });
