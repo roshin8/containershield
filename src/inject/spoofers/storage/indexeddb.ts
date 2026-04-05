@@ -22,7 +22,7 @@ export function initIndexedDBSpoofer(mode: ProtectionMode, prng: PRNG): void {
     const originalDatabases = indexedDB.databases.bind(indexedDB);
 
     indexedDB.databases = async function (): Promise<IDBDatabaseInfo[]> {
-      logAccess('indexedDB.databases', { spoofed: mode !== 'block' });
+      logAccess('indexedDB.databases', { spoofed: mode !== 'block', value: 'spoofed' });
 
       if (mode === 'block') {
         return []; // Hide all databases
@@ -40,7 +40,7 @@ export function initIndexedDBSpoofer(mode: ProtectionMode, prng: PRNG): void {
     name: string,
     version?: number
   ): IDBOpenDBRequest {
-    logAccess('indexedDB.open', { spoofed: true });
+    logAccess('indexedDB.open', { spoofed: true, value: 'spoofed' });
     return originalOpen(name, version);
   };
 
@@ -48,7 +48,7 @@ export function initIndexedDBSpoofer(mode: ProtectionMode, prng: PRNG): void {
   const originalDeleteDatabase = indexedDB.deleteDatabase.bind(indexedDB);
 
   indexedDB.deleteDatabase = function (name: string): IDBOpenDBRequest {
-    logAccess('indexedDB.deleteDatabase', { spoofed: true });
+    logAccess('indexedDB.deleteDatabase', { spoofed: true, value: 'spoofed' });
     return originalDeleteDatabase(name);
   };
 

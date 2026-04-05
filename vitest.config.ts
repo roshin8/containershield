@@ -3,9 +3,9 @@ import { resolve } from 'path';
 
 export default defineConfig({
   test: {
-    globals: true,
+    globals: false, // Don't use globals to avoid conflicts with Playwright
     environment: 'node',
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/unit/**/*.test.ts'], // Only unit tests, not e2e
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

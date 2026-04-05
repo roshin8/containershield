@@ -7,6 +7,7 @@
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { overrideMethod } from '@/lib/stealth';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 
 // Common codec support (what a typical Chrome browser would return)
@@ -57,39 +58,33 @@ export function initCodecSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (mode === 'off') return;
 
   // Spoof HTMLMediaElement.canPlayType
-  const originalCanPlayType = HTMLMediaElement.prototype.canPlayType;
-
-  HTMLMediaElement.prototype.canPlayType = function (type: string): CanPlayTypeResult {
-    logAccess('HTMLMediaElement.canPlayType', { spoofed: true });
+  overrideMethod(HTMLMediaElement.prototype, 'canPlayType', (original, thisArg, args) => {
+    const type = args[0] as string;
+    logAccess('HTMLMediaElement.canPlayType', { spoofed: true, value: 'normalized' });
 
     if (mode === 'block') {
-      return ''; // Can't play anything
+      return '';
     }
 
-    // Return consistent results based on our codec map
     const normalizedType = type.toLowerCase().trim();
 
-    // Check exact match first
     if (normalizedType in CODEC_SUPPORT) {
       return CODEC_SUPPORT[normalizedType];
     }
 
-    // Check base type (without codecs)
     const baseType = normalizedType.split(';')[0].trim();
     if (baseType in CODEC_SUPPORT) {
-      return 'maybe'; // We support the container but aren't sure about codec
+      return 'maybe';
     }
 
-    // Unknown type - use original
-    return originalCanPlayType.call(this, type);
-  };
+    return original.call(thisArg, type);
+  });
 
   // Spoof MediaSource.isTypeSupported
   if (typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported) {
-    const originalIsTypeSupported = MediaSource.isTypeSupported;
-
-    MediaSource.isTypeSupported = function (type: string): boolean {
-      logAccess('MediaSource.isTypeSupported', { spoofed: true });
+    overrideMethod(MediaSource as any, 'isTypeSupported', (original, _thisArg, args) => {
+      const type = args[0] as string;
+      logAccess('MediaSource.isTypeSupported', { spoofed: true, value: 'normalized' });
 
       if (mode === 'block') {
         return false;
@@ -97,30 +92,25 @@ export function initCodecSpoofer(mode: ProtectionMode, prng: PRNG): void {
 
       const normalizedType = type.toLowerCase().trim();
 
-      // Check our map
       if (normalizedType in CODEC_SUPPORT) {
         return CODEC_SUPPORT[normalizedType] === 'probably';
       }
 
-      // Use original for unknown types
-      return originalIsTypeSupported.call(MediaSource, type);
-    };
+      return original.call(MediaSource, type);
+    });
   }
 
   // Spoof RTCRtpSender.getCapabilities (WebRTC codecs)
   if (typeof RTCRtpSender !== 'undefined' && RTCRtpSender.getCapabilities) {
-    const originalGetCapabilities = RTCRtpSender.getCapabilities;
-
-    RTCRtpSender.getCapabilities = function (kind: string) {
-      logAccess('RTCRtpSender.getCapabilities', { spoofed: true });
+    overrideMethod(RTCRtpSender as any, 'getCapabilities', (original, _thisArg, args) => {
+      logAccess('RTCRtpSender.getCapabilities', { spoofed: true, value: 'normalized' });
 
       if (mode === 'block') {
         return null;
       }
 
-      // Return original but could be modified
-      return originalGetCapabilities.call(RTCRtpSender, kind);
-    };
+      return original.call(RTCRtpSender, ...args);
+    });
   }
 
   console.log('[ContainerShield] Codec spoofer initialized');

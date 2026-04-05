@@ -5,6 +5,85 @@
 import browser from 'webextension-polyfill';
 import type { SettingsStore } from './settings-store';
 import type { ContainerManager } from './container-manager';
+import type { HeaderConfig } from '@/types';
+
+/**
+ * Private IPv4 ranges that must be excluded from random generation.
+ * Each entry is [startIP, endIP] as 32-bit unsigned integers.
+ */
+const PRIVATE_RANGES: [number, number][] = [
+  [0x0A000000, 0x0AFFFFFF], // 10.0.0.0 – 10.255.255.255
+  [0x64400000, 0x647FFFFF], // 100.64.0.0 – 100.127.255.255 (CGNAT)
+  [0x7F000000, 0x7FFFFFFF], // 127.0.0.0 – 127.255.255.255
+  [0xA9FE0000, 0xA9FEFFFF], // 169.254.0.0 – 169.254.255.255
+  [0xAC100000, 0xAC1FFFFF], // 172.16.0.0 – 172.31.255.255
+  [0xC0A80000, 0xC0A8FFFF], // 192.168.0.0 – 192.168.255.255
+  [0xE0000000, 0xFFFFFFFF], // 224.0.0.0 – 255.255.255.255 (multicast + reserved)
+  [0x00000000, 0x00FFFFFF], // 0.0.0.0 – 0.255.255.255
+];
+
+function ipToUint32(ip: string): number {
+  const parts = ip.split('.').map(Number);
+  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+}
+
+function uint32ToIp(n: number): string {
+  return [
+    (n >>> 24) & 0xFF,
+    (n >>> 16) & 0xFF,
+    (n >>> 8) & 0xFF,
+    n & 0xFF,
+  ].join('.');
+}
+
+function isPrivateIP(ip: number): boolean {
+  return PRIVATE_RANGES.some(([start, end]) => ip >= start && ip <= end);
+}
+
+/**
+ * Generate a random public IPv4 address (not in any private/reserved range).
+ */
+function generateRandomPublicIPv4(): string {
+  let ip: number;
+  do {
+    // Generate a random 32-bit unsigned integer
+    ip = (Math.random() * 0xFFFFFFFF) >>> 0;
+  } while (isPrivateIP(ip));
+  return uint32ToIp(ip);
+}
+
+/**
+ * Generate an IP from a range string like "1.1.1.1-2.2.2.2".
+ */
+function generateIPFromRange(range: string): string {
+  const parts = range.split('-').map((s) => s.trim());
+  if (parts.length !== 2) {
+    return generateRandomPublicIPv4();
+  }
+  const start = ipToUint32(parts[0]);
+  const end = ipToUint32(parts[1]);
+  if (start > end || isNaN(start) || isNaN(end)) {
+    return generateRandomPublicIPv4();
+  }
+  const ip = (start + Math.floor(Math.random() * (end - start + 1))) >>> 0;
+  return uint32ToIp(ip);
+}
+
+/**
+ * Random Via proxy version/pseudonym templates.
+ */
+const VIA_PROTOCOLS = ['1.0', '1.1', '2.0'];
+const VIA_PSEUDONYMS = [
+  'proxy', 'cache', 'edge', 'cdn', 'gateway', 'relay',
+  'forward', 'node', 'hop', 'accelerator',
+];
+
+function generateViaHeader(): string {
+  const proto = VIA_PROTOCOLS[Math.floor(Math.random() * VIA_PROTOCOLS.length)];
+  const pseudonym = VIA_PSEUDONYMS[Math.floor(Math.random() * VIA_PSEUDONYMS.length)];
+  const id = Math.floor(Math.random() * 900 + 100); // 3-digit number
+  return `${proto} ${pseudonym}${id}`;
+}
 
 export class HeaderSpoofer {
   private settingsStore: SettingsStore;
@@ -125,6 +204,45 @@ export class HeaderSpoofer {
       }
     }
 
+    // Add X-Forwarded-For header if enabled
+    if (headerSettings.spoofXForwardedFor) {
+      const xffValue = this.generateXForwardedFor(headerSettings);
+      // Remove any existing X-Forwarded-For header to avoid appending
+      const xffIndex = modifiedHeaders.findIndex(
+        (h) => h.name.toLowerCase() === 'x-forwarded-for'
+      );
+      if (xffIndex !== -1) {
+        modifiedHeaders.splice(xffIndex, 1);
+      }
+      modifiedHeaders.push({ name: 'X-Forwarded-For', value: xffValue });
+    }
+
+    // Add Via header if enabled
+    if (headerSettings.spoofVia) {
+      const viaIndex = modifiedHeaders.findIndex(
+        (h) => h.name.toLowerCase() === 'via'
+      );
+      if (viaIndex !== -1) {
+        modifiedHeaders.splice(viaIndex, 1);
+      }
+      modifiedHeaders.push({ name: 'Via', value: generateViaHeader() });
+    }
+
     return modifiedHeaders;
+  }
+
+  /**
+   * Generate an X-Forwarded-For IP based on the current header settings mode.
+   */
+  private generateXForwardedFor(headerSettings: HeaderConfig): string {
+    switch (headerSettings.xForwardedForMode) {
+      case 'custom':
+        return headerSettings.xForwardedForValue || generateRandomPublicIPv4();
+      case 'range':
+        return generateIPFromRange(headerSettings.xForwardedForValue);
+      case 'random':
+      default:
+        return generateRandomPublicIPv4();
+    }
   }
 }

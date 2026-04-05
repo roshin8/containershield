@@ -5,118 +5,47 @@
  * and is used for fingerprinting.
  */
 
-import type { ProtectionMode } from '@/types';
+import type { ProtectionMode, AssignedProfileData } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 
-/**
- * Initialize Touch events spoofing
- */
-export function initTouchSpoofer(mode: ProtectionMode, prng: PRNG): void {
+export function initTouchSpoofer(mode: ProtectionMode, prng: PRNG, assignedProfile?: AssignedProfileData): void {
   if (mode === 'off') return;
 
-  // Common desktop value (no touch)
-  const spoofedMaxTouchPoints = 0;
-  const spoofedTouchSupport = false;
+  // Determine touch points based on profile
+  const isMobile = assignedProfile?.userAgent?.mobile ?? false;
+  const spoofedMaxTouchPoints = mode === 'block' ? 0
+    : isMobile ? prng.pick([5, 10, 10])
+    : prng.pick([0, 0, 1, 2, 5]); // desktop: mostly 0, some laptops have touch
+  const spoofedTouchSupport = spoofedMaxTouchPoints > 0;
 
-  // Spoof maxTouchPoints
   try {
     Object.defineProperty(navigator, 'maxTouchPoints', {
-      get: function () {
-        logAccess('navigator.maxTouchPoints', { spoofed: true });
-
-        if (mode === 'block') {
-          return 0;
-        }
-
-        // Return consistent value based on profile
+      get() {
+        logAccess('navigator.maxTouchPoints', { spoofed: true, value: `${spoofedMaxTouchPoints} points` });
         return spoofedMaxTouchPoints;
       },
       configurable: true,
     });
-  } catch {
-    // Can't override
-  }
+  } catch {}
 
-  // Spoof 'ontouchstart' in window check
-  if (mode === 'block' || !spoofedTouchSupport) {
+  // Spoof 'ontouchstart' - present on touch devices, undefined on desktop
+  if (!spoofedTouchSupport) {
     try {
       Object.defineProperty(window, 'ontouchstart', {
-        value: undefined,
-        writable: true,
-        configurable: true,
+        value: undefined, writable: true, configurable: true,
       });
-    } catch {
-      // Can't override
-    }
+    } catch {}
   }
 
-  // Spoof TouchEvent constructor
-  if (typeof TouchEvent !== 'undefined' && mode === 'block') {
-    try {
-      Object.defineProperty(window, 'TouchEvent', {
-        value: undefined,
-        configurable: true,
-      });
-    } catch {
-      // Can't override
-    }
+  // Block TouchEvent/Touch on non-touch profiles
+  if (!spoofedTouchSupport && mode === 'block') {
+    try { Object.defineProperty(window, 'TouchEvent', { value: undefined, configurable: true }); } catch {}
+    try { Object.defineProperty(window, 'Touch', { value: undefined, configurable: true }); } catch {}
   }
 
-  // Spoof Touch constructor
-  if (typeof Touch !== 'undefined' && mode === 'block') {
-    try {
-      Object.defineProperty(window, 'Touch', {
-        value: undefined,
-        configurable: true,
-      });
-    } catch {
-      // Can't override
-    }
+  // Mobile orientation
+  if (!isMobile) {
+    try { Object.defineProperty(window, 'orientation', { value: undefined, configurable: true }); } catch {}
   }
-
-  // Spoof 'orientation' in window (mobile indicator)
-  if (mode === 'block') {
-    try {
-      Object.defineProperty(window, 'orientation', {
-        value: undefined,
-        configurable: true,
-      });
-    } catch {
-      // Can't override
-    }
-  }
-
-  // Spoof screen.orientation to be consistent
-  if ('orientation' in screen) {
-    const originalOrientation = screen.orientation;
-
-    try {
-      Object.defineProperty(screen, 'orientation', {
-        get: function () {
-          logAccess('screen.orientation', { spoofed: true });
-
-          if (mode === 'block') {
-            return {
-              type: 'landscape-primary',
-              angle: 0,
-              onchange: null,
-              addEventListener: () => {},
-              removeEventListener: () => {},
-              dispatchEvent: () => true,
-              lock: async () => {},
-              unlock: () => {},
-            };
-          }
-
-          return originalOrientation;
-        },
-        configurable: true,
-      });
-    } catch {
-      // Can't override
-    }
-  }
-
-  console.log('[ContainerShield] Touch events spoofer initialized');
 }

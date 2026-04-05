@@ -25,7 +25,6 @@ export class SettingsStore {
     // Migrate if needed
     await this.migrate();
 
-    console.log('[SettingsStore] Initialized');
   }
 
   /**
@@ -56,6 +55,7 @@ export class SettingsStore {
       ipRecords: {},
       settings: createDefaultIPSettings(),
       exceptions: [],
+      trackedDomains: [],
     };
   }
 
@@ -79,9 +79,52 @@ export class SettingsStore {
   private async migrate(): Promise<void> {
     if (!this.storage) return;
 
-    // Add migration logic here as needed
-    // For now, just ensure version is updated
     if (this.storage.version !== EXTENSION_VERSION) {
+      // Merge new default fields into existing container settings
+      // This ensures new spoofer categories/fields get added
+      // and old 'block' defaults get updated to 'noise' for balanced mode
+      const defaults = createDefaultSettings();
+
+      for (const [containerId, settings] of Object.entries(this.storage.containers)) {
+        // Deep merge spoofers - add missing categories and fields from defaults
+        if (settings.spoofers && defaults.spoofers) {
+          for (const [cat, defaultVals] of Object.entries(defaults.spoofers)) {
+            if (!(cat in settings.spoofers)) {
+              // New category - add entire default
+              (settings.spoofers as any)[cat] = defaultVals;
+            } else {
+              // Existing category - add missing fields only
+              for (const [key, defaultVal] of Object.entries(defaultVals as Record<string, string>)) {
+                if (!((settings.spoofers as any)[cat] as Record<string, string>)[key]) {
+                  (settings.spoofers as any)[cat][key] = defaultVal;
+                }
+              }
+            }
+          }
+        }
+
+        // If balanced mode (level 2), ensure no signals are blocked
+        // (old defaults had some signals as 'block' which is now only for strict mode)
+        if (settings.protectionLevel === 2 && settings.spoofers) {
+          for (const [cat, vals] of Object.entries(settings.spoofers)) {
+            for (const [key, val] of Object.entries(vals as Record<string, string>)) {
+              if (val === 'block') {
+                (settings.spoofers as any)[cat][key] = 'noise';
+              }
+            }
+          }
+        }
+
+        // Merge new header fields
+        if (defaults.headers) {
+          for (const [key, val] of Object.entries(defaults.headers)) {
+            if (!(key in (settings.headers || {}))) {
+              (settings as any).headers = { ...(settings.headers || {}), [key]: val };
+            }
+          }
+        }
+      }
+
       this.storage.version = EXTENSION_VERSION;
       await this.save();
     }
@@ -91,7 +134,12 @@ export class SettingsStore {
    * Ensure settings exist for a container
    */
   async ensureContainerSettings(containerId: string): Promise<void> {
-    if (!this.storage) return;
+    if (!this.storage) {
+      await this.load();
+    }
+    if (!this.storage) {
+      return;
+    }
 
     // Create settings if not exist
     if (!this.storage.containers[containerId]) {
@@ -169,6 +217,19 @@ export class SettingsStore {
         network: { ...base.spoofers.network, ...overrides.spoofers?.network },
         timing: { ...base.spoofers.timing, ...overrides.spoofers?.timing },
         css: { ...base.spoofers.css, ...overrides.spoofers?.css },
+        speech: { ...base.spoofers.speech, ...overrides.spoofers?.speech },
+        permissions: { ...base.spoofers.permissions, ...overrides.spoofers?.permissions },
+        storage: { ...base.spoofers.storage, ...overrides.spoofers?.storage },
+        math: { ...base.spoofers.math, ...overrides.spoofers?.math },
+        keyboard: { ...base.spoofers.keyboard, ...overrides.spoofers?.keyboard },
+        workers: { ...base.spoofers.workers, ...overrides.spoofers?.workers },
+        errors: { ...base.spoofers.errors, ...overrides.spoofers?.errors },
+        rendering: { ...base.spoofers.rendering, ...overrides.spoofers?.rendering },
+        intl: { ...base.spoofers.intl, ...overrides.spoofers?.intl },
+        crypto: { ...base.spoofers.crypto, ...overrides.spoofers?.crypto },
+        devices: { ...base.spoofers.devices, ...overrides.spoofers?.devices },
+        features: { ...base.spoofers.features, ...overrides.spoofers?.features },
+        payment: { ...base.spoofers.payment, ...overrides.spoofers?.payment },
       },
     };
   }

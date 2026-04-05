@@ -20,7 +20,7 @@ export function initClipboardSpoofer(mode: ProtectionMode, prng: PRNG): void {
 
   const spoofedClipboard = {
     readText: async function (): Promise<string> {
-      logAccess('navigator.clipboard.readText', { spoofed: true, blocked: mode === 'block' });
+      logAccess('navigator.clipboard.readText', { spoofed: true, blocked: mode === 'block', value: 'blocked' });
 
       if (mode === 'block') {
         throw new DOMException('Clipboard read denied', 'NotAllowedError');
@@ -30,7 +30,7 @@ export function initClipboardSpoofer(mode: ProtectionMode, prng: PRNG): void {
     },
 
     read: async function (): Promise<ClipboardItems> {
-      logAccess('navigator.clipboard.read', { spoofed: true, blocked: mode === 'block' });
+      logAccess('navigator.clipboard.read', { spoofed: true, blocked: mode === 'block', value: 'blocked' });
 
       if (mode === 'block') {
         throw new DOMException('Clipboard read denied', 'NotAllowedError');
@@ -40,7 +40,7 @@ export function initClipboardSpoofer(mode: ProtectionMode, prng: PRNG): void {
     },
 
     writeText: async function (text: string): Promise<void> {
-      logAccess('navigator.clipboard.writeText', { spoofed: true, blocked: mode === 'block' });
+      logAccess('navigator.clipboard.writeText', { spoofed: true, blocked: mode === 'block', value: 'blocked' });
 
       if (mode === 'block') {
         throw new DOMException('Clipboard write denied', 'NotAllowedError');
@@ -50,7 +50,7 @@ export function initClipboardSpoofer(mode: ProtectionMode, prng: PRNG): void {
     },
 
     write: async function (data: ClipboardItems): Promise<void> {
-      logAccess('navigator.clipboard.write', { spoofed: true, blocked: mode === 'block' });
+      logAccess('navigator.clipboard.write', { spoofed: true, blocked: mode === 'block', value: 'blocked' });
 
       if (mode === 'block') {
         throw new DOMException('Clipboard write denied', 'NotAllowedError');
@@ -64,7 +64,7 @@ export function initClipboardSpoofer(mode: ProtectionMode, prng: PRNG): void {
   try {
     Object.defineProperty(navigator, 'clipboard', {
       get: function () {
-        logAccess('navigator.clipboard', { spoofed: true });
+        logAccess('navigator.clipboard', { spoofed: true, value: 'blocked' });
         return spoofedClipboard;
       },
       configurable: true,

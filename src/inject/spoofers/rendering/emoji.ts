@@ -7,13 +7,14 @@
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { overrideMethod } from '@/lib/stealth';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 import { farbleImageData } from '@/lib/farbling';
 
 // Emoji characters commonly used for fingerprinting
 const FINGERPRINT_EMOJIS = [
-  '😀', '🎨', '🔒', '🌈', '🎭', '🎪', '🏳️‍🌈', '👨‍👩‍👧‍👦',
-  '🧑‍🤝‍🧑', '🏴󠁧󠁢󠁥󠁮󠁧󠁿', '👁️‍🗨️', '⚡', '❤️', '🔥'
+  '\u{1F600}', '\u{1F3A8}', '\u{1F512}', '\u{1F308}', '\u{1F3AD}', '\u{1F3AA}', '\u{1F3F3}\u{FE0F}\u{200D}\u{1F308}', '\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}',
+  '\u{1F9D1}\u{200D}\u{1F91D}\u{200D}\u{1F9D1}', '\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}', '\u{1F441}\u{FE0F}\u{200D}\u{1F5E8}\u{FE0F}', '\u{26A1}', '\u{2764}\u{FE0F}', '\u{1F525}'
 ];
 
 /**
@@ -25,10 +26,6 @@ export function initEmojiSpoofer(mode: ProtectionMode, prng: PRNG): void {
   // The main vector is canvas text rendering of emojis
   // We already spoof canvas, but we can add emoji-specific protection
 
-  const originalFillText = CanvasRenderingContext2D.prototype.fillText;
-  const originalStrokeText = CanvasRenderingContext2D.prototype.strokeText;
-  const originalMeasureText = CanvasRenderingContext2D.prototype.measureText;
-
   // Detect if text contains emoji
   const containsEmoji = (text: string): boolean => {
     const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{1F000}-\u{1F02F}]/u;
@@ -36,14 +33,14 @@ export function initEmojiSpoofer(mode: ProtectionMode, prng: PRNG): void {
   };
 
   // Spoof measureText for emoji
-  CanvasRenderingContext2D.prototype.measureText = function (text: string): TextMetrics {
-    const result = originalMeasureText.call(this, text);
+  overrideMethod(CanvasRenderingContext2D.prototype, 'measureText', (original, thisArg, args) => {
+    const text = args[0] as string;
+    const result = original.call(thisArg, text) as TextMetrics;
 
     if (containsEmoji(text)) {
-      logAccess('CanvasRenderingContext2D.measureText(emoji)', { spoofed: true });
+      logAccess('CanvasRenderingContext2D.measureText(emoji)', { spoofed: true, value: 'noised' });
 
       if (mode === 'block') {
-        // Return zeroed metrics
         return {
           width: 0,
           actualBoundingBoxLeft: 0,
@@ -74,7 +71,7 @@ export function initEmojiSpoofer(mode: ProtectionMode, prng: PRNG): void {
     }
 
     return result;
-  };
+  });
 
   console.log('[ContainerShield] Emoji rendering spoofer initialized');
 }

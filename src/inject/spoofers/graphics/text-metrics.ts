@@ -5,6 +5,8 @@
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { overrideMethod } from '@/lib/stealth';
+import { logAccess } from '../../monitor/fingerprint-monitor';
 
 /**
  * Initialize TextMetrics spoofing
@@ -14,29 +16,21 @@ export function initTextMetricsSpoofer(mode: ProtectionMode, prng: PRNG): void {
 
   const maxNoise = mode === 'noise' ? 0.3 : 0;
 
-  // Store original measureText
-  const originalMeasureText = CanvasRenderingContext2D.prototype.measureText;
-
-  CanvasRenderingContext2D.prototype.measureText = function (
-    this: CanvasRenderingContext2D,
-    text: string
-  ): TextMetrics {
-    const metrics = originalMeasureText.call(this, text);
+  // Wrap CanvasRenderingContext2D.measureText
+  overrideMethod(CanvasRenderingContext2D.prototype, 'measureText', (original, thisArg, args) => {
+    logAccess('CanvasRenderingContext2D.measureText', { spoofed: true, value: 'noised' });
+    const metrics = original.call(thisArg, ...args) as TextMetrics;
 
     if (mode === 'block') {
-      // Return zeroed metrics
       return createFakeTextMetrics(0);
     }
 
-    // Add noise to all metric properties
     const noise = () => prng.nextNoise(maxNoise);
 
-    // Create a proxy to intercept property access
     return new Proxy(metrics, {
       get(target, prop) {
         const value = (target as any)[prop];
 
-        // Add noise to numeric properties
         if (typeof value === 'number') {
           return value + noise();
         }
@@ -44,18 +38,13 @@ export function initTextMetricsSpoofer(mode: ProtectionMode, prng: PRNG): void {
         return value;
       },
     });
-  };
+  });
 
   // Also wrap OffscreenCanvasRenderingContext2D if available
   if (typeof OffscreenCanvasRenderingContext2D !== 'undefined') {
-    const originalOffscreenMeasureText =
-      OffscreenCanvasRenderingContext2D.prototype.measureText;
-
-    OffscreenCanvasRenderingContext2D.prototype.measureText = function (
-      this: OffscreenCanvasRenderingContext2D,
-      text: string
-    ): TextMetrics {
-      const metrics = originalOffscreenMeasureText.call(this, text);
+    overrideMethod(OffscreenCanvasRenderingContext2D.prototype, 'measureText', (original, thisArg, args) => {
+      logAccess('OffscreenCanvasRenderingContext2D.measureText', { spoofed: true, value: 'noised' });
+      const metrics = original.call(thisArg, ...args) as TextMetrics;
 
       if (mode === 'block') {
         return createFakeTextMetrics(0);
@@ -72,10 +61,10 @@ export function initTextMetricsSpoofer(mode: ProtectionMode, prng: PRNG): void {
           return value;
         },
       });
-    };
+    });
   }
 
-  console.log('[ChameleonContainers] TextMetrics spoofer initialized:', mode);
+  console.log('[ContainerShield] TextMetrics spoofer initialized:', mode);
 }
 
 /**

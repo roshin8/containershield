@@ -54,7 +54,7 @@ export function initErrorSpoofer(mode: ProtectionMode, prng: PRNG): void {
       targetObject: object,
       constructorOpt?: Function
     ): void {
-      logAccess('Error.captureStackTrace', { spoofed: true });
+      logAccess('Error.captureStackTrace', { spoofed: true, value: 'modified' });
       (OriginalError as any).captureStackTrace(targetObject, constructorOpt);
 
       if (mode === 'block') {

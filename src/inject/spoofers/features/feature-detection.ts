@@ -23,7 +23,7 @@ export function initFeatureSpoofer(mode: ProtectionMode, prng: PRNG): void {
       propertyOrCondition: string,
       value?: string
     ): boolean {
-      logAccess('CSS.supports', { spoofed: true });
+      logAccess('CSS.supports', { spoofed: true, value: 'webdriver: false' });
 
       // In block mode, return true for common features, false for fingerprinting features
       if (mode === 'block') {
@@ -53,7 +53,7 @@ export function initFeatureSpoofer(mode: ProtectionMode, prng: PRNG): void {
       feature: string,
       version?: string
     ): boolean {
-      logAccess('document.implementation.hasFeature', { spoofed: true });
+      logAccess('document.implementation.hasFeature', { spoofed: true, value: 'webdriver: false' });
       return true; // Always return true (it's deprecated anyway)
     };
   }
@@ -66,7 +66,7 @@ export function initFeatureSpoofer(mode: ProtectionMode, prng: PRNG): void {
     try {
       Object.defineProperty(navigator, 'pdfViewerEnabled', {
         get: function () {
-          logAccess('navigator.pdfViewerEnabled', { spoofed: true });
+          logAccess('navigator.pdfViewerEnabled', { spoofed: true, value: 'webdriver: false' });
           return true; // Common value
         },
         configurable: true,
@@ -80,7 +80,7 @@ export function initFeatureSpoofer(mode: ProtectionMode, prng: PRNG): void {
   try {
     Object.defineProperty(navigator, 'webdriver', {
       get: function () {
-        logAccess('navigator.webdriver', { spoofed: true });
+        logAccess('navigator.webdriver', { spoofed: true, value: 'webdriver: false' });
         return false; // Not automated
       },
       configurable: true,
@@ -93,7 +93,7 @@ export function initFeatureSpoofer(mode: ProtectionMode, prng: PRNG): void {
   try {
     Object.defineProperty(navigator, 'doNotTrack', {
       get: function () {
-        logAccess('navigator.doNotTrack', { spoofed: true });
+        logAccess('navigator.doNotTrack', { spoofed: true, value: 'webdriver: false' });
         return '1'; // DNT enabled
       },
       configurable: true,
@@ -106,7 +106,7 @@ export function initFeatureSpoofer(mode: ProtectionMode, prng: PRNG): void {
   try {
     Object.defineProperty(navigator, 'globalPrivacyControl', {
       get: function () {
-        logAccess('navigator.globalPrivacyControl', { spoofed: true });
+        logAccess('navigator.globalPrivacyControl', { spoofed: true, value: 'webdriver: false' });
         return true; // GPC enabled
       },
       configurable: true,
@@ -119,7 +119,7 @@ export function initFeatureSpoofer(mode: ProtectionMode, prng: PRNG): void {
   try {
     Object.defineProperty(navigator, 'cookieEnabled', {
       get: function () {
-        logAccess('navigator.cookieEnabled', { spoofed: true });
+        logAccess('navigator.cookieEnabled', { spoofed: true, value: 'webdriver: false' });
         return true;
       },
       configurable: true,
@@ -132,7 +132,7 @@ export function initFeatureSpoofer(mode: ProtectionMode, prng: PRNG): void {
   try {
     Object.defineProperty(navigator, 'onLine', {
       get: function () {
-        logAccess('navigator.onLine', { spoofed: true });
+        logAccess('navigator.onLine', { spoofed: true, value: 'webdriver: false' });
         return true;
       },
       configurable: true,
@@ -144,7 +144,7 @@ export function initFeatureSpoofer(mode: ProtectionMode, prng: PRNG): void {
   // Spoof navigator.javaEnabled()
   if (navigator.javaEnabled) {
     navigator.javaEnabled = function (): boolean {
-      logAccess('navigator.javaEnabled', { spoofed: true });
+      logAccess('navigator.javaEnabled', { spoofed: true, value: 'webdriver: false' });
       return false; // Java is dead
     };
   }

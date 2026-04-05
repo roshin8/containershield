@@ -20,7 +20,7 @@ export function initVibrationSpoofer(mode: ProtectionMode, prng: PRNG): void {
     if (mode === 'noise') {
       try {
         (navigator as any).vibrate = function (pattern: VibratePattern): boolean {
-          logAccess('navigator.vibrate', { spoofed: true });
+          logAccess('navigator.vibrate', { spoofed: true, value: 'spoofed' });
           return true; // Pretend it worked
         };
       } catch {
@@ -35,7 +35,7 @@ export function initVibrationSpoofer(mode: ProtectionMode, prng: PRNG): void {
   // Replace navigator.vibrate
   try {
     (navigator as any).vibrate = function (pattern: VibratePattern): boolean {
-      logAccess('navigator.vibrate', { spoofed: true, blocked: mode === 'block' });
+      logAccess('navigator.vibrate', { spoofed: true, blocked: mode === 'block', value: 'spoofed' });
 
       if (mode === 'block') {
         return false; // Pretend vibration is not supported

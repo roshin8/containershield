@@ -23,7 +23,7 @@ export function initNotificationSpoofer(mode: ProtectionMode, prng: PRNG): void 
   try {
     Object.defineProperty(Notification, 'permission', {
       get: function () {
-        logAccess('Notification.permission', { spoofed: true });
+        logAccess('Notification.permission', { spoofed: true, value: spoofedPermission });
         return spoofedPermission;
       },
       configurable: true,
@@ -38,7 +38,7 @@ export function initNotificationSpoofer(mode: ProtectionMode, prng: PRNG): void 
   Notification.requestPermission = function (
     deprecatedCallback?: NotificationPermissionCallback
   ): Promise<NotificationPermission> {
-    logAccess('Notification.requestPermission', { spoofed: true });
+    logAccess('Notification.requestPermission', { spoofed: true, value: spoofedPermission });
 
     if (mode === 'block') {
       const result: NotificationPermission = 'denied';
@@ -55,7 +55,7 @@ export function initNotificationSpoofer(mode: ProtectionMode, prng: PRNG): void 
   try {
     Object.defineProperty(Notification, 'maxActions', {
       get: function () {
-        logAccess('Notification.maxActions', { spoofed: true });
+        logAccess('Notification.maxActions', { spoofed: true, value: spoofedPermission });
         return 2; // Common value
       },
       configurable: true,

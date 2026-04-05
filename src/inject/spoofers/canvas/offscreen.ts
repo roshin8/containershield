@@ -7,6 +7,7 @@
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { overrideMethod } from '@/lib/stealth';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 import { farbleImageData } from '@/lib/farbling';
 
@@ -19,40 +20,33 @@ export function initOffscreenCanvasSpoofer(mode: ProtectionMode, prng: PRNG): vo
   if (typeof OffscreenCanvas === 'undefined') return;
 
   // Spoof OffscreenCanvas.convertToBlob
-  const originalConvertToBlob = OffscreenCanvas.prototype.convertToBlob;
-
-  if (originalConvertToBlob) {
-    OffscreenCanvas.prototype.convertToBlob = async function (
-      options?: ImageEncodeOptions
-    ): Promise<Blob> {
-      logAccess('OffscreenCanvas.convertToBlob', { spoofed: mode !== 'block' });
+  if (OffscreenCanvas.prototype.convertToBlob) {
+    overrideMethod(OffscreenCanvas.prototype, 'convertToBlob', async (original, thisArg, args) => {
+      const options = args[0] as ImageEncodeOptions | undefined;
+      logAccess('OffscreenCanvas.convertToBlob', { spoofed: mode !== 'block', value: 'noised' });
 
       if (mode === 'block') {
         return new Blob([], { type: options?.type || 'image/png' });
       }
 
       // Get 2D context and add noise
-      const ctx = this.getContext('2d');
+      const ctx = thisArg.getContext('2d');
       if (ctx) {
-        const imageData = ctx.getImageData(0, 0, this.width, this.height);
+        const imageData = ctx.getImageData(0, 0, thisArg.width, thisArg.height);
         farbleImageData(imageData.data, prng, 3);
         ctx.putImageData(imageData, 0, 0);
       }
 
-      return originalConvertToBlob.call(this, options);
-    };
+      return original.call(thisArg, ...args);
+    });
   }
 
   // Spoof getContext to track WebGL usage
-  const originalGetContext = OffscreenCanvas.prototype.getContext;
-
-  OffscreenCanvas.prototype.getContext = function (
-    contextType: string,
-    options?: any
-  ): RenderingContext | null {
-    logAccess(`OffscreenCanvas.getContext(${contextType})`, { spoofed: true });
-    return originalGetContext.call(this, contextType, options);
-  };
+  overrideMethod(OffscreenCanvas.prototype, 'getContext', (original, thisArg, args) => {
+    const contextType = args[0] as string;
+    logAccess(`OffscreenCanvas.getContext(${contextType})`, { spoofed: true, value: 'noised' });
+    return original.call(thisArg, ...args);
+  });
 
   console.log('[ContainerShield] OffscreenCanvas spoofer initialized');
 }

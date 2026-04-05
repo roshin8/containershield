@@ -1,5 +1,5 @@
 /**
- * Cryptographic utilities for Chameleon Containers
+ * Cryptographic utilities for Container Shield
  * Uses Web Crypto API and xorshift128+ PRNG
  */
 
@@ -72,6 +72,7 @@ export async function deriveKey(
  * State initialized from a 32-byte seed
  */
 export class PRNG {
+  private static readonly MASK64 = (1n << 64n) - 1n;
   private state0: bigint;
   private state1: bigint;
 
@@ -110,18 +111,20 @@ export class PRNG {
    * Generate next random 64-bit unsigned integer
    */
   nextBigInt(): bigint {
+    const M = PRNG.MASK64;
     let s1 = this.state0;
     const s0 = this.state1;
 
     this.state0 = s0;
-    s1 ^= s1 << 23n;
+    // Mask after left shift to prevent BigInt from growing unbounded
+    // (JavaScript BigInt doesn't wrap at 64 bits like C's uint64_t)
+    s1 ^= (s1 << 23n) & M;
     s1 ^= s1 >> 17n;
     s1 ^= s0;
     s1 ^= s0 >> 26n;
-    this.state1 = s1;
+    this.state1 = s1 & M;
 
-    // Mask to 64 bits
-    return (this.state0 + this.state1) & ((1n << 64n) - 1n);
+    return (this.state0 + this.state1) & M;
   }
 
   /**

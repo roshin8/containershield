@@ -5,6 +5,7 @@
  * Sends reports back to the background script for display in the popup.
  */
 
+import { overrideMethod, overrideGetter } from '@/lib/stealth';
 import {
   PAGE_MSG_FINGERPRINT_REPORT,
   PAGE_MSG_GET_REPORT,
@@ -13,8 +14,11 @@ import {
   FINGERPRINT_REPORT_INTERVAL_MS,
   FINGERPRINT_MAX_LOG_SIZE,
   FINGERPRINT_STACK_TRACE_LINES,
-  LOG_PREFIX,
 } from '@/constants';
+import { CATEGORY_TO_SETTING } from '@/constants/categories';
+
+// Re-export for consumers that imported from here
+export { CATEGORY_TO_SETTING };
 
 export interface FingerprintAccess {
   api: string;
@@ -23,9 +27,9 @@ export interface FingerprintAccess {
   blocked: boolean;
   spoofed: boolean;
   stackTrace?: string;
+  value?: string;
 }
 
-// In-memory log of fingerprint accesses for this page
 const accessLog: FingerprintAccess[] = [];
 
 // Categories for fingerprinting APIs
@@ -235,71 +239,14 @@ export const API_CATEGORIES: Record<string, string> = {
   'navigator.hid.requestDevice': 'HID',
 };
 
-// Map API categories to settings paths
-export const CATEGORY_TO_SETTING: Record<string, { category: string; setting: string }> = {
-  'Canvas': { category: 'graphics', setting: 'canvas' },
-  'OffscreenCanvas': { category: 'graphics', setting: 'offscreenCanvas' },
-  'WebGL': { category: 'graphics', setting: 'webgl' },
-  'WebGL Shaders': { category: 'graphics', setting: 'webglShaders' },
-  'WebGPU': { category: 'graphics', setting: 'webgpu' },
-  'DOMRect': { category: 'graphics', setting: 'domRect' },
-  'TextMetrics': { category: 'graphics', setting: 'textMetrics' },
-  'SVG': { category: 'graphics', setting: 'svg' },
-  'Audio': { category: 'audio', setting: 'audioContext' },
-  'Offline Audio': { category: 'audio', setting: 'offlineAudio' },
-  'Codecs': { category: 'audio', setting: 'codecs' },
-  'Screen': { category: 'hardware', setting: 'screen' },
-  'Hardware': { category: 'hardware', setting: 'deviceMemory' },
-  'Media Devices': { category: 'hardware', setting: 'mediaDevices' },
-  'Battery': { category: 'hardware', setting: 'battery' },
-  'Touch': { category: 'hardware', setting: 'touch' },
-  'Navigator': { category: 'navigator', setting: 'userAgent' },
-  'Client Hints': { category: 'navigator', setting: 'clientHints' },
-  'Timezone': { category: 'timezone', setting: 'intl' },
-  'Fonts': { category: 'fonts', setting: 'enumeration' },
-  'CSS Fonts': { category: 'fonts', setting: 'cssDetection' },
-  'WebRTC': { category: 'network', setting: 'webrtc' },
-  'Network': { category: 'network', setting: 'connection' },
-  'Timing': { category: 'timing', setting: 'performance' },
-  'CSS': { category: 'css', setting: 'mediaQueries' },
-  'Speech': { category: 'speech', setting: 'synthesis' },
-  'Permissions': { category: 'permissions', setting: 'query' },
-  'Storage': { category: 'storage', setting: 'estimate' },
-  'IndexedDB': { category: 'storage', setting: 'indexedDB' },
-  'Math': { category: 'math', setting: 'functions' },
-  'Keyboard': { category: 'keyboard', setting: 'layout' },
-  'Workers': { category: 'workers', setting: 'fingerprint' },
-  'Errors': { category: 'errors', setting: 'stackTrace' },
-  'Emoji': { category: 'rendering', setting: 'emoji' },
-  'MathML': { category: 'rendering', setting: 'mathml' },
-  'Intl': { category: 'intl', setting: 'apis' },
-  'Crypto': { category: 'crypto', setting: 'webCrypto' },
-  'Gamepad': { category: 'devices', setting: 'gamepad' },
-  'MIDI': { category: 'devices', setting: 'midi' },
-  'Bluetooth': { category: 'devices', setting: 'bluetooth' },
-  'USB': { category: 'devices', setting: 'usb' },
-  'Serial': { category: 'devices', setting: 'serial' },
-  'HID': { category: 'devices', setting: 'hid' },
-  'Features': { category: 'features', setting: 'detection' },
-  'Screen Frame': { category: 'hardware', setting: 'screenFrame' },
-  'Screen Orientation': { category: 'hardware', setting: 'orientation' },
-  'Sensors': { category: 'hardware', setting: 'sensors' },
-  'Audio Latency': { category: 'audio', setting: 'latency' },
-  'Clipboard': { category: 'navigator', setting: 'clipboard' },
-  'Vibration': { category: 'navigator', setting: 'vibration' },
-  'Notification': { category: 'permissions', setting: 'notification' },
-  'WebSQL': { category: 'storage', setting: 'webSQL' },
-  'Apple Pay': { category: 'payment', setting: 'applePay' },
-};
-
 /**
  * Log a fingerprint API access
  */
 export function logAccess(
   api: string,
-  options: { blocked?: boolean; spoofed?: boolean; captureStack?: boolean } = {}
+  options: { blocked?: boolean; spoofed?: boolean; captureStack?: boolean; value?: string } = {}
 ): void {
-  const { blocked = false, spoofed = true, captureStack = false } = options;
+  const { blocked = false, spoofed = true, captureStack = false, value } = options;
 
   const access: FingerprintAccess = {
     api,
@@ -309,12 +256,14 @@ export function logAccess(
     spoofed,
   };
 
-  // Capture stack trace if requested (helps identify tracking scripts)
+  if (value) {
+    access.value = value.length > 40 ? value.substring(0, 40) : value;
+  }
+
   if (captureStack) {
     try {
       const stack = new Error().stack;
       if (stack) {
-        // Remove the first two lines (Error and this function)
         access.stackTrace = stack
           .split('\n')
           .slice(2, 2 + FINGERPRINT_STACK_TRACE_LINES)
@@ -327,25 +276,17 @@ export function logAccess(
 
   accessLog.push(access);
 
-  // Keep log size manageable
   if (accessLog.length > FINGERPRINT_MAX_LOG_SIZE) {
     accessLog.shift();
   }
 }
 
-/**
- * Get all logged accesses
- */
 export function getAccessLog(): FingerprintAccess[] {
   return [...accessLog];
 }
 
-/**
- * Get access summary by category
- */
 export function getAccessSummary(): Record<string, { count: number; blocked: number; spoofed: number }> {
   const summary: Record<string, { count: number; blocked: number; spoofed: number }> = {};
-
   for (const access of accessLog) {
     if (!summary[access.category]) {
       summary[access.category] = { count: 0, blocked: 0, spoofed: 0 };
@@ -354,34 +295,42 @@ export function getAccessSummary(): Record<string, { count: number; blocked: num
     if (access.blocked) summary[access.category].blocked++;
     if (access.spoofed) summary[access.category].spoofed++;
   }
-
   return summary;
 }
 
-/**
- * Clear the access log
- */
 export function clearAccessLog(): void {
   accessLog.length = 0;
 }
 
 /**
- * Send access report to background script
+ * Update spoofed/blocked status for entries matching specific APIs.
+ * Called when spoofers initialize to correct early monitoring entries.
+ */
+function updateApiStatus(
+  apiNames: string[],
+  status: { spoofed?: boolean; blocked?: boolean }
+): void {
+  for (const access of accessLog) {
+    if (apiNames.includes(access.api)) {
+      if (status.spoofed !== undefined) access.spoofed = status.spoofed;
+      if (status.blocked !== undefined) access.blocked = status.blocked;
+    }
+  }
+}
+
+/**
+ * Send access report to background script via content script bridge
  */
 export function reportToBackground(): void {
-  const summary = getAccessSummary();
-  const detail = getAccessLog();
-
-  // Use postMessage to send to content script, which forwards to background
   window.postMessage({
     type: PAGE_MSG_FINGERPRINT_REPORT,
-    summary,
-    detail,
+    summary: getAccessSummary(),
+    detail: getAccessLog(),
     url: window.location.href,
   }, '*');
 }
 
-// Auto-report periodically if there are new accesses
+// Auto-report periodically when new accesses are logged
 let lastReportedCount = 0;
 
 setInterval(() => {
@@ -391,14 +340,10 @@ setInterval(() => {
   }
 }, FINGERPRINT_REPORT_INTERVAL_MS);
 
-// Also report on page unload
-window.addEventListener('beforeunload', () => {
-  reportToBackground();
-});
+window.addEventListener('beforeunload', () => reportToBackground());
 
 /**
  * Get recommendations for spoofers that should be enabled
- * Returns APIs that were accessed but have protection disabled
  */
 export function getRecommendations(
   settings: Record<string, Record<string, string>>
@@ -407,21 +352,15 @@ export function getRecommendations(
   const seenCategories = new Set<string>();
 
   for (const access of accessLog) {
-    // Skip if we've already recommended this category
     if (seenCategories.has(access.category)) continue;
 
     const settingInfo = CATEGORY_TO_SETTING[access.category];
     if (!settingInfo) continue;
 
-    // Check if the spoofer is disabled
     const { category, setting } = settingInfo;
     const spooferSettings = settings[category];
     if (spooferSettings && spooferSettings[setting] === 'off') {
-      recommendations.push({
-        api: access.api,
-        category: access.category,
-        setting: `${category}.${setting}`,
-      });
+      recommendations.push({ api: access.api, category: access.category, setting: `${category}.${setting}` });
       seenCategories.add(access.category);
     }
   }
@@ -429,24 +368,81 @@ export function getRecommendations(
   return recommendations;
 }
 
-/**
- * Get unique accessed categories for quick overview
- */
 export function getAccessedCategories(): string[] {
-  const categories = new Set<string>();
-  for (const access of accessLog) {
-    categories.add(access.category);
-  }
-  return Array.from(categories);
+  return [...new Set(accessLog.map(a => a.category))];
 }
 
 /**
- * Initialize the fingerprint monitor
+ * Install passive monitoring wrappers for key fingerprinting APIs.
+ * These only log accesses without modifying behavior.
+ * Replaced by full spoofers when config arrives.
  */
-export function initFingerprintMonitor(): void {
-  console.log(`${LOG_PREFIX} Fingerprint access monitor initialized`);
+function installEarlyMonitoringWrappers(): void {
+  // Use stealth overrides so monitoring wrappers are also undetectable
+  overrideMethod(HTMLCanvasElement.prototype, 'toDataURL', (orig, thisArg, args) => {
+    if (!spoofersInitialized) logAccess('HTMLCanvasElement.toDataURL', { spoofed: false });
+    return orig.apply(thisArg, args);
+  });
 
-  // Listen for requests from popup/content script
+  overrideMethod(HTMLCanvasElement.prototype, 'toBlob', (orig, thisArg, args) => {
+    if (!spoofersInitialized) logAccess('HTMLCanvasElement.toBlob', { spoofed: false });
+    return orig.apply(thisArg, args);
+  });
+
+  overrideMethod(CanvasRenderingContext2D.prototype, 'getImageData', (orig, thisArg, args) => {
+    if (!spoofersInitialized) logAccess('CanvasRenderingContext2D.getImageData', { spoofed: false });
+    return orig.apply(thisArg, args);
+  });
+
+  const monitorProp = (proto: object, prop: string, apiName: string) => {
+    try {
+      overrideGetter(proto, prop, (origGet, thisArg) => {
+        if (!spoofersInitialized) logAccess(apiName, { spoofed: false });
+        return origGet.call(thisArg);
+      });
+    } catch {
+      // Property may not be writable
+    }
+  };
+
+  monitorProp(Navigator.prototype, 'userAgent', 'navigator.userAgent');
+  monitorProp(Navigator.prototype, 'platform', 'navigator.platform');
+  monitorProp(Navigator.prototype, 'languages', 'navigator.languages');
+  monitorProp(Navigator.prototype, 'hardwareConcurrency', 'navigator.hardwareConcurrency');
+  monitorProp(Navigator.prototype, 'deviceMemory', 'navigator.deviceMemory');
+  monitorProp(Navigator.prototype, 'maxTouchPoints', 'navigator.maxTouchPoints');
+
+  monitorProp(Screen.prototype, 'width', 'screen.width');
+  monitorProp(Screen.prototype, 'height', 'screen.height');
+  monitorProp(Screen.prototype, 'colorDepth', 'screen.colorDepth');
+
+  try {
+    overrideMethod(WebGLRenderingContext.prototype, 'getParameter', (orig, thisArg, args) => {
+      if (!spoofersInitialized) logAccess('WebGLRenderingContext.getParameter', { spoofed: false });
+      return orig.apply(thisArg, args);
+    });
+  } catch {
+    // WebGL may not be available
+  }
+}
+
+
+let isMonitorInitialized = false;
+let spoofersInitialized = false;
+
+export function markSpoofersInitialized(): void {
+  spoofersInitialized = true;
+  lastReportedCount = 0;
+}
+
+export function initFingerprintMonitor(): void {
+  if (isMonitorInitialized) return;
+  isMonitorInitialized = true;
+
+  installEarlyMonitoringWrappers();
+
+  setTimeout(reportToBackground, 100);
+
   window.addEventListener('message', (event) => {
     if (event.data?.type === PAGE_MSG_GET_REPORT) {
       reportToBackground();
@@ -460,4 +456,40 @@ export function initFingerprintMonitor(): void {
       }, '*');
     }
   });
+}
+
+// Mark functions for individual spoofer categories
+export function markCanvasSpoofed(mode: string): void {
+  updateApiStatus(
+    ['HTMLCanvasElement.toDataURL', 'HTMLCanvasElement.toBlob', 'CanvasRenderingContext2D.getImageData'],
+    { spoofed: mode === 'noise', blocked: mode === 'block' }
+  );
+}
+
+export function markWebGLSpoofed(mode: string): void {
+  updateApiStatus(
+    ['WebGLRenderingContext.getParameter', 'WebGL2RenderingContext.getParameter', 'WebGLRenderingContext.getExtension', 'WebGLRenderingContext.getSupportedExtensions', 'WEBGL_debug_renderer_info'],
+    { spoofed: mode === 'noise', blocked: mode === 'block' }
+  );
+}
+
+export function markNavigatorSpoofed(mode: string): void {
+  updateApiStatus(
+    ['navigator.userAgent', 'navigator.platform', 'navigator.languages'],
+    { spoofed: mode !== 'off' }
+  );
+}
+
+export function markScreenSpoofed(mode: string): void {
+  updateApiStatus(
+    ['screen.width', 'screen.height', 'screen.colorDepth', 'window.devicePixelRatio'],
+    { spoofed: mode !== 'off' }
+  );
+}
+
+export function markHardwareSpoofed(mode: string): void {
+  updateApiStatus(
+    ['navigator.hardwareConcurrency', 'navigator.deviceMemory', 'navigator.maxTouchPoints'],
+    { spoofed: mode !== 'off' }
+  );
 }

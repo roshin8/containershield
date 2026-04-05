@@ -51,7 +51,7 @@ export function initPermissionsSpoofer(mode: ProtectionMode, prng: PRNG): void {
   navigator.permissions.query = async function (
     permissionDesc: PermissionDescriptor
   ): Promise<PermissionStatus> {
-    logAccess('navigator.permissions.query', { spoofed: true });
+    logAccess('navigator.permissions.query', { spoofed: true, value: 'spoofed' });
 
     const name = permissionDesc.name;
 

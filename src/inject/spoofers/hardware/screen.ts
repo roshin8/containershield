@@ -1,15 +1,15 @@
 /**
  * Screen Spoofer - Spoofs screen dimensions and related properties
- * Uses assigned profile for guaranteed uniqueness across containers
+ * Uses assigned profile for guaranteed uniqueness across containers.
+ * Overrides on PROTOTYPE level to avoid detection.
  */
 
 import type { ProtectionMode, AssignedProfileData } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { farbleScreenResolution, COMMON_SCREEN_RESOLUTIONS } from '@/lib/farbling';
+import { overrideGetterWithValue } from '@/lib/stealth';
+import { logAccess, markScreenSpoofed } from '../../monitor/fingerprint-monitor';
 
-/**
- * Screen configuration from assigned profile
- */
 interface AssignedScreenConfig {
   width: number;
   height: number;
@@ -20,9 +20,6 @@ interface AssignedScreenConfig {
   devicePixelRatio: number;
 }
 
-/**
- * Initialize screen spoofing
- */
 export function initScreenSpoofer(
   mode: ProtectionMode,
   prng: PRNG,
@@ -30,7 +27,8 @@ export function initScreenSpoofer(
 ): void {
   if (mode === 'off') return;
 
-  // Use assigned profile for guaranteed uniqueness, or fall back to random
+  markScreenSpoofed(mode);
+
   let targetScreen: { width: number; height: number };
   let availWidth: number;
   let availHeight: number;
@@ -39,7 +37,6 @@ export function initScreenSpoofer(
   let devicePixelRatio: number;
 
   if (assignedScreen && assignedScreen.width && assignedScreen.height) {
-    // Use assigned profile - guaranteed unique across containers
     targetScreen = { width: assignedScreen.width, height: assignedScreen.height };
     availWidth = assignedScreen.availWidth;
     availHeight = assignedScreen.availHeight;
@@ -47,7 +44,6 @@ export function initScreenSpoofer(
     pixelDepth = assignedScreen.pixelDepth;
     devicePixelRatio = assignedScreen.devicePixelRatio;
   } else if (mode === 'noise') {
-    // Fallback to random
     targetScreen = farbleScreenResolution(prng);
     colorDepth = prng.pick([24, 32]);
     pixelDepth = colorDepth;
@@ -55,7 +51,6 @@ export function initScreenSpoofer(
     availWidth = targetScreen.width;
     availHeight = targetScreen.height - prng.nextInt(30, 50);
   } else {
-    // Block mode - use a common resolution
     targetScreen = COMMON_SCREEN_RESOLUTIONS[0];
     colorDepth = 24;
     pixelDepth = 24;
@@ -64,57 +59,44 @@ export function initScreenSpoofer(
     availHeight = targetScreen.height - 40;
   }
 
-  // Inner dimensions (viewport) - derived from screen
   const innerWidth = Math.min(targetScreen.width, prng.nextInt(1200, targetScreen.width));
   const innerHeight = Math.min(availHeight, prng.nextInt(700, availHeight));
-
-  // Outer dimensions (including browser chrome)
   const outerWidth = innerWidth + prng.nextInt(0, 20);
   const outerHeight = innerHeight + prng.nextInt(70, 120);
 
-  // Override screen properties
-  Object.defineProperties(screen, {
-    width: { value: targetScreen.width, configurable: true },
-    height: { value: targetScreen.height, configurable: true },
-    availWidth: { value: availWidth, configurable: true },
-    availHeight: { value: availHeight, configurable: true },
-    availLeft: { value: 0, configurable: true },
-    availTop: { value: 0, configurable: true },
-    colorDepth: { value: colorDepth, configurable: true },
-    pixelDepth: { value: pixelDepth, configurable: true },
-  });
-
-  // Override window properties
-  Object.defineProperties(window, {
-    innerWidth: { value: innerWidth, configurable: true },
-    innerHeight: { value: innerHeight, configurable: true },
-    outerWidth: { value: outerWidth, configurable: true },
-    outerHeight: { value: outerHeight, configurable: true },
-    devicePixelRatio: { value: devicePixelRatio, configurable: true },
-    screenX: { value: 0, configurable: true },
-    screenY: { value: 0, configurable: true },
-    screenLeft: { value: 0, configurable: true },
-    screenTop: { value: prng.nextInt(0, 30), configurable: true },
-  });
-
-  // Override matchMedia for screen-related queries
-  const originalMatchMedia = window.matchMedia;
-
-  window.matchMedia = function (query: string): MediaQueryList {
-    // Handle width/height queries
-    const widthMatch = query.match(/\((?:min-|max-)?width:\s*(\d+)px\)/);
-    const heightMatch = query.match(/\((?:min-|max-)?height:\s*(\d+)px\)/);
-
-    if (widthMatch || heightMatch) {
-      // Let it use our spoofed values
-      return originalMatchMedia.call(window, query);
+  let screenLogged = false;
+  const logScreen = () => {
+    if (!screenLogged) {
+      logAccess('screen.width', { spoofed: true, value: `${targetScreen.width}x${targetScreen.height}` });
+      screenLogged = true;
     }
-
-    return originalMatchMedia.call(window, query);
   };
 
-  console.log(
-    '[ChameleonContainers] Screen spoofer initialized:',
-    `${targetScreen.width}x${targetScreen.height}`
-  );
+  // Override on Screen.prototype (not instance) to match native behavior
+  overrideGetterWithValue(Screen.prototype, 'width', () => { logScreen(); return targetScreen.width; });
+  overrideGetterWithValue(Screen.prototype, 'height', () => { logScreen(); return targetScreen.height; });
+  overrideGetterWithValue(Screen.prototype, 'availWidth', () => { logScreen(); return availWidth; });
+  overrideGetterWithValue(Screen.prototype, 'availHeight', () => { logScreen(); return availHeight; });
+  overrideGetterWithValue(Screen.prototype, 'availLeft', () => 0);
+  overrideGetterWithValue(Screen.prototype, 'availTop', () => 0);
+  overrideGetterWithValue(Screen.prototype, 'colorDepth', () => { logScreen(); return colorDepth; });
+  overrideGetterWithValue(Screen.prototype, 'pixelDepth', () => { logScreen(); return pixelDepth; });
+
+  // Window properties - these are own properties on window, use defineProperty
+  const screenTopValue = prng.nextInt(0, 30);
+  const windowProps: Record<string, () => any> = {
+    innerWidth: () => { logScreen(); return innerWidth; },
+    innerHeight: () => { logScreen(); return innerHeight; },
+    outerWidth: () => { logScreen(); return outerWidth; },
+    outerHeight: () => { logScreen(); return outerHeight; },
+    devicePixelRatio: () => { logAccess('window.devicePixelRatio', { spoofed: true }); return devicePixelRatio; },
+    screenX: () => 0,
+    screenY: () => 0,
+    screenLeft: () => 0,
+    screenTop: () => screenTopValue,
+  };
+
+  for (const [prop, getter] of Object.entries(windowProps)) {
+    overrideGetterWithValue(window as any, prop, getter);
+  }
 }

@@ -31,7 +31,7 @@ export function initWorkerSpoofer(mode: ProtectionMode, prng: PRNG): void {
   const OriginalWorker = window.Worker;
 
   window.Worker = function (scriptURL: string | URL, options?: WorkerOptions): Worker {
-    logAccess('Worker.constructor', { spoofed: true });
+    logAccess('Worker.constructor', { spoofed: true, value: 'wrapped' });
 
     // Create the worker normally
     const worker = new OriginalWorker(scriptURL, options);
@@ -50,7 +50,7 @@ export function initWorkerSpoofer(mode: ProtectionMode, prng: PRNG): void {
       moduleURL: string | URL,
       options?: WorkletOptions
     ): Promise<void> {
-      logAccess('AudioWorklet.addModule', { spoofed: true });
+      logAccess('AudioWorklet.addModule', { spoofed: true, value: 'wrapped' });
       return originalAddModule.call(this, moduleURL, options);
     };
   }
@@ -63,7 +63,7 @@ export function initWorkerSpoofer(mode: ProtectionMode, prng: PRNG): void {
       scriptURL: string | URL,
       options?: RegistrationOptions
     ): Promise<ServiceWorkerRegistration> {
-      logAccess('ServiceWorker.register', { spoofed: true });
+      logAccess('ServiceWorker.register', { spoofed: true, value: 'wrapped' });
       return originalRegister.call(navigator.serviceWorker, scriptURL, options);
     };
   }

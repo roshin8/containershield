@@ -6,6 +6,7 @@
 import type { ProtectionMode, AssignedProfileData } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { farbleDeviceMemory, farbleHardwareConcurrency } from '@/lib/farbling';
+import { logAccess, markHardwareSpoofed } from '../../monitor/fingerprint-monitor';
 
 /**
  * Initialize device spoofing
@@ -16,8 +17,13 @@ export function initDeviceSpoofer(
   prng: PRNG,
   assignedProfile?: AssignedProfileData
 ): void {
+  // Update any early monitoring entries to reflect spoofed status
+  if (deviceMemoryMode !== 'off' || hardwareConcurrencyMode !== 'off') {
+    markHardwareSpoofed(deviceMemoryMode !== 'off' ? deviceMemoryMode : hardwareConcurrencyMode);
+  }
+
   // Spoof deviceMemory - use assigned profile for guaranteed uniqueness
-  if (deviceMemoryMode !== 'off' && 'deviceMemory' in navigator) {
+  if (deviceMemoryMode !== 'off') {
     let spoofedMemory: number;
 
     if (assignedProfile?.deviceMemory) {
@@ -30,12 +36,12 @@ export function initDeviceSpoofer(
     }
 
     Object.defineProperty(navigator, 'deviceMemory', {
-      value: spoofedMemory,
+      get: () => { logAccess('navigator.deviceMemory', { spoofed: true, value: `${spoofedMemory}GB` }); return spoofedMemory; },
       configurable: true,
       enumerable: true,
     });
 
-    console.log('[ChameleonContainers] Device memory spoofed:', spoofedMemory);
+    console.log('[ContainerShield] Device memory spoofed:', spoofedMemory);
   }
 
   // Spoof hardwareConcurrency - use assigned profile for guaranteed uniqueness
@@ -52,20 +58,13 @@ export function initDeviceSpoofer(
     }
 
     Object.defineProperty(navigator, 'hardwareConcurrency', {
-      value: spoofedConcurrency,
+      get: () => { logAccess('navigator.hardwareConcurrency', { spoofed: true, value: `${spoofedConcurrency} cores` }); return spoofedConcurrency; },
       configurable: true,
       enumerable: true,
     });
 
-    console.log('[ChameleonContainers] Hardware concurrency spoofed:', spoofedConcurrency);
+    console.log('[ContainerShield] Hardware concurrency spoofed:', spoofedConcurrency);
   }
 
-  // Spoof maxTouchPoints (to match profile)
-  const maxTouchPoints = prng.pick([0, 0, 0, 0, 10]);
-
-  Object.defineProperty(navigator, 'maxTouchPoints', {
-    value: maxTouchPoints,
-    configurable: true,
-    enumerable: true,
-  });
+  // maxTouchPoints is handled by the touch spoofer (hardware/touch.ts)
 }

@@ -25,32 +25,32 @@ export function initScreenOrientationSpoofer(mode: ProtectionMode, prng: PRNG): 
   ];
 
   // Select consistent orientation
-  const typeIndex = Math.floor(prng.random() * orientationTypes.length);
+  const typeIndex = Math.floor(prng.nextFloat() * orientationTypes.length);
   const spoofedType = mode === 'block' ? 'landscape-primary' : orientationTypes[typeIndex];
   const spoofedAngle = spoofedType.startsWith('landscape') ? 0 : 90;
 
   // Create spoofed orientation object
   const spoofedOrientation = {
     get type() {
-      logAccess('screen.orientation.type', { spoofed: true });
+      logAccess('screen.orientation.type', { spoofed: true, value: spoofedType });
       return spoofedType;
     },
     get angle() {
-      logAccess('screen.orientation.angle', { spoofed: true });
+      logAccess('screen.orientation.angle', { spoofed: true, value: spoofedType });
       return spoofedAngle;
     },
     addEventListener: originalOrientation.addEventListener.bind(originalOrientation),
     removeEventListener: originalOrientation.removeEventListener.bind(originalOrientation),
     dispatchEvent: originalOrientation.dispatchEvent.bind(originalOrientation),
     lock: function (orientation: OrientationLockType): Promise<void> {
-      logAccess('screen.orientation.lock', { spoofed: true });
+      logAccess('screen.orientation.lock', { spoofed: true, value: spoofedType });
       if (mode === 'block') {
         return Promise.reject(new DOMException('Orientation lock denied', 'NotSupportedError'));
       }
       return originalOrientation.lock(orientation);
     },
     unlock: function (): void {
-      logAccess('screen.orientation.unlock', { spoofed: true });
+      logAccess('screen.orientation.unlock', { spoofed: true, value: spoofedType });
       if (mode !== 'block') {
         originalOrientation.unlock();
       }
@@ -61,7 +61,7 @@ export function initScreenOrientationSpoofer(mode: ProtectionMode, prng: PRNG): 
   try {
     Object.defineProperty(screen, 'orientation', {
       get: function () {
-        logAccess('screen.orientation', { spoofed: true });
+        logAccess('screen.orientation', { spoofed: true, value: spoofedType });
         return spoofedOrientation;
       },
       configurable: true,

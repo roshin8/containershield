@@ -6,6 +6,7 @@
  */
 
 import type { PRNG } from '@/lib/crypto';
+import { logAccess } from '../../monitor/fingerprint-monitor';
 
 type WebRTCMode = 'off' | 'public_only' | 'block';
 
@@ -22,6 +23,7 @@ export function initWebRTCSpoofer(mode: WebRTCMode, _prng: PRNG): void {
     // Completely disable WebRTC
     // @ts-ignore
     window.RTCPeerConnection = function () {
+      logAccess('RTCPeerConnection', { spoofed: true, blocked: true, value: 'blocked' });
       throw new Error('WebRTC is disabled');
     };
 
@@ -47,7 +49,7 @@ export function initWebRTCSpoofer(mode: WebRTCMode, _prng: PRNG): void {
       };
     }
 
-    console.log('[ChameleonContainers] WebRTC blocked');
+    console.log('[ContainerShield] WebRTC blocked');
     return;
   }
 
@@ -66,6 +68,7 @@ export function initWebRTCSpoofer(mode: WebRTCMode, _prng: PRNG): void {
       }),
     };
 
+    logAccess('RTCPeerConnection', { spoofed: true, value: 'public only' });
     const pc = new OriginalRTCPeerConnection(filteredConfig);
 
     // Intercept ICE candidates to filter local IPs
@@ -83,7 +86,7 @@ export function initWebRTCSpoofer(mode: WebRTCMode, _prng: PRNG): void {
 
             // Filter out local IP candidates
             if (isLocalIPCandidate(candidate)) {
-              console.log('[ChameleonContainers] Filtered local IP candidate');
+              console.log('[ContainerShield] Filtered local IP candidate');
               return;
             }
           }
@@ -114,7 +117,7 @@ export function initWebRTCSpoofer(mode: WebRTCMode, _prng: PRNG): void {
               const candidate = event.candidate.candidate;
 
               if (isLocalIPCandidate(candidate)) {
-                console.log('[ChameleonContainers] Filtered local IP candidate');
+                console.log('[ContainerShield] Filtered local IP candidate');
                 return;
               }
             }
@@ -133,7 +136,7 @@ export function initWebRTCSpoofer(mode: WebRTCMode, _prng: PRNG): void {
   // Copy static properties
   Object.setPrototypeOf(window.RTCPeerConnection, OriginalRTCPeerConnection);
 
-  console.log('[ChameleonContainers] WebRTC spoofer initialized: public_only');
+  console.log('[ContainerShield] WebRTC spoofer initialized: public_only');
 }
 
 /**

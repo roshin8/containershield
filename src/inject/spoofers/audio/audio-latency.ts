@@ -25,10 +25,11 @@ const COMMON_LATENCIES = [
 export function initAudioLatencySpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (mode === 'off') return;
 
-  // Select a consistent latency value
-  const latencyIndex = Math.floor(prng.random() * COMMON_LATENCIES.length);
+  // Select consistent spoofed values
+  const latencyIndex = Math.floor(prng.nextFloat() * COMMON_LATENCIES.length);
   const spoofedBaseLatency = mode === 'block' ? 0 : COMMON_LATENCIES[latencyIndex];
-  const spoofedOutputLatency = mode === 'block' ? 0 : spoofedBaseLatency * (1 + prng.random() * 0.5);
+  const spoofedOutputLatency = mode === 'block' ? 0 : spoofedBaseLatency * (1 + prng.nextFloat() * 0.5);
+  const spoofedSampleRate = prng.pick([44100, 48000]);
 
   // Store original AudioContext
   const OriginalAudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -43,7 +44,7 @@ export function initAudioLatencySpoofer(mode: ProtectionMode, prng: PRNG): void 
     try {
       Object.defineProperty(ctx, 'baseLatency', {
         get: function () {
-          logAccess('AudioContext.baseLatency', { spoofed: true });
+          logAccess('AudioContext.baseLatency', { spoofed: true, value: `${spoofedSampleRate}Hz, ${spoofedBaseLatency.toFixed(4)}s` });
           return spoofedBaseLatency;
         },
         configurable: true,
@@ -56,14 +57,22 @@ export function initAudioLatencySpoofer(mode: ProtectionMode, prng: PRNG): void 
     try {
       Object.defineProperty(ctx, 'outputLatency', {
         get: function () {
-          logAccess('AudioContext.outputLatency', { spoofed: true });
+          logAccess('AudioContext.outputLatency', { spoofed: true, value: `${spoofedOutputLatency.toFixed(4)}s` });
           return spoofedOutputLatency;
         },
         configurable: true,
       });
-    } catch {
-      // Can't override
-    }
+    } catch {}
+
+    // Spoof sampleRate
+    try {
+      Object.defineProperty(ctx, 'sampleRate', {
+        get: function () {
+          return spoofedSampleRate;
+        },
+        configurable: true,
+      });
+    } catch {}
 
     return ctx;
   };

@@ -4,8 +4,10 @@ import browser from 'webextension-polyfill';
 
 interface ConflictParams {
   ip: string;
+  domain: string;
   url: string;
   currentContainer: string;
+  currentContainerId: string;
   originalContainer: string;
   originalContainerId: string;
   lastAccessed: string;
@@ -15,139 +17,150 @@ function IPWarningPage() {
   const [params, setParams] = useState<ConflictParams | null>(null);
 
   useEffect(() => {
-    // Parse URL parameters
-    const searchParams = new URLSearchParams(window.location.search);
+    const sp = new URLSearchParams(window.location.search);
     setParams({
-      ip: searchParams.get('ip') || '',
-      url: searchParams.get('url') || '',
-      currentContainer: searchParams.get('currentContainer') || '',
-      originalContainer: searchParams.get('originalContainer') || '',
-      originalContainerId: searchParams.get('originalContainerId') || '',
-      lastAccessed: searchParams.get('lastAccessed') || '',
+      ip: sp.get('ip') || '',
+      domain: sp.get('domain') || '',
+      url: sp.get('url') || '',
+      currentContainer: sp.get('currentContainer') || '',
+      currentContainerId: sp.get('currentContainerId') || '',
+      originalContainer: sp.get('originalContainer') || '',
+      originalContainerId: sp.get('originalContainerId') || '',
+      lastAccessed: sp.get('lastAccessed') || '',
     });
   }, []);
 
-  const formatTimeAgo = (timestamp: string): string => {
-    const diff = Date.now() - parseInt(timestamp, 10);
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
-    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+  const formatTimeAgo = (ts: string): string => {
+    const diff = Date.now() - parseInt(ts, 10);
+    const mins = Math.floor(diff / 60000);
+    const hrs = Math.floor(mins / 60);
+    const days = Math.floor(hrs / 24);
+    if (days > 0) return `${days}d ago`;
+    if (hrs > 0) return `${hrs}h ago`;
+    if (mins > 0) return `${mins}m ago`;
     return 'just now';
   };
 
   const handleBlock = () => {
-    // Close the tab
-    window.close();
+    // Go back or close tab
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.close();
+    }
   };
 
   const handleAllowOnce = async () => {
-    // Navigate to the original URL
-    if (params?.url) {
-      window.location.href = params.url;
-    }
+    if (!params) return;
+    // Tell background to allow this IP temporarily and record it
+    await browser.runtime.sendMessage({
+      type: 'IP_ALLOW_ONCE',
+      ip: params.ip,
+      url: params.url,
+      containerId: params.currentContainerId,
+      containerName: params.currentContainer,
+    });
+    // Navigate to original URL
+    window.location.href = params.url;
   };
 
   const handleOpenInOriginal = async () => {
     if (!params) return;
-
-    // Create a new tab in the original container
-    await browser.runtime.sendMessage({
-      type: 'OPEN_IN_CONTAINER',
-      url: params.url,
-      containerId: params.originalContainerId,
-    });
-
-    // Close this tab
-    window.close();
+    // Open in the original container
+    try {
+      await browser.tabs.create({
+        url: params.url,
+        cookieStoreId: params.originalContainerId,
+      });
+    } catch {
+      // Fallback - just open normally
+      window.open(params.url);
+    }
+    // Go back in current tab
+    if (window.history.length > 1) window.history.back();
+    else window.close();
   };
 
-  if (!params) {
-    return (
-      <div className="text-center text-gray-400">Loading...</div>
-    );
-  }
+  if (!params) return null;
 
   return (
-    <div className="max-w-lg w-full bg-gray-800 rounded-xl shadow-2xl overflow-hidden">
+    <div style={{
+      maxWidth: '480px', width: '100%',
+      background: '#18181f', borderRadius: '12px',
+      border: '1px solid #2a2a3e', overflow: 'hidden',
+    }}>
       {/* Header */}
-      <div className="bg-yellow-600 px-6 py-4 flex items-center gap-3">
-        <svg
-          className="w-8 h-8 text-white"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-          />
+      <div style={{
+        background: '#d97706', padding: '16px 24px',
+        display: 'flex', alignItems: 'center', gap: '12px',
+      }}>
+        <svg width="28" height="28" fill="none" stroke="white" viewBox="0 0 24 24" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
-        <h1 className="text-xl font-bold text-white">
-          IP Address Conflict Detected
-        </h1>
+        <div>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: 'white' }}>IP Conflict Detected</div>
+          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)' }}>Request blocked until you decide</div>
+        </div>
       </div>
 
       {/* Content */}
-      <div className="px-6 py-5 space-y-4">
-        <p className="text-gray-300">
-          You're trying to access <span className="font-mono bg-gray-700 px-2 py-0.5 rounded">{params.ip}</span> from:
+      <div style={{ padding: '20px 24px' }}>
+        <p style={{ fontSize: '13px', color: '#9898b0', marginBottom: '16px' }}>
+          <strong style={{ fontFamily: 'monospace', color: '#e8e8f0' }}>{params.domain}</strong> resolves to IP <strong style={{ fontFamily: 'monospace' }}>{params.ip}</strong> which was already used in another container.
         </p>
 
-        <div className="bg-gray-700/50 rounded-lg p-4 space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Current Container:</span>
-            <span className="font-medium text-blue-400">{params.currentContainer}</span>
+        <div style={{
+          background: '#1f1f2b', borderRadius: '8px', padding: '12px 16px',
+          marginBottom: '16px', fontSize: '13px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ color: '#606078' }}>You are in:</span>
+            <span style={{ fontWeight: 600, color: '#7c5cfc' }}>{params.currentContainer}</span>
           </div>
-          <div className="border-t border-gray-600"></div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Previously Accessed From:</span>
-            <span className="font-medium text-orange-400">{params.originalContainer}</span>
+          <div style={{ borderTop: '1px solid #2a2a3e', margin: '8px 0' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ color: '#606078' }}>Previously used by:</span>
+            <span style={{ fontWeight: 600, color: '#f59e0b' }}>{params.originalContainer}</span>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Last Access:</span>
-            <span className="text-gray-300">{formatTimeAgo(params.lastAccessed)}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: '#606078' }}>Last access:</span>
+            <span style={{ color: '#9898b0' }}>{formatTimeAgo(params.lastAccessed)}</span>
           </div>
         </div>
 
-        <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-4 text-sm text-yellow-200">
-          <strong>Warning:</strong> Accessing the same IP address from different containers may allow the server to correlate your identities across containers.
+        <div style={{
+          background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.3)',
+          borderRadius: '8px', padding: '12px 16px', fontSize: '12px',
+          color: '#9898b0', lineHeight: '1.5',
+        }}>
+          <strong>Why this matters:</strong> The server at {params.domain} can see your IP address. If you visit from multiple containers, the server can link those visits together, defeating container isolation.
         </div>
       </div>
 
       {/* Actions */}
-      <div className="px-6 py-4 bg-gray-800/50 border-t border-gray-700 flex gap-3">
-        <button
-          onClick={handleBlock}
-          className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors"
-        >
+      <div style={{
+        padding: '16px 24px', borderTop: '1px solid #2a2a3e',
+        display: 'flex', gap: '8px',
+      }}>
+        <button onClick={handleBlock} style={{
+          flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 500, fontSize: '13px',
+          background: '#1f1f2b', color: '#e8e8f0', border: '1px solid #2a2a3e',
+          cursor: 'pointer',
+        }}>
           Block
         </button>
-        <button
-          onClick={handleAllowOnce}
-          className="flex-1 px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg font-medium transition-colors"
-        >
+        <button onClick={handleAllowOnce} style={{
+          flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 500, fontSize: '13px',
+          background: '#d97706', color: 'white', border: 'none', cursor: 'pointer',
+        }}>
           Allow Once
         </button>
-        <button
-          onClick={handleOpenInOriginal}
-          className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors"
-        >
+        <button onClick={handleOpenInOriginal} style={{
+          flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 500, fontSize: '13px',
+          background: '#7c5cfc', color: 'white', border: 'none', cursor: 'pointer',
+        }}>
           Open in {params.originalContainer}
         </button>
-      </div>
-
-      {/* Remember checkbox */}
-      <div className="px-6 pb-4">
-        <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-          <input type="checkbox" className="rounded bg-gray-700 border-gray-600" />
-          Remember my choice for this IP
-        </label>
       </div>
     </div>
   );
@@ -155,6 +168,5 @@ function IPWarningPage() {
 
 const container = document.getElementById('root');
 if (container) {
-  const root = createRoot(container);
-  root.render(<IPWarningPage />);
+  createRoot(container).render(<IPWarningPage />);
 }

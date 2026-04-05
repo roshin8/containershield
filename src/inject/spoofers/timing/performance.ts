@@ -8,6 +8,8 @@
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { overrideMethod } from '@/lib/stealth';
+import { logAccess } from '../../monitor/fingerprint-monitor';
 
 /**
  * Initialize performance timing spoofing
@@ -32,27 +34,25 @@ export function initPerformanceSpoofer(mode: ProtectionMode, prng: PRNG): void {
   // Add consistent offset for this container+domain
   const offset = prng.nextFloatRange(-50, 50);
 
-  // Wrap performance.now()
-  performance.now = function (): number {
+  let perfLogged = false;
+  // Wrap performance.now() with stealth
+  overrideMethod(Performance.prototype, 'now', () => {
+    if (!perfLogged) {
+      logAccess('performance.now', { spoofed: true, value: `${precision}ms precision` });
+      perfLogged = true;
+    }
     const now = originalNow();
-
     if (mode === 'block') {
-      // Round to precision
       return Math.round(now / precision) * precision;
     }
-
-    // Add offset and slight jitter, then round
     const jitter = prng.nextNoise(0.5);
     const modified = now + offset + jitter;
-
     return Math.round(modified / precision) * precision;
-  };
+  });
 
   // Also wrap Date.now() for consistency
-  const originalDateNow = Date.now;
-
-  Date.now = function (): number {
-    const now = originalDateNow();
+  overrideMethod(Date, 'now', (original, _thisArg, _args) => {
+    const now = original.call(Date) as number;
 
     if (mode === 'block') {
       return Math.round(now / precision) * precision;
@@ -60,7 +60,7 @@ export function initPerformanceSpoofer(mode: ProtectionMode, prng: PRNG): void {
 
     const jitter = prng.nextNoise(1);
     return Math.round((now + jitter) / precision) * precision;
-  };
+  });
 
   // Wrap performance.timeOrigin (read-only, so we use getter)
   const originalTimeOrigin = performance.timeOrigin;
@@ -152,7 +152,7 @@ export function initPerformanceSpoofer(mode: ProtectionMode, prng: PRNG): void {
   };
 
   console.log(
-    '[ChameleonContainers] Performance spoofer initialized:',
+    '[ContainerShield] Performance spoofer initialized:',
     mode,
     `(precision: ${precision}ms)`
   );

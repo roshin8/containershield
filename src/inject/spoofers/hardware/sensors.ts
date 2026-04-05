@@ -42,7 +42,7 @@ function createFakeSensor(
           get: () => {
             if (!this._hasReading) return null;
             // Return small noise values
-            return (prng.random() - 0.5) * 0.01;
+            return (prng.nextFloat() - 0.5) * 0.01;
           },
           configurable: true,
         });

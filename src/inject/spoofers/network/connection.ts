@@ -72,7 +72,7 @@ export function initNetworkSpoofer(mode: ProtectionMode, prng: PRNG): void {
   // Create a proxy to log access
   const proxyHandler: ProxyHandler<NetworkInformationLike> = {
     get(target, prop) {
-      logAccess('navigator.connection', { spoofed: true });
+      logAccess('navigator.connection', { spoofed: true, value: `${selectedProfile.type}/${selectedProfile.effectiveType}` });
       return target[prop as keyof NetworkInformationLike];
     },
   };

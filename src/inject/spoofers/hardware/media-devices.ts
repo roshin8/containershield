@@ -8,6 +8,7 @@
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { logAccess } from '../../monitor/fingerprint-monitor';
 
 /**
  * Initialize MediaDevices spoofing
@@ -29,10 +30,11 @@ export function initMediaDevicesSpoofer(mode: ProtectionMode, prng: PRNG): void 
     navigator.mediaDevices.enumerateDevices = async function (): Promise<
       MediaDeviceInfo[]
     > {
+      logAccess('navigator.mediaDevices.enumerateDevices', { spoofed: false, blocked: true, value: '0 devices' });
       return [];
     };
 
-    console.log('[ChameleonContainers] MediaDevices blocked');
+    console.log('[ContainerShield] MediaDevices blocked');
     return;
   }
 
@@ -41,6 +43,7 @@ export function initMediaDevicesSpoofer(mode: ProtectionMode, prng: PRNG): void 
     MediaDeviceInfo[]
   > {
     const realDevices = await originalEnumerateDevices();
+    logAccess('navigator.mediaDevices.enumerateDevices', { spoofed: true, value: `${realDevices.length} devices` });
 
     // Generate consistent fake device IDs based on seed
     const fakeDevices: MediaDeviceInfo[] = realDevices.map((device, index) => {
@@ -87,7 +90,7 @@ export function initMediaDevicesSpoofer(mode: ProtectionMode, prng: PRNG): void 
     return fakeDevices;
   };
 
-  console.log('[ChameleonContainers] MediaDevices spoofer initialized');
+  console.log('[ContainerShield] MediaDevices spoofer initialized');
 }
 
 /**

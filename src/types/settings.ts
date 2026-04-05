@@ -37,7 +37,15 @@ export interface ProfileConfig {
   language?: string;
   timezone?: string | 'real' | 'ip';
   screen?: { width: number; height: number };
+  hardwareConcurrency?: number;
+  deviceMemory?: number;
+  gpu?: { vendor: string; renderer: string };
 }
+
+/**
+ * X-Forwarded-For header mode
+ */
+export type XForwardedForMode = 'random' | 'custom' | 'range';
 
 /**
  * Header spoofing configuration
@@ -48,6 +56,10 @@ export interface HeaderConfig {
   refererPolicy: RefererPolicy;
   disableEtag: boolean;
   sendDNT: boolean;
+  spoofXForwardedFor: boolean;
+  xForwardedForMode: XForwardedForMode;
+  xForwardedForValue: string;
+  spoofVia: boolean;
 }
 
 /**
@@ -81,6 +93,7 @@ export interface AudioSpoofers {
 export interface HardwareSpoofers {
   screen: ProtectionMode;
   screenFrame: ProtectionMode;
+  screenExtended: ProtectionMode;
   orientation: ProtectionMode;
   deviceMemory: ProtectionMode;
   hardwareConcurrency: ProtectionMode;
@@ -89,6 +102,8 @@ export interface HardwareSpoofers {
   gpu: ProtectionMode;
   touch: ProtectionMode;
   sensors: ProtectionMode;
+  architecture: ProtectionMode;
+  visualViewport: ProtectionMode;
 }
 
 /**
@@ -101,6 +116,10 @@ export interface NavigatorSpoofers {
   clientHints: ProtectionMode;
   clipboard: ProtectionMode;
   vibration: ProtectionMode;
+  vendorFlavors: ProtectionMode;
+  fontPreferences: ProtectionMode;
+  windowName: ProtectionMode;
+  tabHistory: ProtectionMode;
 }
 
 /**
@@ -125,6 +144,8 @@ export interface FontSpoofers {
 export interface NetworkSpoofers {
   webrtc: WebRTCMode;
   connection: ProtectionMode;
+  geolocation: ProtectionMode;
+  websocket: ProtectionMode;
 }
 
 /**
@@ -132,6 +153,7 @@ export interface NetworkSpoofers {
  */
 export interface TimingSpoofers {
   performance: ProtectionMode;
+  memory: ProtectionMode;
 }
 
 /**
@@ -177,6 +199,7 @@ export interface MathSpoofers {
  */
 export interface KeyboardSpoofers {
   layout: ProtectionMode;
+  cadence: ProtectionMode;
 }
 
 /**
@@ -313,6 +336,8 @@ export interface IPIsolationSettings {
   trackLocalIPs: boolean;
   trackLocalhostIPs: boolean;
   maxUrlHistory: number;
+  autoProtectNewContainers: boolean;
+  similarityThreshold: number;
 }
 
 /**
@@ -322,6 +347,7 @@ export interface IPDatabase {
   ipRecords: Record<string, IPRecord>;
   settings: IPIsolationSettings;
   exceptions: string[];
+  trackedDomains: string[];
 }
 
 /**
@@ -351,6 +377,10 @@ export function createDefaultSettings(): ContainerSettings {
       refererPolicy: 'same-origin',
       disableEtag: true,
       sendDNT: false,
+      spoofXForwardedFor: false,
+      xForwardedForMode: 'random',
+      xForwardedForValue: '',
+      spoofVia: false,
     },
     spoofers: {
       graphics: {
@@ -368,27 +398,34 @@ export function createDefaultSettings(): ContainerSettings {
         audioContext: 'noise',
         offlineAudio: 'noise',
         latency: 'noise',
-        codecs: 'off',
+        codecs: 'noise',
       },
       hardware: {
         screen: 'noise',
         screenFrame: 'noise',
+        screenExtended: 'noise',
         orientation: 'noise',
         deviceMemory: 'noise',
         hardwareConcurrency: 'noise',
         mediaDevices: 'noise',
-        battery: 'block',
+        battery: 'noise',
         gpu: 'noise',
         touch: 'noise',
-        sensors: 'block',
+        sensors: 'noise',
+        architecture: 'noise',
+        visualViewport: 'noise',
       },
       navigator: {
         userAgent: 'noise',
         languages: 'noise',
         plugins: 'noise',
         clientHints: 'noise',
-        clipboard: 'block',
+        clipboard: 'noise',
         vibration: 'noise',
+        vendorFlavors: 'noise',
+        fontPreferences: 'noise',
+        windowName: 'noise',
+        tabHistory: 'noise',
       },
       timezone: {
         intl: 'noise',
@@ -400,10 +437,13 @@ export function createDefaultSettings(): ContainerSettings {
       },
       network: {
         webrtc: 'public_only',
-        connection: 'off',
+        connection: 'noise',
+        geolocation: 'noise',
+        websocket: 'noise',
       },
       timing: {
         performance: 'noise',
+        memory: 'noise',
       },
       css: {
         mediaQueries: 'noise',
@@ -418,13 +458,14 @@ export function createDefaultSettings(): ContainerSettings {
       storage: {
         estimate: 'noise',
         indexedDB: 'noise',
-        webSQL: 'block',
+        webSQL: 'noise',
       },
       math: {
         functions: 'noise',
       },
       keyboard: {
         layout: 'noise',
+        cadence: 'noise',
       },
       workers: {
         fingerprint: 'noise',
@@ -443,18 +484,18 @@ export function createDefaultSettings(): ContainerSettings {
         webCrypto: 'noise',
       },
       devices: {
-        gamepad: 'block',
-        midi: 'block',
-        bluetooth: 'block',
-        usb: 'block',
-        serial: 'block',
-        hid: 'block',
+        gamepad: 'noise',
+        midi: 'noise',
+        bluetooth: 'noise',
+        usb: 'noise',
+        serial: 'noise',
+        hid: 'noise',
       },
       features: {
         detection: 'noise',
       },
       payment: {
-        applePay: 'block',
+        applePay: 'noise',
       },
     },
     domainRules: {},
@@ -471,5 +512,7 @@ export function createDefaultIPSettings(): IPIsolationSettings {
     trackLocalIPs: true,
     trackLocalhostIPs: false,
     maxUrlHistory: 10,
+    autoProtectNewContainers: true,
+    similarityThreshold: 30,
   };
 }

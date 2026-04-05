@@ -5,105 +5,83 @@
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { farbleImageData } from '@/lib/farbling';
+import { overrideMethod } from '@/lib/stealth';
+import { logAccess, markCanvasSpoofed } from '../../monitor/fingerprint-monitor';
 
-/**
- * Initialize canvas spoofing
- */
+// Fast string hash for generating CreepJS-style fingerprint IDs
+function quickHash(str: string): string {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
 export function initCanvasSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (mode === 'off') return;
 
-  // Store original methods
-  const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-  const originalToBlob = HTMLCanvasElement.prototype.toBlob;
+  markCanvasSpoofed(mode);
+
   const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
 
-  // Wrap toDataURL
-  HTMLCanvasElement.prototype.toDataURL = function (
-    this: HTMLCanvasElement,
-    type?: string,
-    quality?: number
-  ): string {
+  overrideMethod(HTMLCanvasElement.prototype, 'toDataURL', (original, thisArg, args) => {
     if (mode === 'block') {
+      logAccess('HTMLCanvasElement.toDataURL', { blocked: true, spoofed: false, value: 'blocked' });
       return 'data:image/png;base64,';
     }
 
-    // Get context and apply noise
-    const ctx = this.getContext('2d');
+    const ctx = thisArg.getContext('2d');
     if (ctx) {
-      const imageData = originalGetImageData.call(ctx, 0, 0, this.width, this.height);
+      const imageData = originalGetImageData.call(ctx, 0, 0, thisArg.width, thisArg.height);
       farbleImageData(imageData.data, prng);
       ctx.putImageData(imageData, 0, 0);
     }
 
-    return originalToDataURL.call(this, type, quality);
-  };
+    const result = original.apply(thisArg, args);
+    logAccess('HTMLCanvasElement.toDataURL', { spoofed: true, value: '#' + quickHash(result) });
+    return result;
+  });
 
-  // Wrap toBlob
-  HTMLCanvasElement.prototype.toBlob = function (
-    this: HTMLCanvasElement,
-    callback: BlobCallback,
-    type?: string,
-    quality?: number
-  ): void {
+  overrideMethod(HTMLCanvasElement.prototype, 'toBlob', (original, thisArg, args) => {
+    logAccess('HTMLCanvasElement.toBlob', { blocked: mode === 'block', spoofed: mode === 'noise', value: mode === 'block' ? 'blocked' : 'noised' });
+
     if (mode === 'block') {
-      callback(null);
+      args[0]?.(null);
       return;
     }
 
-    // Get context and apply noise
-    const ctx = this.getContext('2d');
+    const ctx = thisArg.getContext('2d');
     if (ctx) {
-      const imageData = originalGetImageData.call(ctx, 0, 0, this.width, this.height);
+      const imageData = originalGetImageData.call(ctx, 0, 0, thisArg.width, thisArg.height);
       farbleImageData(imageData.data, prng);
       ctx.putImageData(imageData, 0, 0);
     }
 
-    return originalToBlob.call(this, callback, type, quality);
-  };
+    return original.apply(thisArg, args);
+  });
 
-  // Wrap getImageData
-  CanvasRenderingContext2D.prototype.getImageData = function (
-    this: CanvasRenderingContext2D,
-    sx: number,
-    sy: number,
-    sw: number,
-    sh: number,
-    settings?: ImageDataSettings
-  ): ImageData {
-    const imageData = originalGetImageData.call(this, sx, sy, sw, sh, settings);
+  overrideMethod(CanvasRenderingContext2D.prototype, 'getImageData', (original, thisArg, args) => {
+    logAccess('CanvasRenderingContext2D.getImageData', { blocked: mode === 'block', spoofed: mode === 'noise', value: mode === 'block' ? 'blocked' : 'noised' });
 
-    if (mode === 'block') {
-      // Return blank image data
-      return new ImageData(sw, sh);
-    }
+    const imageData = original.apply(thisArg, args);
 
-    // Apply noise
+    if (mode === 'block') return new ImageData(args[2], args[3]);
+
     farbleImageData(imageData.data, prng);
     return imageData;
-  };
+  });
 
-  // Also wrap OffscreenCanvas if available
+  // OffscreenCanvas
   if (typeof OffscreenCanvas !== 'undefined') {
-    const originalOffscreenToBlob = OffscreenCanvas.prototype.convertToBlob;
+    overrideMethod(OffscreenCanvas.prototype, 'convertToBlob', (original, thisArg, args) => {
+      if (mode === 'block') return Promise.resolve(new Blob([]));
 
-    OffscreenCanvas.prototype.convertToBlob = async function (
-      this: OffscreenCanvas,
-      options?: ImageEncodeOptions
-    ): Promise<Blob> {
-      if (mode === 'block') {
-        return new Blob([]);
-      }
-
-      const ctx = this.getContext('2d') as OffscreenCanvasRenderingContext2D | null;
+      const ctx = thisArg.getContext('2d') as OffscreenCanvasRenderingContext2D | null;
       if (ctx) {
-        const imageData = ctx.getImageData(0, 0, this.width, this.height);
+        const imageData = ctx.getImageData(0, 0, thisArg.width, thisArg.height);
         farbleImageData(imageData.data, prng);
         ctx.putImageData(imageData, 0, 0);
       }
 
-      return originalOffscreenToBlob.call(this, options);
-    };
+      return original.apply(thisArg, args);
+    });
   }
-
-  console.log('[ChameleonContainers] Canvas spoofer initialized:', mode);
 }

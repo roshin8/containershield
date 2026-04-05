@@ -19,20 +19,20 @@ export function initScreenFrameSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (mode === 'off') return;
 
   // Generate consistent spoofed values
-  const spoofedScreenX = mode === 'block' ? 0 : Math.floor(prng.random() * 100);
-  const spoofedScreenY = mode === 'block' ? 0 : Math.floor(prng.random() * 100);
+  const spoofedScreenX = mode === 'block' ? 0 : Math.floor(prng.nextFloat() * 100);
+  const spoofedScreenY = mode === 'block' ? 0 : Math.floor(prng.nextFloat() * 100);
 
   // Outer dimensions should be slightly larger than inner
   const innerWidth = window.innerWidth;
   const innerHeight = window.innerHeight;
-  const spoofedOuterWidth = mode === 'block' ? innerWidth : innerWidth + Math.floor(prng.random() * 20) + 10;
-  const spoofedOuterHeight = mode === 'block' ? innerHeight : innerHeight + Math.floor(prng.random() * 100) + 50;
+  const spoofedOuterWidth = mode === 'block' ? innerWidth : innerWidth + Math.floor(prng.nextFloat() * 20) + 10;
+  const spoofedOuterHeight = mode === 'block' ? innerHeight : innerHeight + Math.floor(prng.nextFloat() * 100) + 50;
 
   // Spoof window.screenX
   try {
     Object.defineProperty(window, 'screenX', {
       get: function () {
-        logAccess('window.screenX', { spoofed: true });
+        logAccess('window.screenX', { spoofed: true, value: `${spoofedOuterWidth}x${spoofedOuterHeight}` });
         return spoofedScreenX;
       },
       configurable: true,
@@ -45,7 +45,7 @@ export function initScreenFrameSpoofer(mode: ProtectionMode, prng: PRNG): void {
   try {
     Object.defineProperty(window, 'screenLeft', {
       get: function () {
-        logAccess('window.screenLeft', { spoofed: true });
+        logAccess('window.screenLeft', { spoofed: true, value: `${spoofedOuterWidth}x${spoofedOuterHeight}` });
         return spoofedScreenX;
       },
       configurable: true,
@@ -58,7 +58,7 @@ export function initScreenFrameSpoofer(mode: ProtectionMode, prng: PRNG): void {
   try {
     Object.defineProperty(window, 'screenY', {
       get: function () {
-        logAccess('window.screenY', { spoofed: true });
+        logAccess('window.screenY', { spoofed: true, value: `${spoofedOuterWidth}x${spoofedOuterHeight}` });
         return spoofedScreenY;
       },
       configurable: true,
@@ -71,7 +71,7 @@ export function initScreenFrameSpoofer(mode: ProtectionMode, prng: PRNG): void {
   try {
     Object.defineProperty(window, 'screenTop', {
       get: function () {
-        logAccess('window.screenTop', { spoofed: true });
+        logAccess('window.screenTop', { spoofed: true, value: `${spoofedOuterWidth}x${spoofedOuterHeight}` });
         return spoofedScreenY;
       },
       configurable: true,
@@ -84,7 +84,7 @@ export function initScreenFrameSpoofer(mode: ProtectionMode, prng: PRNG): void {
   try {
     Object.defineProperty(window, 'outerWidth', {
       get: function () {
-        logAccess('window.outerWidth', { spoofed: true });
+        logAccess('window.outerWidth', { spoofed: true, value: `${spoofedOuterWidth}x${spoofedOuterHeight}` });
         return spoofedOuterWidth;
       },
       configurable: true,
@@ -97,7 +97,7 @@ export function initScreenFrameSpoofer(mode: ProtectionMode, prng: PRNG): void {
   try {
     Object.defineProperty(window, 'outerHeight', {
       get: function () {
-        logAccess('window.outerHeight', { spoofed: true });
+        logAccess('window.outerHeight', { spoofed: true, value: `${spoofedOuterWidth}x${spoofedOuterHeight}` });
         return spoofedOuterHeight;
       },
       configurable: true,

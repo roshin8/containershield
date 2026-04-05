@@ -40,7 +40,7 @@ export function initWebSQLSpoofer(mode: ProtectionMode, prng: PRNG): void {
           estimatedSize: number,
           creationCallback?: (db: any) => void
         ): any {
-          logAccess('openDatabase', { spoofed: true });
+          logAccess('openDatabase', { spoofed: true, value: 'blocked' });
           return originalOpenDatabase.call(
             window,
             name,

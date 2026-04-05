@@ -27,7 +27,7 @@ export function initIntlSpoofer(mode: ProtectionMode, prng: PRNG): void {
       locales?: string | string[],
       options?: Intl.ListFormatOptions
     ): Intl.ListFormat {
-      logAccess('Intl.ListFormat', { spoofed: true });
+      logAccess('Intl.ListFormat', { spoofed: true, value: 'spoofed' });
 
       if (mode === 'block') {
         locales = spoofedLocale;
@@ -48,7 +48,7 @@ export function initIntlSpoofer(mode: ProtectionMode, prng: PRNG): void {
       locales?: string | string[],
       options?: Intl.RelativeTimeFormatOptions
     ): Intl.RelativeTimeFormat {
-      logAccess('Intl.RelativeTimeFormat', { spoofed: true });
+      logAccess('Intl.RelativeTimeFormat', { spoofed: true, value: 'spoofed' });
 
       if (mode === 'block') {
         locales = spoofedLocale;
@@ -69,7 +69,7 @@ export function initIntlSpoofer(mode: ProtectionMode, prng: PRNG): void {
       locales?: string | string[],
       options?: Intl.PluralRulesOptions
     ): Intl.PluralRules {
-      logAccess('Intl.PluralRules', { spoofed: true });
+      logAccess('Intl.PluralRules', { spoofed: true, value: 'spoofed' });
 
       if (mode === 'block') {
         locales = spoofedLocale;
@@ -90,7 +90,7 @@ export function initIntlSpoofer(mode: ProtectionMode, prng: PRNG): void {
       locales?: string | string[],
       options?: Intl.NumberFormatOptions
     ): Intl.NumberFormat {
-      logAccess('Intl.NumberFormat', { spoofed: true });
+      logAccess('Intl.NumberFormat', { spoofed: true, value: 'spoofed' });
 
       if (mode === 'block') {
         locales = spoofedLocale;
@@ -111,7 +111,7 @@ export function initIntlSpoofer(mode: ProtectionMode, prng: PRNG): void {
       locales?: string | string[],
       options?: Intl.CollatorOptions
     ): Intl.Collator {
-      logAccess('Intl.Collator', { spoofed: true });
+      logAccess('Intl.Collator', { spoofed: true, value: 'spoofed' });
 
       if (mode === 'block') {
         locales = spoofedLocale;
@@ -131,7 +131,7 @@ export function initIntlSpoofer(mode: ProtectionMode, prng: PRNG): void {
       locales?: string | string[],
       options?: any
     ): any {
-      logAccess('Intl.Segmenter', { spoofed: true });
+      logAccess('Intl.Segmenter', { spoofed: true, value: 'spoofed' });
 
       if (mode === 'block') {
         locales = spoofedLocale;
@@ -151,7 +151,7 @@ export function initIntlSpoofer(mode: ProtectionMode, prng: PRNG): void {
       locales?: string | string[],
       options?: any
     ): any {
-      logAccess('Intl.DisplayNames', { spoofed: true });
+      logAccess('Intl.DisplayNames', { spoofed: true, value: 'spoofed' });
 
       if (mode === 'block') {
         locales = spoofedLocale;

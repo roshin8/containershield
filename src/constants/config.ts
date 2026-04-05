@@ -71,7 +71,7 @@ export const COMMON_AUDIO_LATENCIES = [
 ] as const;
 
 // Extension version
-export const EXTENSION_VERSION = '0.1.0';
+export const EXTENSION_VERSION = '0.3.0';
 
 // Console log prefix
 export const LOG_PREFIX = '[ContainerShield]';

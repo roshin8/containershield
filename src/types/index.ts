@@ -11,11 +11,12 @@ export type MessageType =
   | 'GET_CONTAINER_INFO'
   | 'GET_ALL_CONTAINERS'
   | 'IP_CONFLICT_CHECK'
-  | 'IP_CONFLICT_RESOLVED'
-  | 'INJECT_CONFIG'
+  | 'GET_SPOOF_CONFIG'
   | 'FINGERPRINT_REPORT'
   | 'GET_FINGERPRINT_DATA'
-  | 'GET_RECOMMENDATIONS';
+  | 'GET_RECOMMENDATIONS'
+  | 'GET_ASSIGNED_PROFILE'
+  | 'CHECK_COLLISIONS';
 
 /**
  * Fingerprint access record
@@ -27,6 +28,7 @@ export interface FingerprintAccess {
   blocked: boolean;
   spoofed: boolean;
   stackTrace?: string;
+  value?: string;
 }
 
 /**
@@ -66,6 +68,7 @@ export interface SpooferRecommendation {
 export interface RecommendationsResponse {
   recommendations: SpooferRecommendation[];
   accessedCategories: string[];
+  accessedAPIs: FingerprintAccess[];  // Specific API accesses for detailed view
   totalAccesses: number;
   url: string;
 }
@@ -175,8 +178,7 @@ export interface InjectConfig {
  * Inject config message
  */
 export interface InjectConfigMessage extends BaseMessage {
-  type: 'INJECT_CONFIG';
-  config: InjectConfig;
+  type: 'GET_SPOOF_CONFIG';
 }
 
 /**
@@ -208,6 +210,21 @@ export interface GetRecommendationsMessage extends BaseMessage {
 /**
  * Union of all message types
  */
+/**
+ * Get assigned profile message
+ */
+export interface GetAssignedProfileMessage extends BaseMessage {
+  type: 'GET_ASSIGNED_PROFILE';
+  containerId: string;
+}
+
+/**
+ * Check collisions message
+ */
+export interface CheckCollisionsMessage extends BaseMessage {
+  type: 'CHECK_COLLISIONS';
+}
+
 export type ExtensionMessage =
   | GetSettingsMessage
   | SetSettingsMessage
@@ -218,7 +235,9 @@ export type ExtensionMessage =
   | InjectConfigMessage
   | FingerprintReportMessage
   | GetFingerprintDataMessage
-  | GetRecommendationsMessage;
+  | GetRecommendationsMessage
+  | GetAssignedProfileMessage
+  | CheckCollisionsMessage;
 
 /**
  * Firefox container identity

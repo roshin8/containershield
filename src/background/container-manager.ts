@@ -5,6 +5,7 @@
 import browser from 'webextension-polyfill';
 import type { ContainerIdentity } from '@/types';
 import type { SettingsStore } from './settings-store';
+import { CollisionDetector } from './collision-detector';
 import { DEFAULT_COOKIE_STORE_ID, PRIVATE_COOKIE_STORE_ID } from '@/lib/constants';
 
 export class ContainerManager {
@@ -89,6 +90,9 @@ export class ContainerManager {
       await this.settingsStore.ensureContainerSettings(identity.cookieStoreId);
 
       console.log('[ContainerManager] Container created:', identity.name);
+
+      // Auto-protect: check similarity and rotate entropy if needed
+      await this.autoProtectContainer(identity.cookieStoreId, identity.name);
     });
 
     // Container updated
@@ -139,6 +143,61 @@ export class ContainerManager {
     browser.tabs.onRemoved.addListener((tabId) => {
       this.tabContainers.delete(tabId);
     });
+  }
+
+  /**
+   * Auto-protect a newly created container by checking fingerprint similarity
+   * against existing containers and rotating entropy if too similar.
+   */
+  private async autoProtectContainer(containerId: string, containerName: string): Promise<void> {
+    try {
+      const ipDatabase = this.settingsStore.getIPDatabase();
+      const ipSettings = ipDatabase.settings;
+
+      if (!ipSettings.autoProtectNewContainers) {
+        return;
+      }
+
+      const threshold = ipSettings.similarityThreshold;
+      const detector = new CollisionDetector(this.settingsStore, this);
+      const maxAttempts = 5;
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const results = await detector.checkSingleContainer(containerId);
+        const highSimilarity = results.find((r) => r.score > threshold);
+
+        if (!highSimilarity) {
+          // No collisions above threshold - success
+          try {
+            await browser.notifications.create(`auto-protect-${containerId}`, {
+              type: 'basic',
+              title: 'Container Shield',
+              message: attempt === 0
+                ? `Container "${containerName}" has a unique fingerprint.`
+                : `Container "${containerName}" fingerprint rotated ${attempt} time(s) to ensure uniqueness.`,
+            });
+          } catch {}
+          return;
+        }
+
+        // Similarity too high - rotate entropy
+        console.log(
+          `[ContainerManager] Auto-protect: "${containerName}" similarity ${highSimilarity.score}% with "${highSimilarity.container2.name}" (attempt ${attempt + 1}/${maxAttempts})`
+        );
+        await this.settingsStore.rotateEntropy(containerId);
+      }
+
+      // Exhausted attempts - warn the user
+      try {
+        await browser.notifications.create(`auto-protect-${containerId}`, {
+          type: 'basic',
+          title: 'Container Shield - Warning',
+          message: `Container "${containerName}" may still share fingerprint signals with another container after ${maxAttempts} rotation attempts.`,
+        });
+      } catch {}
+    } catch (error) {
+      console.error('[ContainerManager] Auto-protect failed:', error);
+    }
   }
 
   /**

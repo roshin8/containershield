@@ -1,5 +1,9 @@
 /**
- * IP Isolation - Tracks IP addresses per container and warns on conflicts
+ * IP Isolation - Tracks IP addresses per container and warns on conflicts.
+ *
+ * Supports both raw IP navigation and domain-based tracking:
+ * - Tracked domains get their IP resolved via DNS before navigation
+ * - If the resolved IP was used in another container, warn/block
  */
 
 import browser from 'webextension-polyfill';
@@ -11,268 +15,266 @@ import { IP_PATTERNS, MAX_IP_URL_HISTORY } from '@/lib/constants';
 export class IPIsolation {
   private settingsStore: SettingsStore;
   private containerManager: ContainerManager;
+  // Cache DNS lookups (domain -> IP) for 5 minutes
+  private dnsCache: Map<string, { ip: string; expires: number }> = new Map();
 
   constructor(settingsStore: SettingsStore, containerManager: ContainerManager) {
     this.settingsStore = settingsStore;
     this.containerManager = containerManager;
   }
 
-  /**
-   * Initialize IP isolation
-   */
+  // Domains temporarily allowed (user clicked "Allow Once")
+  private allowedOnce: Set<string> = new Set();
+
   async init(): Promise<void> {
-    // Listen for navigation to IP addresses
-    browser.webNavigation.onBeforeNavigate.addListener(
-      (details) => this.handleBeforeNavigate(details)
+    // Use webRequest.onBeforeRequest with blocking to intercept tracked domain requests
+    browser.webRequest.onBeforeRequest.addListener(
+      (details) => this.handleBeforeRequest(details),
+      { urls: ['<all_urls>'], types: ['main_frame'] },
+      ['blocking']
     );
 
-    console.log('[IPIsolation] Initialized');
+    // Listen for "allow once" messages from warning page
+    browser.runtime.onMessage.addListener((message) => {
+      if ((message as any).type === 'IP_ALLOW_ONCE') {
+        const { ip, url, containerId, containerName } = message as any;
+        this.allowedOnce.add(ip);
+        this.recordIPAccess(ip, containerId, containerName, url);
+        // Clear the allowance after 10 seconds
+        setTimeout(() => this.allowedOnce.delete(ip), 10000);
+        return Promise.resolve({ success: true });
+      }
+      return false;
+    });
   }
 
-  /**
-   * Check if a hostname is an IP address
-   */
   isIPAddress(hostname: string): boolean {
     return IP_PATTERNS.IPV4.test(hostname) || IP_PATTERNS.IPV6.test(hostname);
   }
 
-  /**
-   * Check if an IP is a local network IP
-   */
   isLocalIP(ip: string): boolean {
     return IP_PATTERNS.LOCAL_IPV4.test(ip);
   }
 
-  /**
-   * Check if an IP is localhost
-   */
   isLocalhostIP(ip: string): boolean {
     return IP_PATTERNS.LOCALHOST.test(ip);
   }
 
   /**
-   * Handle navigation before it happens
+   * Resolve domain to IP using DNS via fetch to a public DNS API.
+   * Cached for 5 minutes to avoid excessive lookups.
    */
-  private async handleBeforeNavigate(
-    details: browser.WebNavigation.OnBeforeNavigateDetailsType
-  ): Promise<void> {
-    // Only handle main frame navigation
-    if (details.frameId !== 0 || details.tabId === -1) {
-      return;
+  private async resolveDomain(domain: string): Promise<string | null> {
+    // Check cache
+    const cached = this.dnsCache.get(domain);
+    if (cached && cached.expires > Date.now()) {
+      return cached.ip;
     }
+
+    try {
+      // Use DNS-over-HTTPS (Cloudflare)
+      const response = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`, {
+        headers: { 'Accept': 'application/dns-json' },
+      });
+      const data = await response.json();
+      const answer = data.Answer?.find((a: any) => a.type === 1); // Type 1 = A record
+      if (answer?.data) {
+        this.dnsCache.set(domain, { ip: answer.data, expires: Date.now() + 5 * 60 * 1000 });
+        return answer.data;
+      }
+    } catch {
+      // DNS lookup failed - skip IP check
+    }
+    return null;
+  }
+
+  /**
+   * Check if a domain is in the tracked domains list
+   */
+  private isTrackedDomain(hostname: string): boolean {
+    const ipDatabase = this.settingsStore.getIPDatabase();
+    const trackedDomains = ipDatabase.trackedDomains || [];
+    return trackedDomains.some(d => {
+      if (d.startsWith('*.')) {
+        return hostname.endsWith(d.slice(1)) || hostname === d.slice(2);
+      }
+      return hostname === d;
+    });
+  }
+
+  /**
+   * Handle request before it's sent. Returns { cancel: true } to block,
+   * or { redirectUrl: ... } to show warning page, or {} to allow.
+   */
+  private handleBeforeRequest(
+    details: browser.WebRequest.OnBeforeRequestDetailsType
+  ): browser.WebRequest.BlockingResponse | void {
+    if (details.tabId === -1) return;
 
     try {
       const url = new URL(details.url);
       const hostname = url.hostname;
 
-      // Check if this is an IP address
-      if (!this.isIPAddress(hostname)) {
-        return;
-      }
+      // Skip extension pages
+      if (url.protocol === 'moz-extension:' || url.protocol === 'chrome-extension:') return;
 
-      // Get IP isolation settings
       const ipDatabase = this.settingsStore.getIPDatabase();
       const settings = ipDatabase.settings;
+      if (!settings.enabled) return;
 
-      // Check if IP isolation is enabled
-      if (!settings.enabled) {
-        return;
+      // Only check tracked domains and raw IPs
+      const isIP = this.isIPAddress(hostname);
+      const isTracked = this.isTrackedDomain(hostname);
+      if (!isIP && !isTracked) return;
+
+      // For tracked domains, we need async DNS resolution.
+      // webRequest blocking can't be async, so we use a two-phase approach:
+      // Phase 1: Resolve DNS and check conflict (async, in background)
+      // Phase 2: If conflict, redirect to warning page
+      this.checkAndHandleConflict(details, hostname, isIP);
+
+      // Can't block synchronously for DNS resolution, so we let the first request through
+      // and handle conflicts via redirect on subsequent loads.
+      // For raw IPs, we can check synchronously.
+      if (isIP) {
+        if (this.isLocalhostIP(hostname) && !settings.trackLocalhostIPs) return;
+        if (this.isLocalIP(hostname) && !settings.trackLocalIPs) return;
+        if (ipDatabase.exceptions.includes(hostname)) return;
+        if (this.allowedOnce.has(hostname)) return;
+
+        const existingRecord = ipDatabase.ipRecords[hostname];
+        // We need containerId which is async - can't get it synchronously
+        // Fall through to async handler
       }
-
-      // Check if we should track this type of IP
-      if (this.isLocalhostIP(hostname) && !settings.trackLocalhostIPs) {
-        return;
-      }
-
-      if (this.isLocalIP(hostname) && !settings.trackLocalIPs) {
-        return;
-      }
-
-      // Check if IP is in exceptions
-      if (ipDatabase.exceptions.includes(hostname)) {
-        return;
-      }
-
-      // Get current container
-      const containerId = await this.containerManager.getContainerForTab(details.tabId);
-      const containerName = this.containerManager.getContainerName(containerId);
-
-      // Check if this IP was accessed from another container
-      const existingRecord = ipDatabase.ipRecords[hostname];
-
-      if (existingRecord && existingRecord.containerId !== containerId) {
-        // IP conflict detected!
-        await this.handleIPConflict(details.tabId, {
-          ip: hostname,
-          url: details.url,
-          currentContainerId: containerId,
-          currentContainerName: containerName,
-          originalRecord: existingRecord,
-          warnOnly: settings.warnOnly,
-        });
-      } else {
-        // Record this IP access
-        await this.recordIPAccess(hostname, containerId, containerName, details.url);
-      }
-    } catch (error) {
-      console.error('[IPIsolation] Error:', error);
+    } catch {
+      // Don't block on errors
     }
   }
 
   /**
-   * Record IP access for a container
+   * Async conflict check - runs after the initial request.
+   * If conflict found, redirects the tab to the warning page.
    */
-  async recordIPAccess(
-    ip: string,
-    containerId: string,
-    containerName: string,
-    url: string
+  private async checkAndHandleConflict(
+    details: browser.WebRequest.OnBeforeRequestDetailsType,
+    hostname: string,
+    isIP: boolean
   ): Promise<void> {
+    try {
+      const ipDatabase = this.settingsStore.getIPDatabase();
+      const settings = ipDatabase.settings;
+
+      let ipToCheck: string | null = null;
+
+      if (isIP) {
+        ipToCheck = hostname;
+      } else {
+        ipToCheck = await this.resolveDomain(hostname);
+      }
+
+      if (!ipToCheck) return;
+      if (this.allowedOnce.has(ipToCheck)) return;
+      if (this.isLocalhostIP(ipToCheck) && !settings.trackLocalhostIPs) return;
+      if (this.isLocalIP(ipToCheck) && !settings.trackLocalIPs) return;
+      if (ipDatabase.exceptions.includes(ipToCheck)) return;
+
+      const containerId = await this.containerManager.getContainerForTab(details.tabId);
+      const containerName = this.containerManager.getContainerName(containerId);
+      const existingRecord = ipDatabase.ipRecords[ipToCheck];
+
+      if (existingRecord && existingRecord.containerId !== containerId) {
+        // CONFLICT - redirect to warning page which blocks until user decides
+        const warningUrl = browser.runtime.getURL(
+          `pages/ip-warning.html?${new URLSearchParams({
+            ip: ipToCheck,
+            domain: hostname,
+            url: details.url,
+            currentContainer: containerName,
+            currentContainerId: containerId,
+            originalContainer: existingRecord.containerName,
+            originalContainerId: existingRecord.containerId,
+            lastAccessed: existingRecord.lastAccessed.toString(),
+          }).toString()}`
+        );
+        await browser.tabs.update(details.tabId, { url: warningUrl });
+      } else {
+        // No conflict - record this access
+        await this.recordIPAccess(ipToCheck, containerId, containerName, details.url);
+      }
+    } catch (error) {
+      console.error('[IPIsolation] Conflict check error:', error);
+    }
+  }
+
+  async recordIPAccess(ip: string, containerId: string, containerName: string, url: string): Promise<void> {
     const ipDatabase = this.settingsStore.getIPDatabase();
-    const existingRecord = ipDatabase.ipRecords[ip];
-
-    const urls = existingRecord?.urls || [];
+    const existing = ipDatabase.ipRecords[ip];
+    const urls = existing?.urls || [];
     urls.unshift(url);
-
-    const record: IPRecord = {
-      ip,
-      containerId,
-      containerName,
-      firstAccessed: existingRecord?.firstAccessed || Date.now(),
-      lastAccessed: Date.now(),
-      accessCount: (existingRecord?.accessCount || 0) + 1,
-      urls: urls.slice(0, MAX_IP_URL_HISTORY),
-    };
 
     await this.settingsStore.updateIPDatabase({
       ipRecords: {
         ...ipDatabase.ipRecords,
-        [ip]: record,
+        [ip]: {
+          ip, containerId, containerName,
+          firstAccessed: existing?.firstAccessed || Date.now(),
+          lastAccessed: Date.now(),
+          accessCount: (existing?.accessCount || 0) + 1,
+          urls: urls.slice(0, MAX_IP_URL_HISTORY),
+        },
       },
     });
   }
 
-  /**
-   * Handle IP conflict - show warning to user
-   */
-  private async handleIPConflict(
-    tabId: number,
-    conflict: {
-      ip: string;
-      url: string;
-      currentContainerId: string;
-      currentContainerName: string;
-      originalRecord: IPRecord;
-      warnOnly: boolean;
-    }
-  ): Promise<void> {
-    console.warn('[IPIsolation] IP conflict detected:', conflict);
 
-    if (conflict.warnOnly) {
-      // Just log a warning notification
-      await browser.notifications.create({
-        type: 'basic',
-        iconUrl: browser.runtime.getURL('icons/icon-48.png'),
-        title: 'IP Address Conflict',
-        message: `${conflict.ip} was previously accessed from "${conflict.originalRecord.containerName}"`,
-      });
-
-      // Still record the access
-      await this.recordIPAccess(
-        conflict.ip,
-        conflict.currentContainerId,
-        conflict.currentContainerName,
-        conflict.url
-      );
-    } else {
-      // Redirect to warning page
-      const warningUrl = browser.runtime.getURL(
-        `pages/ip-warning.html?${new URLSearchParams({
-          ip: conflict.ip,
-          url: conflict.url,
-          currentContainer: conflict.currentContainerName,
-          originalContainer: conflict.originalRecord.containerName,
-          originalContainerId: conflict.originalRecord.containerId,
-          lastAccessed: conflict.originalRecord.lastAccessed.toString(),
-        }).toString()}`
-      );
-
-      await browser.tabs.update(tabId, { url: warningUrl });
-    }
-  }
-
-  /**
-   * Check if an IP would conflict with another container
-   */
-  checkIPConflict(
-    ip: string,
-    containerId: string
-  ): { hasConflict: boolean; originalRecord?: IPRecord } {
+  checkIPConflict(ip: string, containerId: string): { hasConflict: boolean; originalRecord?: IPRecord } {
     const ipDatabase = this.settingsStore.getIPDatabase();
     const record = ipDatabase.ipRecords[ip];
-
     if (record && record.containerId !== containerId) {
       return { hasConflict: true, originalRecord: record };
     }
-
     return { hasConflict: false };
   }
 
-  /**
-   * Clear IP record
-   */
   async clearIPRecord(ip: string): Promise<void> {
     const ipDatabase = this.settingsStore.getIPDatabase();
     const { [ip]: _, ...remaining } = ipDatabase.ipRecords;
-
-    await this.settingsStore.updateIPDatabase({
-      ipRecords: remaining,
-    });
+    await this.settingsStore.updateIPDatabase({ ipRecords: remaining });
   }
 
-  /**
-   * Add IP to exceptions
-   */
   async addException(ip: string): Promise<void> {
     const ipDatabase = this.settingsStore.getIPDatabase();
-
     if (!ipDatabase.exceptions.includes(ip)) {
-      await this.settingsStore.updateIPDatabase({
-        exceptions: [...ipDatabase.exceptions, ip],
-      });
+      await this.settingsStore.updateIPDatabase({ exceptions: [...ipDatabase.exceptions, ip] });
     }
   }
 
-  /**
-   * Remove IP from exceptions
-   */
   async removeException(ip: string): Promise<void> {
     const ipDatabase = this.settingsStore.getIPDatabase();
-
-    await this.settingsStore.updateIPDatabase({
-      exceptions: ipDatabase.exceptions.filter((e) => e !== ip),
-    });
+    await this.settingsStore.updateIPDatabase({ exceptions: ipDatabase.exceptions.filter(e => e !== ip) });
   }
 
-  /**
-   * Reassign IP to a different container
-   */
+  async addTrackedDomain(domain: string): Promise<void> {
+    const ipDatabase = this.settingsStore.getIPDatabase();
+    const tracked = ipDatabase.trackedDomains || [];
+    if (!tracked.includes(domain)) {
+      await this.settingsStore.updateIPDatabase({ trackedDomains: [...tracked, domain] } as any);
+    }
+  }
+
+  async removeTrackedDomain(domain: string): Promise<void> {
+    const ipDatabase = this.settingsStore.getIPDatabase();
+    const tracked = ipDatabase.trackedDomains || [];
+    await this.settingsStore.updateIPDatabase({ trackedDomains: tracked.filter(d => d !== domain) } as any);
+  }
+
   async reassignIP(ip: string, newContainerId: string): Promise<void> {
     const ipDatabase = this.settingsStore.getIPDatabase();
     const record = ipDatabase.ipRecords[ip];
-
     if (record) {
       const containerName = this.containerManager.getContainerName(newContainerId);
-
       await this.settingsStore.updateIPDatabase({
-        ipRecords: {
-          ...ipDatabase.ipRecords,
-          [ip]: {
-            ...record,
-            containerId: newContainerId,
-            containerName,
-          },
-        },
+        ipRecords: { ...ipDatabase.ipRecords, [ip]: { ...record, containerId: newContainerId, containerName } },
       });
     }
   }

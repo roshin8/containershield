@@ -6,6 +6,8 @@ import browser from 'webextension-polyfill';
 import type { SettingsStore } from './settings-store';
 import type { ContainerManager } from './container-manager';
 import type { IPIsolation } from './ip-isolation';
+import type { ProfileRotation } from './profile-rotation';
+import type { StatisticsStore } from './statistics-store';
 import type {
   ExtensionMessage,
   InjectConfig,
@@ -17,7 +19,8 @@ import type {
   SpooferRecommendation,
   RecommendationsResponse,
 } from '@/types';
-import { ensureUniqueProfile, type AssignedProfile } from './profile-manager';
+import { ensureUniqueProfile, getAssignedProfile } from './profile-manager';
+import { CollisionDetector } from './collision-detector';
 import {
   MSG_GET_SETTINGS,
   MSG_SET_SETTINGS,
@@ -29,50 +32,60 @@ import {
   MSG_FINGERPRINT_REPORT,
   MSG_GET_FINGERPRINT_DATA,
   MSG_GET_RECOMMENDATIONS,
+  MSG_GET_ASSIGNED_PROFILE,
+  MSG_GET_IP_DATABASE,
+  MSG_ADD_TRACKED_DOMAIN,
+  MSG_REMOVE_TRACKED_DOMAIN,
+  MSG_CLEAR_IP_RECORD,
+  MSG_UPDATE_IP_SETTINGS,
+  MSG_ADD_IP_EXCEPTION,
+  MSG_REMOVE_IP_EXCEPTION,
+  MSG_GET_ROTATION_SETTINGS,
+  MSG_SET_ROTATION_SETTINGS,
+  MSG_ROTATE_NOW,
+  MSG_GET_STATS,
+  MSG_CHECK_COLLISIONS,
 } from '@/constants';
-
-// FingerprintData is now imported from @/types
+import { CATEGORY_TO_SETTING } from '@/constants/categories';
 
 export class MessageHandler {
   private settingsStore: SettingsStore;
   private containerManager: ContainerManager;
   private ipIsolation: IPIsolation;
+  private profileRotation: ProfileRotation;
+  private statisticsStore: StatisticsStore;
   private fingerprintData: Map<number, FingerprintData> = new Map();
 
   constructor(
     settingsStore: SettingsStore,
     containerManager: ContainerManager,
-    ipIsolation: IPIsolation
+    ipIsolation: IPIsolation,
+    profileRotation: ProfileRotation,
+    statisticsStore: StatisticsStore
   ) {
     this.settingsStore = settingsStore;
     this.containerManager = containerManager;
     this.ipIsolation = ipIsolation;
+    this.profileRotation = profileRotation;
+    this.statisticsStore = statisticsStore;
 
-    // Clean up fingerprint data when tabs are closed
     browser.tabs.onRemoved.addListener((tabId) => {
       this.fingerprintData.delete(tabId);
     });
   }
 
-  /**
-   * Initialize message handling
-   */
   init(): void {
-    browser.runtime.onMessage.addListener((message, sender) =>
-      this.handleMessage(message as ExtensionMessage, sender)
-    );
-
-    console.log('[MessageHandler] Initialized');
+    browser.runtime.onMessage.addListener((message: unknown, sender: browser.Runtime.MessageSender) => {
+      return this.handleMessage(message as ExtensionMessage, sender);
+    });
   }
 
-  /**
-   * Handle incoming messages
-   */
   private async handleMessage(
     message: ExtensionMessage,
     sender: browser.Runtime.MessageSender
   ): Promise<unknown> {
-    switch (message.type) {
+    try {
+      switch (message.type) {
       case MSG_GET_SETTINGS:
         return this.handleGetSettings(message);
 
@@ -103,51 +116,85 @@ export class MessageHandler {
       case MSG_GET_RECOMMENDATIONS:
         return this.handleGetRecommendations(message, sender);
 
+      case MSG_GET_ASSIGNED_PROFILE:
+        return this.handleGetAssignedProfile(message);
+
+      case MSG_GET_IP_DATABASE:
+        return this.settingsStore.getIPDatabase();
+
+      case MSG_ADD_TRACKED_DOMAIN:
+        await this.ipIsolation.addTrackedDomain((message as any).domain);
+        return { success: true };
+
+      case MSG_REMOVE_TRACKED_DOMAIN:
+        await this.ipIsolation.removeTrackedDomain((message as any).domain);
+        return { success: true };
+
+      case MSG_CLEAR_IP_RECORD:
+        await this.ipIsolation.clearIPRecord((message as any).ip);
+        return { success: true };
+
+      case MSG_UPDATE_IP_SETTINGS:
+        await this.settingsStore.updateIPDatabase({ settings: (message as any).settings });
+        return { success: true };
+
+      case MSG_ADD_IP_EXCEPTION:
+        await this.ipIsolation.addException((message as any).ip);
+        return { success: true };
+
+      case MSG_REMOVE_IP_EXCEPTION:
+        await this.ipIsolation.removeException((message as any).ip);
+        return { success: true };
+
+      case MSG_GET_ROTATION_SETTINGS:
+        return this.profileRotation.getSettings();
+
+      case MSG_SET_ROTATION_SETTINGS:
+        await this.profileRotation.updateSettings((message as any).settings);
+        return { success: true };
+
+      case MSG_ROTATE_NOW:
+        await this.profileRotation.rotateAllContainers();
+        return { success: true };
+
+      case MSG_GET_STATS:
+        return this.statisticsStore.getStatsSummary();
+
+      case MSG_CHECK_COLLISIONS:
+        return this.handleCheckCollisions();
+
       default:
-        console.warn('[MessageHandler] Unknown message type:', (message as any).type);
         return null;
+      }
+    } catch (error) {
+      console.error('[MessageHandler] Error handling message:', (message as any).type, error);
+      return null;
     }
   }
 
-  /**
-   * Handle GET_SETTINGS request
-   */
   private handleGetSettings(message: import('@/types').GetSettingsMessage) {
     const { containerId, domain } = message;
-
     if (domain) {
       return this.settingsStore.getSettingsForDomain(containerId, domain);
     }
-
     return this.settingsStore.getContainerSettings(containerId);
   }
 
-  /**
-   * Handle SET_SETTINGS request
-   */
   private async handleSetSettings(message: import('@/types').SetSettingsMessage) {
     const { containerId, settings } = message;
     await this.settingsStore.updateContainerSettings(containerId, settings);
     return { success: true };
   }
 
-  /**
-   * Handle GET_ENTROPY request
-   */
   private handleGetEntropy(message: import('@/types').GetEntropyMessage) {
-    const { containerId } = message;
-    return this.settingsStore.getEntropy(containerId);
+    return this.settingsStore.getEntropy(message.containerId);
   }
 
-  /**
-   * Handle GET_CONTAINER_INFO request
-   */
   private async handleGetContainerInfo(
     message: import('@/types').GetContainerInfoMessage,
     sender: browser.Runtime.MessageSender
   ) {
     const tabId = message.tabId ?? sender.tab?.id;
-
     if (!tabId) {
       return { containerId: 'firefox-default', containerName: 'Default' };
     }
@@ -163,23 +210,16 @@ export class MessageHandler {
     };
   }
 
-  /**
-   * Handle GET_ALL_CONTAINERS request
-   */
   private handleGetAllContainers() {
     return this.containerManager.getAllContainers();
   }
 
-  /**
-   * Handle IP_CONFLICT_CHECK request
-   */
   private handleIPConflictCheck(message: import('@/types').IPConflictCheckMessage) {
-    const { ip, containerId } = message;
-    return this.ipIsolation.checkIPConflict(ip, containerId);
+    return this.ipIsolation.checkIPConflict(message.ip, message.containerId);
   }
 
   /**
-   * Handle INJECT_CONFIG request - prepare config for page context injection
+   * Prepare config for page context injection
    */
   private async handleGetInjectConfig(
     sender: browser.Runtime.MessageSender
@@ -187,26 +227,21 @@ export class MessageHandler {
     const tabId = sender.tab?.id;
     const url = sender.tab?.url || sender.url;
 
-    if (!tabId || !url) {
-      return null;
-    }
+    if (!tabId || !url) return null;
 
     try {
-      const parsedUrl = new URL(url);
-      const domain = parsedUrl.hostname;
-
+      const domain = new URL(url).hostname;
       const containerId = await this.containerManager.getContainerForTab(tabId);
+
+      await this.settingsStore.ensureContainerSettings(containerId);
+
       const settings = this.settingsStore.getSettingsForDomain(containerId, domain);
       const entropy = this.settingsStore.getEntropy(containerId);
 
-      if (!entropy) {
-        return null;
-      }
+      if (!entropy) return null;
 
-      // Get or create unique profile for this container
       const assignedProfile = await ensureUniqueProfile(entropy);
 
-      // Convert to serializable format for injection
       const assignedProfileData: AssignedProfileData = {
         userAgent: {
           id: assignedProfile.userAgent.id,
@@ -250,10 +285,7 @@ export class MessageHandler {
     }
   }
 
-  /**
-   * Handle FINGERPRINT_REPORT - store fingerprint access data from content script
-   */
-  private handleFingerprintReport(
+  private async handleFingerprintReport(
     message: FingerprintReportMessage,
     sender: browser.Runtime.MessageSender
   ): { success: boolean } | null {
@@ -267,103 +299,80 @@ export class MessageHandler {
       lastUpdated: Date.now(),
     });
 
+    // Feed stats store
+    try {
+      const containerId = await this.containerManager.getContainerForTab(tabId);
+      const containerName = this.containerManager.getContainerName(containerId);
+      const domain = message.url ? new URL(message.url).hostname : 'unknown';
+      for (const d of message.detail) {
+        this.statisticsStore.recordAccess(containerId, containerName, {
+          api: d.api, category: d.category, timestamp: d.timestamp,
+          wasBlocked: d.blocked, wasSpoofed: d.spoofed, domain,
+        });
+      }
+    } catch {}
+
+    // Update badge with count of UNIQUE spoofed/blocked APIs
+    if (message.detail?.length) {
+      const uniqueAPIs = new Map<string, { spoofed: boolean; blocked: boolean }>();
+      for (const d of message.detail) {
+        if (!uniqueAPIs.has(d.api)) {
+          uniqueAPIs.set(d.api, { spoofed: d.spoofed, blocked: d.blocked });
+        }
+      }
+      const activeCount = Array.from(uniqueAPIs.values()).filter(d => d.spoofed || d.blocked).length;
+      const total = uniqueAPIs.size;
+      try {
+        const badgeText = activeCount > 0 ? String(activeCount) : '';
+        const rate = total > 0 ? (activeCount / total) * 100 : 100;
+        const color = rate >= 80 ? '#10B981' : rate >= 50 ? '#F59E0B' : '#EF4444';
+        browser.browserAction.setBadgeBackgroundColor({ color, tabId });
+        browser.browserAction.setBadgeText({ text: badgeText, tabId });
+      } catch {}
+    }
+
     return { success: true };
   }
 
-  /**
-   * Handle GET_FINGERPRINT_DATA - retrieve fingerprint access data for a tab
-   */
   private handleGetFingerprintData(
     message: GetFingerprintDataMessage,
     sender: browser.Runtime.MessageSender
   ): FingerprintData | null {
     const tabId = message.tabId ?? sender.tab?.id;
     if (!tabId) return null;
-
     return this.fingerprintData.get(tabId) || null;
   }
 
-  /**
-   * Handle GET_RECOMMENDATIONS - get spoofer recommendations based on accessed APIs
-   */
   private async handleGetRecommendations(
     message: GetRecommendationsMessage,
     sender: browser.Runtime.MessageSender
   ): Promise<RecommendationsResponse> {
+    const empty: RecommendationsResponse = {
+      recommendations: [],
+      accessedCategories: [],
+      accessedAPIs: [],
+      totalAccesses: 0,
+      url: '',
+    };
+
     const tabId = message.tabId ?? sender.tab?.id;
-    if (!tabId) return { recommendations: [], accessedCategories: [] };
+    if (!tabId) return empty;
 
     const data = this.fingerprintData.get(tabId);
-    if (!data) return { recommendations: [], accessedCategories: [] };
+    if (!data) return empty;
 
-    // Get current settings for this tab's container
     const containerId = await this.containerManager.getContainerForTab(tabId);
     const settings = this.settingsStore.getContainerSettings(containerId);
 
-    // Map category names to setting paths
-    const categoryToSetting: Record<string, { category: string; setting: string }> = {
-      'Canvas': { category: 'graphics', setting: 'canvas' },
-      'OffscreenCanvas': { category: 'graphics', setting: 'offscreenCanvas' },
-      'WebGL': { category: 'graphics', setting: 'webgl' },
-      'WebGL Shaders': { category: 'graphics', setting: 'webglShaders' },
-      'WebGPU': { category: 'graphics', setting: 'webgpu' },
-      'DOMRect': { category: 'graphics', setting: 'domRect' },
-      'Audio': { category: 'audio', setting: 'audioContext' },
-      'Offline Audio': { category: 'audio', setting: 'offlineAudio' },
-      'Audio Latency': { category: 'audio', setting: 'latency' },
-      'Codecs': { category: 'audio', setting: 'codecs' },
-      'Screen': { category: 'hardware', setting: 'screen' },
-      'Screen Frame': { category: 'hardware', setting: 'screenFrame' },
-      'Screen Orientation': { category: 'hardware', setting: 'orientation' },
-      'Hardware': { category: 'hardware', setting: 'deviceMemory' },
-      'Touch': { category: 'hardware', setting: 'touch' },
-      'Sensors': { category: 'hardware', setting: 'sensors' },
-      'Battery': { category: 'hardware', setting: 'battery' },
-      'Media Devices': { category: 'hardware', setting: 'mediaDevices' },
-      'Navigator': { category: 'navigator', setting: 'userAgent' },
-      'Client Hints': { category: 'navigator', setting: 'clientHints' },
-      'Clipboard': { category: 'navigator', setting: 'clipboard' },
-      'Vibration': { category: 'navigator', setting: 'vibration' },
-      'Timezone': { category: 'timezone', setting: 'intl' },
-      'Fonts': { category: 'fonts', setting: 'enumeration' },
-      'CSS Fonts': { category: 'fonts', setting: 'cssDetection' },
-      'WebRTC': { category: 'network', setting: 'webrtc' },
-      'Network': { category: 'network', setting: 'connection' },
-      'Timing': { category: 'timing', setting: 'performance' },
-      'CSS': { category: 'css', setting: 'mediaQueries' },
-      'Speech': { category: 'speech', setting: 'synthesis' },
-      'Permissions': { category: 'permissions', setting: 'query' },
-      'Notification': { category: 'permissions', setting: 'notification' },
-      'Storage': { category: 'storage', setting: 'estimate' },
-      'IndexedDB': { category: 'storage', setting: 'indexedDB' },
-      'WebSQL': { category: 'storage', setting: 'webSQL' },
-      'Math': { category: 'math', setting: 'functions' },
-      'Keyboard': { category: 'keyboard', setting: 'layout' },
-      'Workers': { category: 'workers', setting: 'fingerprint' },
-      'Errors': { category: 'errors', setting: 'stackTrace' },
-      'Emoji': { category: 'rendering', setting: 'emoji' },
-      'MathML': { category: 'rendering', setting: 'mathml' },
-      'Intl': { category: 'intl', setting: 'apis' },
-      'Crypto': { category: 'crypto', setting: 'webCrypto' },
-      'Gamepad': { category: 'devices', setting: 'gamepad' },
-      'MIDI': { category: 'devices', setting: 'midi' },
-      'Bluetooth': { category: 'devices', setting: 'bluetooth' },
-      'USB': { category: 'devices', setting: 'usb' },
-      'Serial': { category: 'devices', setting: 'serial' },
-      'HID': { category: 'devices', setting: 'hid' },
-      'Features': { category: 'features', setting: 'detection' },
-      'Apple Pay': { category: 'payment', setting: 'applePay' },
-    };
-
     const recommendations: SpooferRecommendation[] = [];
-
-    const accessedCategories = Object.keys(data.summary);
+    const categorySet = new Set<string>();
     const seenCategories = new Set<string>();
 
     for (const access of data.detail) {
+      if (access.category) categorySet.add(access.category);
       if (seenCategories.has(access.category)) continue;
 
-      const settingInfo = categoryToSetting[access.category];
+      const settingInfo = CATEGORY_TO_SETTING[access.category];
       if (!settingInfo) continue;
 
       const { category, setting } = settingInfo;
@@ -382,9 +391,80 @@ export class MessageHandler {
 
     return {
       recommendations,
-      accessedCategories,
+      accessedCategories: Array.from(categorySet),
+      accessedAPIs: data.detail,
       totalAccesses: data.detail.length,
       url: data.url,
     };
+  }
+
+  /**
+   * Get the assigned profile for a container, with user overrides applied
+   */
+  private async handleGetAssignedProfile(
+    message: { containerId: string }
+  ): Promise<AssignedProfileData | null> {
+    const { containerId } = message;
+    const settings = this.settingsStore.getContainerSettings(containerId);
+    const profileSettings = settings.profile;
+
+    let profile = getAssignedProfile(containerId);
+
+    if (!profile) {
+      const entropy = this.settingsStore.getEntropy(containerId);
+      if (!entropy) return null;
+      profile = await ensureUniqueProfile(entropy);
+    }
+
+    return {
+      userAgent: {
+        id: profile.userAgent.id,
+        name: profile.userAgent.name,
+        userAgent: profileSettings.userAgent || profile.userAgent.userAgent,
+        platform: profileSettings.platform || profile.userAgent.platform,
+        vendor: profile.userAgent.vendor,
+        appVersion: profile.userAgent.appVersion,
+        oscpu: profile.userAgent.oscpu,
+        mobile: profile.userAgent.mobile,
+        platformName: profile.userAgent.platformName,
+        platformVersion: profile.userAgent.platformVersion,
+        brands: profile.userAgent.brands,
+      },
+      screen: profileSettings.screen
+        ? {
+            width: profileSettings.screen.width,
+            height: profileSettings.screen.height,
+            availWidth: profileSettings.screen.width,
+            availHeight: profileSettings.screen.height - 40,
+            colorDepth: profile.screen.colorDepth || 24,
+            pixelDepth: profile.screen.pixelDepth || 24,
+            devicePixelRatio: profile.screen.devicePixelRatio || 1,
+          }
+        : {
+            width: profile.screen.width,
+            height: profile.screen.height,
+            availWidth: profile.screen.availWidth,
+            availHeight: profile.screen.availHeight,
+            colorDepth: profile.screen.colorDepth,
+            pixelDepth: profile.screen.pixelDepth,
+            devicePixelRatio: profile.screen.devicePixelRatio,
+          },
+      hardwareConcurrency: profileSettings.hardwareConcurrency || profile.hardwareConcurrency,
+      deviceMemory: profileSettings.deviceMemory || profile.deviceMemory,
+      timezoneOffset: profileSettings.timezone && profileSettings.timezone !== 'real' && profileSettings.timezone !== 'ip'
+        ? parseInt(profileSettings.timezone, 10)
+        : profile.timezoneOffset,
+      languages: profileSettings.language
+        ? profileSettings.language.split(', ').map(l => l.trim())
+        : profile.languages,
+    };
+  }
+
+  /**
+   * Check for fingerprint collisions between containers
+   */
+  private async handleCheckCollisions() {
+    const detector = new CollisionDetector(this.settingsStore, this.containerManager);
+    return detector.checkAllContainers();
   }
 }

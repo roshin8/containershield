@@ -49,7 +49,7 @@ export function initSpeechSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (mode === 'block') {
     // Return empty voice list
     speechSynthesis.getVoices = function (): SpeechSynthesisVoice[] {
-      logAccess('speechSynthesis.getVoices', { blocked: true });
+      logAccess('speechSynthesis.getVoices', { blocked: true, value: '0 voices' });
       return [];
     };
   } else {
@@ -62,7 +62,7 @@ export function initSpeechSpoofer(mode: ProtectionMode, prng: PRNG): void {
     );
 
     speechSynthesis.getVoices = function (): SpeechSynthesisVoice[] {
-      logAccess('speechSynthesis.getVoices', { spoofed: true });
+      logAccess('speechSynthesis.getVoices', { spoofed: true, value: `${fakeVoices.length} voices` });
       return fakeVoices;
     };
   }

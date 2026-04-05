@@ -1,16 +1,11 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig } from '@playwright/test';
 
-/**
- * Playwright configuration for E2E testing
- *
- * Run with: npx playwright test
- */
 export default defineConfig({
   testDir: './tests/e2e',
-  fullyParallel: true,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  retries: process.env.CI ? 1 : 0,
+  workers: 1,
   reporter: 'html',
   use: {
     trace: 'on-first-retry',
@@ -19,7 +14,15 @@ export default defineConfig({
   projects: [
     {
       name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      use: { browserName: 'firefox' },
+      testIgnore: /creepjs/,
+      timeout: 30000,
+    },
+    {
+      name: 'creepjs',
+      use: { browserName: 'firefox' },
+      testMatch: /creepjs.*\.spec\.ts$/,
+      timeout: 120000,
     },
   ],
 });

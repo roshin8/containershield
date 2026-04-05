@@ -1,12 +1,14 @@
 /**
  * CSS Media Queries Spoofer
  *
- * Media queries can reveal screen characteristics, color preferences,
- * motion preferences, and other system information.
+ * Media queries reveal screen characteristics, color preferences,
+ * motion preferences, and system info. FingerprintJS/fingerprint.com
+ * check all of these.
  */
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { overrideMethod } from '@/lib/stealth';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 
 interface MediaQueryOverrides {
@@ -17,21 +19,18 @@ interface MediaQueryOverrides {
   'forced-colors': 'none' | 'active';
   'inverted-colors': 'none' | 'inverted';
   'color-gamut': 'srgb' | 'p3' | 'rec2020';
+  'dynamic-range': 'standard' | 'high';
   'pointer': 'none' | 'coarse' | 'fine';
   'hover': 'none' | 'hover';
   'any-pointer': 'none' | 'coarse' | 'fine';
   'any-hover': 'none' | 'hover';
 }
 
-/**
- * Initialize CSS media query spoofing
- */
 export function initCSSSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (mode === 'off') return;
 
   const originalMatchMedia = window.matchMedia;
 
-  // Generate consistent overrides based on PRNG
   const overrides: MediaQueryOverrides = {
     'prefers-color-scheme': prng.pick(['light', 'dark']),
     'prefers-reduced-motion': prng.pick(['no-preference', 'no-preference', 'no-preference', 'reduce']),
@@ -40,77 +39,60 @@ export function initCSSSpoofer(mode: ProtectionMode, prng: PRNG): void {
     'forced-colors': 'none',
     'inverted-colors': 'none',
     'color-gamut': prng.pick(['srgb', 'p3']),
+    'dynamic-range': prng.pick(['standard', 'high']),
     'pointer': 'fine',
     'hover': 'hover',
     'any-pointer': 'fine',
     'any-hover': 'hover',
   };
 
-  window.matchMedia = function (query: string): MediaQueryList {
-    logAccess('matchMedia', { spoofed: true });
+  // monochrome: always report 0 (non-monochrome)
+  // This is a numeric query so handled separately
 
-    // Check if we need to override this query
+  overrideMethod(window as any, 'matchMedia', (original, thisArg, args) => {
+    logAccess('matchMedia', { spoofed: true });
+    const query = args[0] as string;
+
+    // Handle monochrome query
+    if (/\(\s*monochrome\s*\)/.test(query)) {
+      return createFakeMediaQueryList(query, false);
+    }
+    if (/\(\s*monochrome\s*:\s*0\s*\)/.test(query)) {
+      return createFakeMediaQueryList(query, true);
+    }
+
+    // Handle feature queries we override
     for (const [feature, value] of Object.entries(overrides)) {
       const regex = new RegExp(`\\(\\s*${feature}\\s*:\\s*([^)]+)\\s*\\)`);
       const match = query.match(regex);
-
       if (match) {
-        const requestedValue = match[1].trim();
-        const matches = requestedValue === value;
-
-        // Create a fake MediaQueryList
-        return createFakeMediaQueryList(query, matches);
+        return createFakeMediaQueryList(query, match[1].trim() === value);
       }
     }
 
-    // For other queries, use the original
-    return originalMatchMedia.call(window, query);
-  };
+    return original.apply(thisArg, args);
+  });
 
-  // Also spoof getComputedStyle for CSS environment variables
-  const originalGetComputedStyle = window.getComputedStyle;
-
-  window.getComputedStyle = function (
-    element: Element,
-    pseudoElt?: string | null
-  ): CSSStyleDeclaration {
-    logAccess('getComputedStyle', { spoofed: true });
-    return originalGetComputedStyle.call(window, element, pseudoElt);
-  };
-
-  console.log('[ContainerShield] CSS media queries spoofer initialized');
+  // getComputedStyle is wrapped by font-preferences spoofer - don't double-wrap
 }
 
-/**
- * Create a fake MediaQueryList object
- */
 function createFakeMediaQueryList(query: string, matches: boolean): MediaQueryList {
   const listeners: Array<(event: MediaQueryListEvent) => void> = [];
 
-  const mql: MediaQueryList = {
+  return {
     matches,
     media: query,
     onchange: null,
-    addListener: (cb) => {
-      if (cb) listeners.push(cb);
-    },
-    removeListener: (cb) => {
+    addListener: (cb: any) => { if (cb) listeners.push(cb); },
+    removeListener: (cb: any) => {
       const idx = listeners.indexOf(cb);
       if (idx > -1) listeners.splice(idx, 1);
     },
-    addEventListener: (type, cb) => {
-      if (type === 'change' && cb) {
-        listeners.push(cb as (event: MediaQueryListEvent) => void);
-      }
-    },
-    removeEventListener: (type, cb) => {
-      if (type === 'change' && cb) {
-        const idx = listeners.indexOf(cb as (event: MediaQueryListEvent) => void);
-        if (idx > -1) listeners.splice(idx, 1);
-      }
+    addEventListener: (_type: string, cb: any) => { if (cb) listeners.push(cb); },
+    removeEventListener: (_type: string, cb: any) => {
+      const idx = listeners.indexOf(cb);
+      if (idx > -1) listeners.splice(idx, 1);
     },
     dispatchEvent: () => true,
-  };
-
-  return mql;
+  } as MediaQueryList;
 }

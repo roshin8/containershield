@@ -8,6 +8,7 @@
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { logAccess } from '../../monitor/fingerprint-monitor';
 
 /**
  * Initialize Battery API spoofing
@@ -28,7 +29,7 @@ export function initBatterySpoofer(mode: ProtectionMode, prng: PRNG): void {
       writable: true,
     });
 
-    console.log('[ChameleonContainers] Battery API blocked');
+    console.log('[ContainerShield] Battery API blocked');
     return;
   }
 
@@ -71,11 +72,12 @@ export function initBatterySpoofer(mode: ProtectionMode, prng: PRNG): void {
   // Override getBattery
   Object.defineProperty(navigator, 'getBattery', {
     value: async function (): Promise<BatteryManager> {
+      logAccess('navigator.getBattery', { spoofed: true, value: `${Math.round(fakeBattery.level * 100)}% ${fakeBattery.charging ? 'charging' : 'discharging'}` });
       return createFakeBatteryManager();
     },
     configurable: true,
     writable: true,
   });
 
-  console.log('[ChameleonContainers] Battery API spoofed:', fakeBattery.level * 100 + '%');
+  console.log('[ContainerShield] Battery API spoofed:', fakeBattery.level * 100 + '%');
 }

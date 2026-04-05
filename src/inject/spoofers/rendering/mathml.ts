@@ -7,6 +7,7 @@
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { overrideMethod } from '@/lib/stealth';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 
 /**
@@ -18,18 +19,16 @@ export function initMathMLSpoofer(mode: ProtectionMode, prng: PRNG): void {
   // MathML fingerprinting typically uses getBoundingClientRect on math elements
   // We already spoof DOMRect, but we can add MathML-specific detection
 
-  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
-
-  Element.prototype.getBoundingClientRect = function (): DOMRect {
-    const rect = originalGetBoundingClientRect.call(this);
+  overrideMethod(Element.prototype, 'getBoundingClientRect', (original, thisArg, _args) => {
+    const rect = original.call(thisArg) as DOMRect;
 
     // Check if this is a MathML element
-    const isMathElement = this.namespaceURI === 'http://www.w3.org/1998/Math/MathML' ||
-      this.tagName.toLowerCase().startsWith('math') ||
-      this.closest('math') !== null;
+    const isMathElement = thisArg.namespaceURI === 'http://www.w3.org/1998/Math/MathML' ||
+      thisArg.tagName.toLowerCase().startsWith('math') ||
+      thisArg.closest('math') !== null;
 
     if (isMathElement) {
-      logAccess('MathML.getBoundingClientRect', { spoofed: true });
+      logAccess('MathML.getBoundingClientRect', { spoofed: true, value: 'noised' });
 
       if (mode === 'block') {
         return new DOMRect(0, 0, 0, 0);
@@ -46,27 +45,21 @@ export function initMathMLSpoofer(mode: ProtectionMode, prng: PRNG): void {
     }
 
     return rect;
-  };
+  });
 
   // Also spoof getComputedStyle for math elements
-  const originalGetComputedStyle = window.getComputedStyle;
+  overrideMethod(window as any, 'getComputedStyle', (original, _thisArg, args) => {
+    const style = original.apply(window, args);
+    const element = args[0] as Element;
 
-  window.getComputedStyle = function (
-    element: Element,
-    pseudoElt?: string | null
-  ): CSSStyleDeclaration {
-    const style = originalGetComputedStyle.call(window, element, pseudoElt);
-
-    const isMathElement = element.namespaceURI === 'http://www.w3.org/1998/Math/MathML' ||
-      element.tagName.toLowerCase().startsWith('math') ||
-      element.closest('math') !== null;
+    const isMathElement = element?.namespaceURI === 'http://www.w3.org/1998/Math/MathML' ||
+      element?.tagName?.toLowerCase().startsWith('math') ||
+      element?.closest?.('math') !== null;
 
     if (isMathElement) {
-      logAccess('MathML.getComputedStyle', { spoofed: true });
+      logAccess('MathML.getComputedStyle', { spoofed: true, value: 'noised' });
     }
 
     return style;
-  };
-
-  console.log('[ContainerShield] MathML spoofer initialized');
+  });
 }

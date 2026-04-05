@@ -6,6 +6,7 @@
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { overrideMethod } from '@/lib/stealth';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 
 /**
@@ -14,24 +15,22 @@ import { logAccess } from '../../monitor/fingerprint-monitor';
 export function initWebGLShaderSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (mode === 'off') return;
 
-  const contexts = ['WebGLRenderingContext', 'WebGL2RenderingContext'];
+  const contexts: Array<{ name: string; proto: any }> = [];
 
-  for (const ctxName of contexts) {
-    const ctx = (window as any)[ctxName];
-    if (!ctx?.prototype) continue;
+  if (typeof WebGLRenderingContext !== 'undefined') {
+    contexts.push({ name: 'WebGLRenderingContext', proto: WebGLRenderingContext.prototype });
+  }
+  if (typeof WebGL2RenderingContext !== 'undefined') {
+    contexts.push({ name: 'WebGL2RenderingContext', proto: WebGL2RenderingContext.prototype });
+  }
 
+  for (const { name: ctxName, proto } of contexts) {
     // Spoof getShaderPrecisionFormat
-    const originalGetShaderPrecisionFormat = ctx.prototype.getShaderPrecisionFormat;
-
-    if (originalGetShaderPrecisionFormat) {
-      ctx.prototype.getShaderPrecisionFormat = function (
-        shaderType: number,
-        precisionType: number
-      ): WebGLShaderPrecisionFormat | null {
+    if (proto.getShaderPrecisionFormat) {
+      overrideMethod(proto, 'getShaderPrecisionFormat', (original, thisArg, args) => {
         logAccess(`${ctxName}.getShaderPrecisionFormat`, { spoofed: true });
 
         if (mode === 'block') {
-          // Return common values
           return {
             rangeMin: 127,
             rangeMax: 127,
@@ -39,10 +38,9 @@ export function initWebGLShaderSpoofer(mode: ProtectionMode, prng: PRNG): void {
           } as WebGLShaderPrecisionFormat;
         }
 
-        const result = originalGetShaderPrecisionFormat.call(this, shaderType, precisionType);
+        const result = original.call(thisArg, ...args);
 
         if (result && mode === 'noise') {
-          // Slightly modify precision values
           return {
             rangeMin: result.rangeMin,
             rangeMax: result.rangeMax,
@@ -51,37 +49,33 @@ export function initWebGLShaderSpoofer(mode: ProtectionMode, prng: PRNG): void {
         }
 
         return result;
-      };
+      });
     }
 
     // Spoof getShaderInfoLog (can reveal compiler info)
-    const originalGetShaderInfoLog = ctx.prototype.getShaderInfoLog;
-
-    if (originalGetShaderInfoLog) {
-      ctx.prototype.getShaderInfoLog = function (shader: WebGLShader): string | null {
+    if (proto.getShaderInfoLog) {
+      overrideMethod(proto, 'getShaderInfoLog', (original, thisArg, args) => {
         logAccess(`${ctxName}.getShaderInfoLog`, { spoofed: true });
 
         if (mode === 'block') {
           return '';
         }
 
-        return originalGetShaderInfoLog.call(this, shader);
-      };
+        return original.call(thisArg, ...args);
+      });
     }
 
     // Spoof getProgramInfoLog
-    const originalGetProgramInfoLog = ctx.prototype.getProgramInfoLog;
-
-    if (originalGetProgramInfoLog) {
-      ctx.prototype.getProgramInfoLog = function (program: WebGLProgram): string | null {
+    if (proto.getProgramInfoLog) {
+      overrideMethod(proto, 'getProgramInfoLog', (original, thisArg, args) => {
         logAccess(`${ctxName}.getProgramInfoLog`, { spoofed: true });
 
         if (mode === 'block') {
           return '';
         }
 
-        return originalGetProgramInfoLog.call(this, program);
-      };
+        return original.call(thisArg, ...args);
+      });
     }
   }
 

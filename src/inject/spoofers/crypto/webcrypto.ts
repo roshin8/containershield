@@ -21,7 +21,7 @@ export function initCryptoSpoofer(mode: ProtectionMode, prng: PRNG): void {
   const originalGetRandomValues = crypto.getRandomValues.bind(crypto);
 
   crypto.getRandomValues = function <T extends ArrayBufferView | null>(array: T): T {
-    logAccess('crypto.getRandomValues', { spoofed: true });
+    logAccess('crypto.getRandomValues', { spoofed: true, value: 'spoofed' });
     return originalGetRandomValues(array);
   };
 
@@ -30,7 +30,7 @@ export function initCryptoSpoofer(mode: ProtectionMode, prng: PRNG): void {
     const originalRandomUUID = crypto.randomUUID.bind(crypto);
 
     crypto.randomUUID = function (): `${string}-${string}-${string}-${string}-${string}` {
-      logAccess('crypto.randomUUID', { spoofed: true });
+      logAccess('crypto.randomUUID', { spoofed: true, value: 'spoofed' });
       return originalRandomUUID();
     };
   }
@@ -46,7 +46,7 @@ export function initCryptoSpoofer(mode: ProtectionMode, prng: PRNG): void {
     const original = (crypto.subtle as any)[op];
     if (typeof original === 'function') {
       (crypto.subtle as any)[op] = function (...args: any[]) {
-        logAccess(`crypto.subtle.${op}`, { spoofed: true });
+        logAccess(`crypto.subtle.${op}`, { spoofed: true, value: 'spoofed' });
         return original.apply(crypto.subtle, args);
       };
     }

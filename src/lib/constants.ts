@@ -1,5 +1,5 @@
 /**
- * Shared constants for Chameleon Containers
+ * Shared constants for Container Shield
  */
 
 /**
@@ -16,17 +16,17 @@ export const PRIVATE_COOKIE_STORE_ID = 'firefox-private';
  * Storage keys
  */
 export const STORAGE_KEYS = {
-  GLOBAL_SETTINGS: 'chameleon_global_settings',
-  CONTAINER_SETTINGS: 'chameleon_container_settings',
-  ENTROPY: 'chameleon_entropy',
-  IP_DATABASE: 'chameleon_ip_database',
-  VERSION: 'chameleon_version',
+  GLOBAL_SETTINGS: 'container_shield_global_settings',
+  CONTAINER_SETTINGS: 'container_shield_container_settings',
+  ENTROPY: 'container_shield_entropy',
+  IP_DATABASE: 'container_shield_ip_database',
+  VERSION: 'container_shield_version',
 } as const;
 
 /**
  * Extension version
  */
-export const EXTENSION_VERSION = '0.1.0';
+export const EXTENSION_VERSION = '0.4.0';
 
 /**
  * Protection level names

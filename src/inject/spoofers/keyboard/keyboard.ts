@@ -41,7 +41,7 @@ export function initKeyboardSpoofer(mode: ProtectionMode, prng: PRNG): void {
   const originalGetLayoutMap = keyboard.getLayoutMap.bind(keyboard);
 
   keyboard.getLayoutMap = async function (): Promise<Map<string, string>> {
-    logAccess('navigator.keyboard.getLayoutMap', { spoofed: true });
+    logAccess('navigator.keyboard.getLayoutMap', { spoofed: true, value: 'spoofed' });
 
     if (mode === 'block') {
       // Return empty map

@@ -9,6 +9,8 @@
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { overrideMethod } from '@/lib/stealth';
+import { logAccess } from '../../monitor/fingerprint-monitor';
 
 // Common fonts that should be "available" on all systems
 const COMMON_FONTS = [
@@ -174,6 +176,7 @@ export function initFontSpoofer(mode: ProtectionMode, prng: PRNG): void {
     const originalCheck = document.fonts.check.bind(document.fonts);
 
     document.fonts.check = function (font: string, text?: string): boolean {
+      logAccess('document.fonts.check', { spoofed: true, value: `${availableFonts.size} fonts` });
       // Extract font family from font string (e.g., "12px Arial" -> "Arial")
       const fontFamily = extractFontFamily(font);
 
@@ -185,43 +188,33 @@ export function initFontSpoofer(mode: ProtectionMode, prng: PRNG): void {
     };
 
     // Override FontFaceSet.prototype.check
-    const originalFontFaceSetCheck = FontFaceSet.prototype.check;
-
-    FontFaceSet.prototype.check = function (
-      this: FontFaceSet,
-      font: string,
-      text?: string
-    ): boolean {
+    overrideMethod(FontFaceSet.prototype, 'check', (original, thisArg, args) => {
+      logAccess('FontFaceSet.check', { spoofed: true, value: `${availableFonts.size} fonts` });
+      const font = args[0] as string;
+      const text = args[1] as string | undefined;
       const fontFamily = extractFontFamily(font);
 
       if (fontFamily && !availableFonts.has(fontFamily)) {
         return false;
       }
 
-      return originalFontFaceSetCheck.call(this, font, text);
-    };
+      return original.call(thisArg, font, text);
+    });
   }
 
   // Override CSS font-family resolution via computed styles
-  // This is trickier - we intercept getComputedStyle
-  const originalGetComputedStyle = window.getComputedStyle;
+  overrideMethod(window as any, 'getComputedStyle', (original, _thisArg, args) => {
+    logAccess('getComputedStyle(fontFamily)', { spoofed: true, value: `${availableFonts.size} fonts` });
+    const styles = original.apply(window, args);
 
-  window.getComputedStyle = function (
-    element: Element,
-    pseudoElt?: string | null
-  ): CSSStyleDeclaration {
-    const styles = originalGetComputedStyle.call(window, element, pseudoElt);
-
-    // Return a proxy that filters font-family
     return new Proxy(styles, {
       get(target, prop) {
         const value = (target as any)[prop];
 
         if (prop === 'fontFamily' && typeof value === 'string') {
-          // Filter to only available fonts
-          const families = value.split(',').map((f) => f.trim().replace(/["']/g, ''));
+          const families = value.split(',').map((f: string) => f.trim().replace(/["']/g, ''));
           const filtered = families.filter(
-            (f) => availableFonts.has(f) || f === 'serif' || f === 'sans-serif' || f === 'monospace'
+            (f: string) => availableFonts.has(f) || f === 'serif' || f === 'sans-serif' || f === 'monospace'
           );
           return filtered.join(', ') || 'sans-serif';
         }
@@ -233,13 +226,7 @@ export function initFontSpoofer(mode: ProtectionMode, prng: PRNG): void {
         return value;
       },
     });
-  };
-
-  console.log(
-    '[ChameleonContainers] Font spoofer initialized:',
-    mode,
-    `(${availableFonts.size} fonts)`
-  );
+  });
 }
 
 /**

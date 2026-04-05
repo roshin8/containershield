@@ -7,6 +7,7 @@
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { overrideMethod } from '@/lib/stealth';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 
 /**
@@ -15,8 +16,8 @@ import { logAccess } from '../../monitor/fingerprint-monitor';
 export function initMathSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (mode === 'off') return;
 
-  // Very small noise value that won't break calculations
-  const noise = () => (prng.nextFloat() - 0.5) * 1e-15;
+  // Small noise that's detectable by fingerprinters but won't break calculations
+  const noise = () => (prng.nextFloat() - 0.5) * 1e-12;
 
   // Functions to spoof
   const mathFunctions: Array<keyof Math> = [
@@ -31,23 +32,19 @@ export function initMathSpoofer(mode: ProtectionMode, prng: PRNG): void {
     return;
   }
 
-  // Noise mode - add tiny noise to results
+  // Noise mode - add tiny noise to results, using stealth to avoid toString detection
   for (const fn of mathFunctions) {
     const original = Math[fn] as (...args: number[]) => number;
-
     if (typeof original !== 'function') continue;
 
-    (Math as any)[fn] = function (...args: number[]): number {
-      logAccess(`Math.${fn}`, { spoofed: true });
-      const result = original.apply(Math, args);
-
-      // Only add noise to finite, non-integer results
+    overrideMethod(Math as any, fn as string, (orig, _thisArg, args) => {
+      logAccess(`Math.${fn}`, { spoofed: true, value: '\u00b11e-12 noise' });
+      const result = orig.apply(Math, args);
       if (Number.isFinite(result) && !Number.isInteger(result)) {
         return result + noise();
       }
-
       return result;
-    };
+    });
   }
 
   // Also spoof Math constants with very tiny noise
@@ -64,5 +61,4 @@ export function initMathSpoofer(mode: ProtectionMode, prng: PRNG): void {
   // These are already constants, fingerprinters just read them
   // We log access but don't modify since they're used in real calculations
 
-  console.log('[ContainerShield] Math spoofer initialized');
 }

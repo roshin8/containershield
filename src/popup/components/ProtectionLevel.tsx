@@ -1,9 +1,5 @@
 import React from 'react';
 import type { ProtectionLevel as Level } from '@/types';
-import {
-  PROTECTION_LEVEL_NAMES,
-  PROTECTION_LEVEL_DESCRIPTIONS,
-} from '@/lib/constants';
 
 interface Props {
   level: Level;
@@ -11,47 +7,42 @@ interface Props {
   disabled?: boolean;
 }
 
-const LEVEL_COLORS: Record<Level, string> = {
-  0: 'bg-gray-600',
-  1: 'bg-yellow-600',
-  2: 'bg-green-600',
-  3: 'bg-red-600',
-};
+const LEVELS: { id: Level; label: string; color: string; hint: string }[] = [
+  { id: 0, label: 'Off', color: 'var(--text-muted)', hint: 'No protection' },
+  { id: 1, label: 'Low', color: 'var(--yellow)', hint: 'Headers & UA only' },
+  { id: 2, label: 'Balanced', color: 'var(--green)', hint: 'All signals noised' },
+  { id: 3, label: 'Strict', color: 'var(--red)', hint: 'Max protection' },
+];
 
 export default function ProtectionLevel({ level, onChange, disabled }: Props) {
-  const levels: Level[] = [0, 1, 2, 3];
-
   return (
-    <div className={`space-y-3 ${disabled ? 'opacity-50' : ''}`}>
-      <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
-        Protection Level
-      </h3>
-
-      <div className="grid grid-cols-4 gap-2">
-        {levels.map((l) => (
+    <div style={{ display: 'flex', gap: '6px', opacity: disabled ? 0.5 : 1 }}>
+      {LEVELS.map((l) => {
+        const active = level === l.id;
+        return (
           <button
-            key={l}
-            onClick={() => !disabled && onChange(l)}
+            key={l.id}
+            onClick={() => !disabled && onChange(l.id)}
             disabled={disabled}
-            className={`
-              px-3 py-2 rounded-lg text-center transition-all
-              ${
-                level === l
-                  ? `${LEVEL_COLORS[l]} text-white ring-2 ring-white/30`
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }
-              ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
-            `}
+            style={{
+              flex: 1,
+              padding: '8px 4px 6px',
+              borderRadius: '6px',
+              textAlign: 'center',
+              fontSize: '11px',
+              fontWeight: 500,
+              background: active ? l.color + '18' : 'var(--bg-elevated)',
+              border: `1px solid ${active ? l.color + '40' : 'var(--border)'}`,
+              color: active ? l.color : 'var(--text-muted)',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              transition: 'all 0.15s',
+            }}
           >
-            <div className="text-lg font-bold">{l}</div>
-            <div className="text-xs">{PROTECTION_LEVEL_NAMES[l]}</div>
+            <div>{l.label}</div>
+            <div style={{ fontSize: '8px', marginTop: '2px', opacity: 0.7 }}>{l.hint}</div>
           </button>
-        ))}
-      </div>
-
-      <p className="text-sm text-gray-400 p-2 bg-gray-800/50 rounded">
-        {PROTECTION_LEVEL_DESCRIPTIONS[level]}
-      </p>
+        );
+      })}
     </div>
   );
 }

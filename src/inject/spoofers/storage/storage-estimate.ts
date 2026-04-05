@@ -29,7 +29,7 @@ export function initStorageSpoofer(mode: ProtectionMode, prng: PRNG): void {
   const originalEstimate = navigator.storage.estimate.bind(navigator.storage);
 
   navigator.storage.estimate = async function (): Promise<StorageEstimate> {
-    logAccess('navigator.storage.estimate', { spoofed: true });
+    logAccess('navigator.storage.estimate', { spoofed: true, value: 'randomized' });
 
     if (mode === 'block') {
       // Return zeros to block the API
@@ -63,7 +63,7 @@ export function initStorageSpoofer(mode: ProtectionMode, prng: PRNG): void {
   // Also spoof navigator.storage.persisted
   if (navigator.storage.persisted) {
     navigator.storage.persisted = async function (): Promise<boolean> {
-      logAccess('navigator.storage.persisted', { spoofed: true });
+      logAccess('navigator.storage.persisted', { spoofed: true, value: 'randomized' });
       return false; // Most sites don't have persistent storage
     };
   }

@@ -5,6 +5,8 @@
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { farbleFloatArray } from '@/lib/farbling';
+import { overrideMethod } from '@/lib/stealth';
+import { logAccess } from '../../monitor/fingerprint-monitor';
 
 /**
  * Initialize audio context spoofing
@@ -13,67 +15,54 @@ export function initAudioSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (mode === 'off') return;
 
   // Wrap AnalyserNode.getFloatFrequencyData
-  const originalGetFloatFrequencyData = AnalyserNode.prototype.getFloatFrequencyData;
+  overrideMethod(AnalyserNode.prototype, 'getFloatFrequencyData', (original, thisArg, args) => {
+    const array = args[0] as Float32Array;
+    logAccess('AnalyserNode.getFloatFrequencyData', { blocked: mode === 'block', spoofed: mode === 'noise' });
 
-  AnalyserNode.prototype.getFloatFrequencyData = function (
-    this: AnalyserNode,
-    array: Float32Array
-  ): void {
     if (mode === 'block') {
-      // Fill with silence
       array.fill(-Infinity);
       return;
     }
 
-    originalGetFloatFrequencyData.call(this, array);
+    original.call(thisArg, array);
     farbleFloatArray(array, prng, 0.0001);
-  };
+  });
 
   // Wrap AnalyserNode.getByteFrequencyData
-  const originalGetByteFrequencyData = AnalyserNode.prototype.getByteFrequencyData;
+  overrideMethod(AnalyserNode.prototype, 'getByteFrequencyData', (original, thisArg, args) => {
+    const array = args[0] as Uint8Array;
 
-  AnalyserNode.prototype.getByteFrequencyData = function (
-    this: AnalyserNode,
-    array: Uint8Array
-  ): void {
     if (mode === 'block') {
       array.fill(0);
       return;
     }
 
-    originalGetByteFrequencyData.call(this, array);
+    original.call(thisArg, array);
 
     // Add small noise to byte values
     for (let i = 0; i < array.length; i++) {
       const noise = Math.round(prng.nextNoise(2));
       array[i] = Math.max(0, Math.min(255, array[i] + noise));
     }
-  };
+  });
 
   // Wrap AnalyserNode.getFloatTimeDomainData
-  const originalGetFloatTimeDomainData = AnalyserNode.prototype.getFloatTimeDomainData;
+  overrideMethod(AnalyserNode.prototype, 'getFloatTimeDomainData', (original, thisArg, args) => {
+    const array = args[0] as Float32Array;
 
-  AnalyserNode.prototype.getFloatTimeDomainData = function (
-    this: AnalyserNode,
-    array: Float32Array
-  ): void {
     if (mode === 'block') {
       array.fill(0);
       return;
     }
 
-    originalGetFloatTimeDomainData.call(this, array);
+    original.call(thisArg, array);
     farbleFloatArray(array, prng, 0.0001);
-  };
+  });
 
   // Wrap AudioBuffer.getChannelData
-  const originalGetChannelData = AudioBuffer.prototype.getChannelData;
-
-  AudioBuffer.prototype.getChannelData = function (
-    this: AudioBuffer,
-    channel: number
-  ): Float32Array {
-    const data = originalGetChannelData.call(this, channel);
+  overrideMethod(AudioBuffer.prototype, 'getChannelData', (original, thisArg, args) => {
+    const channel = args[0] as number;
+    const data = original.call(thisArg, channel) as Float32Array;
 
     if (mode === 'block') {
       return new Float32Array(data.length);
@@ -83,16 +72,14 @@ export function initAudioSpoofer(mode: ProtectionMode, prng: PRNG): void {
     const noisyData = new Float32Array(data);
     farbleFloatArray(noisyData, prng, 0.0001);
     return noisyData;
-  };
+  });
 
   // Wrap OfflineAudioContext.startRendering
   if (typeof OfflineAudioContext !== 'undefined') {
-    const originalStartRendering = OfflineAudioContext.prototype.startRendering;
+    overrideMethod(OfflineAudioContext.prototype, 'startRendering', async (original, thisArg, _args) => {
+      logAccess('OfflineAudioContext.startRendering', { blocked: mode === 'block', spoofed: mode === 'noise' });
 
-    OfflineAudioContext.prototype.startRendering = async function (
-      this: OfflineAudioContext
-    ): Promise<AudioBuffer> {
-      const buffer = await originalStartRendering.call(this);
+      const buffer = await original.call(thisArg) as AudioBuffer;
 
       if (mode === 'block') {
         // Return silent buffer
@@ -106,8 +93,8 @@ export function initAudioSpoofer(mode: ProtectionMode, prng: PRNG): void {
       }
 
       return buffer;
-    };
+    });
   }
 
-  console.log('[ChameleonContainers] Audio spoofer initialized:', mode);
+  console.log('[ContainerShield] Audio spoofer initialized:', mode);
 }
