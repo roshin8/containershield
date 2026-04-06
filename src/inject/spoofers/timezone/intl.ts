@@ -10,6 +10,10 @@ import { overrideMethod, registerNative } from '@/lib/stealth';
 import { TIMEZONE_IANA } from '@/lib/constants';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 
+/** Exposed for Worker preamble builder — ms difference between spoofed and real timezone */
+let _timezoneOffsetDiffMs = 0;
+export function getTimezoneOffsetDiffMs(): number { return _timezoneOffsetDiffMs; }
+
 // Map language codes to likely timezone offsets
 const LANGUAGE_TIMEZONE: Record<string, { offset: number; tz: string }> = {
   'ja': { offset: 540, tz: 'Asia/Tokyo' },
@@ -155,6 +159,7 @@ export function initTimezoneSpoofer(
     const OrigDate = Date;
     // realOffset was saved before the override above
     const offsetDiffMs = (currentOffset - realOffset) * 60000;
+    _timezoneOffsetDiffMs = offsetDiffMs; // Expose for Worker preamble
 
     // ISO date-only format (YYYY-MM-DD) is parsed as UTC per spec — don't shift
     const isISODateOnly = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s.trim());

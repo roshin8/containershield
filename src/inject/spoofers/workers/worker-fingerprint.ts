@@ -14,6 +14,7 @@ import type { PRNG } from '@/lib/crypto';
 import { TIMEZONE_IANA } from '@/lib/constants';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 import { getSelectedGPU } from '../graphics/webgl';
+import { getTimezoneOffsetDiffMs } from '../timezone/intl';
 
 function buildWorkerPreamble(assignedProfile?: AssignedProfileData): string {
   if (!assignedProfile?.userAgent) return '';
@@ -90,10 +91,10 @@ return ctx;
 }}catch(e){}`;
   }
 
-  // Spoof timezone in Worker context — embed pre-computed offset from main frame
+  // Spoof timezone in Worker context — use pre-computed values from main frame
   if (tzName) {
-    // Read the main frame's spoofed offset (already patched by timezone spoofer)
-    const mainOffset = new Date().getTimezoneOffset();
+    const spoofedOffset = new Date().getTimezoneOffset(); // Already spoofed
+    const offsetDiffMs = getTimezoneOffsetDiffMs(); // From main frame's timezone spoofer
 
     code += `
 var _tz=${JSON.stringify(tzName)};
@@ -101,7 +102,16 @@ var _origDTF=Intl.DateTimeFormat;
 Intl.DateTimeFormat=function(l,o){return new _origDTF(l,Object.assign({},o,{timeZone:o&&o.timeZone||_tz}))};
 Intl.DateTimeFormat.supportedLocalesOf=_origDTF.supportedLocalesOf;
 try{Intl.DateTimeFormat.prototype=_origDTF.prototype}catch(e){}
-Date.prototype.getTimezoneOffset=function(){return ${mainOffset}};`;
+Date.prototype.getTimezoneOffset=function(){return ${spoofedOffset}};
+var _OD=Date;var _od=${offsetDiffMs};
+var _iso=function(s){return /^\\d{4}-\\d{2}-\\d{2}$/.test(s.trim())};
+self.Date=function(){var a=arguments;
+if(!(this instanceof self.Date))return new _OD().toString();
+if(!a.length)return new _OD();
+if(a.length===1&&typeof a[0]==='string')return _iso(a[0])?new _OD(a[0]):new _OD(_OD.parse(a[0])+_od);
+return new _OD(a[0],a[1],a[2],a[3],a[4],a[5],a[6]);
+};self.Date.prototype=_OD.prototype;self.Date.now=_OD.now;self.Date.UTC=_OD.UTC;
+self.Date.parse=function(s){return _iso(s)?_OD.parse(s):_OD.parse(s)+_od};`;
   }
 
   code += `\n}catch(e){}})();\n`;

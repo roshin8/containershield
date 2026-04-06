@@ -28,9 +28,18 @@ window.addEventListener('message', async (event) => {
         detail: data.detail,
         url: data.url,
       });
-    } catch {
-      // Extension context invalidated (e.g., extension updated)
-    }
+    } catch {}
+  }
+
+  // Forward the inject script's active profile to background
+  if (type === 'CONTAINER_SHIELD_ACTIVE_PROFILE') {
+    try {
+      await browser.runtime.sendMessage({
+        type: 'ACTIVE_PROFILE',
+        profile: data.profile,
+        domain: data.domain,
+      });
+    } catch {}
   }
 });
 

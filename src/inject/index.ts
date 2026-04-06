@@ -125,3 +125,13 @@ if (allSpoofersDisabled(config.settings)) {
 } else {
   initializeSpoofers(config);
 }
+
+// Post the generated profile to the content script (ISOLATED world)
+// so the popup can display the actual spoofed values
+try {
+  window.postMessage({
+    type: 'CONTAINER_SHIELD_ACTIVE_PROFILE',
+    profile: config.assignedProfile,
+    domain,
+  }, '*');
+} catch {}

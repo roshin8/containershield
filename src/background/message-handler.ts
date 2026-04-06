@@ -110,6 +110,9 @@ export class MessageHandler {
       case MSG_FINGERPRINT_REPORT:
         return this.handleFingerprintReport(message, sender);
 
+      case 'ACTIVE_PROFILE':
+        return this.handleActiveProfile(message, sender);
+
       case MSG_GET_FINGERPRINT_DATA:
         return this.handleGetFingerprintData(message, sender);
 
@@ -331,6 +334,27 @@ export class MessageHandler {
       } catch {}
     }
 
+    return { success: true };
+  }
+
+  /**
+   * Store the inject script's active profile so the popup can display
+   * the actual spoofed values (not the background's assigned profile).
+   */
+  private async handleActiveProfile(
+    message: any,
+    sender: browser.Runtime.MessageSender
+  ): Promise<{ success: boolean }> {
+    const tabId = sender.tab?.id;
+    if (tabId && message.profile) {
+      await browser.storage.local.set({
+        [`activeProfile:${tabId}`]: {
+          profile: message.profile,
+          domain: message.domain,
+          timestamp: Date.now(),
+        },
+      });
+    }
     return { success: true };
   }
 
