@@ -86,80 +86,60 @@ export function initWebGLSpoofer(
 
   const { VENDOR: GL_VENDOR, RENDERER: GL_RENDERER, UNMASKED_VENDOR: UNMASKED_VENDOR_WEBGL, UNMASKED_RENDERER: UNMASKED_RENDERER_WEBGL } = GL;
 
-  // Helper to create a getParameter wrapper
-  const wrapGetParameter = (mode: ProtectionMode, label: string) => {
-    return (original: Function, thisArg: any, args: any[]) => {
-      const pname = args[0] as GLenum;
-
-      if (pname === UNMASKED_VENDOR_WEBGL || pname === UNMASKED_RENDERER_WEBGL ||
-          pname === GL_VENDOR || pname === GL_RENDERER) {
-        logAccess(label, { blocked: mode === 'block', spoofed: mode === 'noise', value: selectedGPU.renderer });
-      }
-
-      if (mode === 'block') return null;
-
-      if (pname === UNMASKED_VENDOR_WEBGL || pname === GL_VENDOR) return selectedGPU.vendor;
-      if (pname === UNMASKED_RENDERER_WEBGL || pname === GL_RENDERER) return selectedGPU.renderer;
-
-      return original.call(thisArg, pname);
-    };
+  // Spoof getParameter: return a Proxy wrapper from getContext that intercepts
+  // all method calls. This is the most reliable approach — it doesn't depend on
+  // prototype configurability or own-property behavior in Firefox's C++ bindings.
+  const spoofGetParam = (origGP: Function, ctx: any, mode: ProtectionMode, pname: GLenum) => {
+    if (mode === 'block') return null;
+    if (pname === UNMASKED_VENDOR_WEBGL || pname === GL_VENDOR) return selectedGPU.vendor;
+    if (pname === UNMASKED_RENDERER_WEBGL || pname === GL_RENDERER) return selectedGPU.renderer;
+    return origGP.call(ctx, pname);
   };
 
-  // Wrap getParameter for WebGLRenderingContext
-  // Use BOTH overrideMethod (Proxy) AND direct defineProperty for maximum compatibility
-  if (webglMode !== 'off') {
-    const origWGL1GetParam = WebGLRenderingContext.prototype.getParameter;
-    const spoofedWGL1GetParam = function getParameter(this: WebGLRenderingContext, pname: GLenum) {
-      if (pname === UNMASKED_VENDOR_WEBGL || pname === UNMASKED_RENDERER_WEBGL ||
-          pname === GL_VENDOR || pname === GL_RENDERER) {
-        logAccess('WebGLRenderingContext.getParameter', { spoofed: true, value: selectedGPU.renderer });
-      }
-      if (webglMode === 'block') return null;
-      if (pname === UNMASKED_VENDOR_WEBGL || pname === GL_VENDOR) return selectedGPU.vendor;
-      if (pname === UNMASKED_RENDERER_WEBGL || pname === GL_RENDERER) return selectedGPU.renderer;
-      return origWGL1GetParam.call(this, pname);
-    };
-    registerNative(spoofedWGL1GetParam, 'getParameter');
-    Object.defineProperty(WebGLRenderingContext.prototype, 'getParameter', {
-      value: spoofedWGL1GetParam,
-      writable: true,
-      configurable: true,
-    });
+  function wrapGLContext(ctx: any, mode: ProtectionMode): any {
+    const origGetParam = ctx.getParameter.bind(ctx);
+    const origGetExt = ctx.getExtension.bind(ctx);
+    let gpLogged = false;
 
-    // Wrap getExtension to control debug extension
-    overrideMethod(WebGLRenderingContext.prototype, 'getExtension', (original, thisArg, args) => {
-      if (webglMode === 'block') return null;
-      return original.call(thisArg, ...args);
+    return new Proxy(ctx, {
+      get(target, prop, receiver) {
+        if (prop === 'getParameter') {
+          return function(pname: GLenum) {
+            if (!gpLogged && (pname === UNMASKED_VENDOR_WEBGL || pname === GL_VENDOR)) {
+              logAccess('WebGL.getParameter', { spoofed: true, value: selectedGPU.renderer });
+              gpLogged = true;
+            }
+            return spoofGetParam(origGetParam, target, mode, pname);
+          };
+        }
+        if (prop === 'getExtension') {
+          return function(name: string) {
+            if (mode === 'block') return null;
+            return origGetExt(name);
+          };
+        }
+        const val = (target as any)[prop];
+        if (typeof val === 'function') return val.bind(target);
+        return val;
+      },
     });
   }
 
-  // Also intercept canvas.getContext to patch each WebGL context instance directly.
-  // Firefox may bind getParameter as an own property (not on prototype), so
-  // prototype-level overrides won't catch it. Patch each context at creation.
+  // Intercept canvas.getContext — return Proxy-wrapped WebGL contexts
   if (webglMode !== 'off' || webgl2Mode !== 'off') {
-    overrideMethod(HTMLCanvasElement.prototype, 'getContext', (original, thisArg, args) => {
-      const ctx = original.call(thisArg, ...args);
-      const contextId = args[0] as string;
-      if (ctx && (contextId === 'webgl' || contextId === 'experimental-webgl') && webglMode !== 'off') {
-        patchContextInstance(ctx, webglMode);
+    const origGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function(this: HTMLCanvasElement, contextId: string, ...rest: any[]) {
+      const ctx = origGetContext.call(this, contextId, ...rest);
+      if (!ctx) return ctx;
+      if ((contextId === 'webgl' || contextId === 'experimental-webgl') && webglMode !== 'off') {
+        return wrapGLContext(ctx, webglMode);
       }
-      if (ctx && contextId === 'webgl2' && webgl2Mode !== 'off') {
-        patchContextInstance(ctx, webgl2Mode);
+      if (contextId === 'webgl2' && webgl2Mode !== 'off') {
+        return wrapGLContext(ctx, webgl2Mode);
       }
       return ctx;
-    });
-  }
-
-  function patchContextInstance(ctx: any, mode: ProtectionMode) {
-    if (ctx._csPatchedGP) return;
-    const origGP = ctx.getParameter.bind(ctx);
-    ctx.getParameter = function(pname: GLenum) {
-      if (mode === 'block') return null;
-      if (pname === UNMASKED_VENDOR_WEBGL || pname === GL_VENDOR) return selectedGPU.vendor;
-      if (pname === UNMASKED_RENDERER_WEBGL || pname === GL_RENDERER) return selectedGPU.renderer;
-      return origGP(pname);
-    };
-    ctx._csPatchedGP = true;
+    } as any;
+    registerNative(HTMLCanvasElement.prototype.getContext, 'getContext');
   }
 
   // Wrap getParameter for WebGL2RenderingContext

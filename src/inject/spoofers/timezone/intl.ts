@@ -131,11 +131,15 @@ export function initTimezoneSpoofer(
       return currentOffset;
     };
     registerNative(spoofedGetTZO, 'getTimezoneOffset');
-    Object.defineProperty(Date.prototype, 'getTimezoneOffset', {
-      value: spoofedGetTZO,
-      writable: true,
-      configurable: true,
-    });
+    // Try multiple override strategies — Firefox 149 may not honor defineProperty
+    // on certain builtin prototypes in the page context
+    try {
+      Object.defineProperty(Date.prototype, 'getTimezoneOffset', {
+        value: spoofedGetTZO, writable: true, configurable: true,
+      });
+    } catch {}
+    // Direct assignment as fallback
+    Date.prototype.getTimezoneOffset = spoofedGetTZO;
 
 
     // Also spoof toLocaleString methods to be consistent

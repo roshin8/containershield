@@ -82,6 +82,16 @@ export function initScreenSpoofer(
   overrideGetterWithValue(Screen.prototype, 'colorDepth', () => { logScreen(); return colorDepth; });
   overrideGetterWithValue(Screen.prototype, 'pixelDepth', () => { logScreen(); return pixelDepth; });
 
+  // Also override directly on window.screen instance as fallback
+  // (Firefox may not honor prototype-level defineProperty for Screen)
+  const screenOverrides: Record<string, number> = {
+    width: targetScreen.width, height: targetScreen.height,
+    availWidth, availHeight, colorDepth, pixelDepth,
+  };
+  for (const [prop, val] of Object.entries(screenOverrides)) {
+    try { Object.defineProperty(window.screen, prop, { get: () => val, configurable: true }); } catch {}
+  }
+
   // Window properties - these are own properties on window, use defineProperty
   const screenTopValue = prng.nextInt(0, 30);
   const windowProps: Record<string, () => any> = {
