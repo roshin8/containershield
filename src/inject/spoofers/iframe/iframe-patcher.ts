@@ -1,10 +1,11 @@
 /**
- * Iframe Patcher - Applies spoofing overrides to dynamically created iframes.
+ * Iframe Patcher - Patches iframes IMMEDIATELY when added to DOM.
  *
- * Fingerprinting tools like CreepJS create hidden iframes to get clean,
- * unmodified prototypes, bypassing main-frame overrides. This module
- * intercepts contentWindow/contentDocument access and patches each
- * iframe's prototypes on first access.
+ * CreepJS creates hidden iframes and accesses them via window.frames[index]
+ * (self[numberOfIframes]), which bypasses our contentWindow getter.
+ *
+ * Fix: Use MutationObserver to detect new iframes and patch their
+ * prototypes BEFORE any script accesses them via window.frames.
  */
 
 import type { AssignedProfileData, SpooferSettings } from '@/types';
@@ -16,9 +17,6 @@ interface IframePatchConfig {
   selectedGPU: { vendor: string; renderer: string } | null;
 }
 
-/**
- * Set up iframe interception to apply spoofing overrides to new iframes.
- */
 export function initIframePatcher(config: IframePatchConfig): void {
   const { settings, assignedProfile, selectedGPU } = config;
 
@@ -29,52 +27,114 @@ export function initIframePatcher(config: IframePatchConfig): void {
   const langs = assignedProfile?.languages;
   const tzOffset = assignedProfile?.timezoneOffset;
   const targetTimezone = tzOffset !== undefined ? (TIMEZONE_IANA[tzOffset] || null) : null;
-
-  // Pre-compute the main frame's spoofed timezone offset (already correct)
   const mainFrameOffset = new Date().getTimezoneOffset();
 
-  const patchedIframes = new WeakSet<HTMLIFrameElement>();
+  const patchedWindows = new WeakSet<Window>();
 
-  function patchWindow(iframeWin: Window): void {
+  function patchWindow(win: Window): void {
+    if (patchedWindows.has(win)) return;
+    patchedWindows.add(win);
+
     try {
-      patchWebGL(iframeWin, selectedGPU, settings);
-      patchScreen(iframeWin, screen, settings);
-      patchNavigator(iframeWin, ua, hc, dm, langs, settings);
-      patchTimezone(iframeWin, targetTimezone, mainFrameOffset, settings);
+      patchWebGL(win, selectedGPU, settings);
+      patchScreen(win, screen, settings);
+      patchNavigator(win, ua, hc, dm, langs, settings);
+      patchTimezone(win, targetTimezone, mainFrameOffset, settings);
     } catch {
-      // Iframe may be cross-origin or already detached
+      // Cross-origin or detached
     }
   }
 
-  // Intercept contentWindow getter
+  function patchIframeElement(iframe: HTMLIFrameElement): void {
+    try {
+      const win = iframe.contentWindow;
+      if (win) patchWindow(win);
+    } catch {
+      // Cross-origin
+    }
+  }
+
+  // Strategy 1: MutationObserver — patches iframes BEFORE window.frames[] access
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node instanceof HTMLIFrameElement) {
+          patchIframeElement(node);
+        }
+        // Also check children (e.g., div containing an iframe)
+        if (node instanceof HTMLElement) {
+          const iframes = node.getElementsByTagName('iframe');
+          for (let i = 0; i < iframes.length; i++) {
+            patchIframeElement(iframes[i]);
+          }
+        }
+      }
+    }
+  });
+
+  // Start observing as soon as document.body exists
+  if (document.body) {
+    observer.observe(document.body, { childList: true, subtree: true });
+  } else {
+    // document.body not ready yet — observe documentElement and wait
+    const docObserver = new MutationObserver(() => {
+      if (document.body) {
+        docObserver.disconnect();
+        observer.observe(document.body, { childList: true, subtree: true });
+        // Patch any iframes that already exist
+        const existing = document.getElementsByTagName('iframe');
+        for (let i = 0; i < existing.length; i++) {
+          patchIframeElement(existing[i]);
+        }
+      }
+    });
+    docObserver.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  // Strategy 2: contentWindow/contentDocument getters (backup)
   const origCWDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow');
+  const origCDDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentDocument');
+
   if (origCWDesc?.get) {
     Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
       get() {
         const win = origCWDesc.get!.call(this);
-        if (win && !patchedIframes.has(this)) {
-          patchedIframes.add(this);
-          try { patchWindow(win); } catch {}
-        }
+        if (win) patchWindow(win);
         return win;
       },
       configurable: true,
     });
   }
 
-  // Intercept contentDocument getter
-  const origCDDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentDocument');
   if (origCDDesc?.get) {
     Object.defineProperty(HTMLIFrameElement.prototype, 'contentDocument', {
       get() {
         const doc = origCDDesc.get!.call(this);
-        if (doc && !patchedIframes.has(this)) {
-          patchedIframes.add(this);
-          try { patchWindow(doc.defaultView!); } catch {}
-        }
+        if (doc?.defaultView) patchWindow(doc.defaultView);
         return doc;
       },
       configurable: true,
+    });
+  }
+
+  // Strategy 3: Patch innerHTML/appendChild to catch iframes created via innerHTML
+  // (CreepJS uses div.innerHTML = '<iframe></iframe>')
+  const origInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  if (origInnerHTML?.set) {
+    Object.defineProperty(Element.prototype, 'innerHTML', {
+      get: origInnerHTML.get,
+      set(value: string) {
+        origInnerHTML.set!.call(this, value);
+        // After innerHTML is set, patch any new iframes
+        if (typeof value === 'string' && value.includes('iframe')) {
+          const iframes = this.getElementsByTagName('iframe');
+          for (let i = 0; i < iframes.length; i++) {
+            patchIframeElement(iframes[i]);
+          }
+        }
+      },
+      configurable: true,
+      enumerable: true,
     });
   }
 }
@@ -88,14 +148,16 @@ function patchWebGL(
 
   for (const ctxName of ['WebGLRenderingContext', 'WebGL2RenderingContext']) {
     const Ctor = (win as any)[ctxName];
-    if (!Ctor) continue;
+    if (!Ctor?.prototype?.getParameter) continue;
 
     const origGP = Ctor.prototype.getParameter;
-    Ctor.prototype.getParameter = function(pname: number) {
+    const spoofed = function(this: any, pname: number) {
       if (pname === GL.UNMASKED_VENDOR || pname === GL.VENDOR) return gpu.vendor;
       if (pname === GL.UNMASKED_RENDERER || pname === GL.RENDERER) return gpu.renderer;
       return origGP.call(this, pname);
     };
+    try { Object.defineProperty(Ctor.prototype, 'getParameter', { value: spoofed, writable: true, configurable: true }); } catch {}
+    try { Ctor.prototype.getParameter = spoofed; } catch {}
   }
 }
 
@@ -112,6 +174,15 @@ function patchScreen(
     colorDepth: screen.colorDepth, pixelDepth: screen.pixelDepth,
   };
 
+  // Patch on prototype
+  const ScreenProto = (win as any).Screen?.prototype;
+  if (ScreenProto) {
+    for (const [prop, val] of Object.entries(props)) {
+      try { Object.defineProperty(ScreenProto, prop, { get: () => val, configurable: true }); } catch {}
+    }
+  }
+
+  // Also patch on instance
   for (const [prop, val] of Object.entries(props)) {
     try { Object.defineProperty(win.screen, prop, { get: () => val, configurable: true }); } catch {}
   }
@@ -161,12 +232,12 @@ function patchTimezone(
   const iframeDate = (win as any).Date;
   if (!iframeDate) return;
 
-  // Use the main frame's already-computed offset (guaranteed correct)
-  iframeDate.prototype.getTimezoneOffset = function(): number {
-    return mainFrameOffset;
-  };
+  // Patch getTimezoneOffset
+  const spoofedTZO = function(): number { return mainFrameOffset; };
+  try { Object.defineProperty(iframeDate.prototype, 'getTimezoneOffset', { value: spoofedTZO, writable: true, configurable: true }); } catch {}
+  try { iframeDate.prototype.getTimezoneOffset = spoofedTZO; } catch {}
 
-  // Patch Intl.DateTimeFormat — inject target timezone
+  // Patch Intl.DateTimeFormat
   const origDTF = (win as any).Intl?.DateTimeFormat;
   if (origDTF) {
     try {
@@ -177,7 +248,6 @@ function patchTimezone(
       (win as any).Intl.DateTimeFormat.supportedLocalesOf = origDTF.supportedLocalesOf;
       (win as any).Intl.DateTimeFormat.prototype = origDTF.prototype;
 
-      // Also patch resolvedOptions to return our timezone
       const origResolved = origDTF.prototype.resolvedOptions;
       origDTF.prototype.resolvedOptions = function() {
         const opts = origResolved.call(this);

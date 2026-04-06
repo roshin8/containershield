@@ -141,6 +141,44 @@ export function initTimezoneSpoofer(
     // Direct assignment as fallback
     Date.prototype.getTimezoneOffset = spoofedGetTZO;
 
+    // Override Date constructor and Date.parse to spoof timezone for string-based
+    // offset computation. CreepJS computes timezone without getTimezoneOffset() by
+    // parsing date strings and comparing UTC vs local interpretation.
+    const OrigDate = Date;
+    const realOffset = new OrigDate().getTimezoneOffset !== spoofedGetTZO
+      ? OrigDate.prototype.getTimezoneOffset.call(new OrigDate())
+      : 300; // fallback if already overridden
+    const offsetDiff = (currentOffset - realOffset) * 60000; // ms difference between real and spoofed
+
+    // Wrap Date constructor to adjust string-parsed dates
+    const SpoofedDate = function(this: any, ...args: any[]) {
+      if (new.target) {
+        // Called with `new`
+        const d = args.length === 0
+          ? new OrigDate()
+          : args.length === 1 && typeof args[0] === 'string'
+            ? new OrigDate(new OrigDate(args[0]).getTime() + offsetDiff)
+            : new OrigDate(...args);
+        Object.setPrototypeOf(d, SpoofedDate.prototype);
+        return d;
+      }
+      // Called without `new` — returns string
+      const d = new OrigDate();
+      return d.toString();
+    } as any;
+
+    SpoofedDate.prototype = OrigDate.prototype;
+    Object.setPrototypeOf(SpoofedDate, OrigDate);
+    SpoofedDate.now = OrigDate.now;
+    SpoofedDate.UTC = OrigDate.UTC;
+    SpoofedDate.parse = function(s: string): number {
+      return OrigDate.parse(s) + offsetDiff;
+    };
+    registerNative(SpoofedDate, 'Date');
+    registerNative(SpoofedDate.parse, 'parse');
+
+    try { (window as any).Date = SpoofedDate; } catch {}
+
 
     // Also spoof toLocaleString methods to be consistent
     overrideMethod(Date.prototype, 'toLocaleString', (original, thisArg, args) => {
