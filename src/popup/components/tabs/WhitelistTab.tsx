@@ -14,9 +14,31 @@ interface WhitelistTabProps {
 export default function WhitelistTab({ settings, onSaveSettings }: WhitelistTabProps) {
   const [newDomain, setNewDomain] = useState('');
   const [newTracked, setNewTracked] = useState('');
+  const [newBlocked, setNewBlocked] = useState('');
+  const [blockedDomains, setBlockedDomains] = useState<string[]>([]);
   const [ipData, setIpData] = useState<IPDatabase | null>(null);
-  const [activeSection, setActiveSection] = useState<'whitelist' | 'iptrack'>('whitelist');
+  const [activeSection, setActiveSection] = useState<'whitelist' | 'iptrack' | 'blocklist'>('whitelist');
   const rules = settings.domainRules || {};
+
+  // Load blocked tracking domains
+  useEffect(() => {
+    async function loadBlocked() {
+      try {
+        const stored = await browser.storage.local.get('blockedTrackingDomains');
+        if (stored.blockedTrackingDomains) {
+          setBlockedDomains(stored.blockedTrackingDomains);
+        } else {
+          // Default list
+          setBlockedDomains([
+            'device-metrics-us.amazon.com', 'device-metrics-us-2.amazon.com',
+            'unagi.amazon.com', 'unagi-na.amazon.com',
+            'fls-na.amazon.com', 'fls-eu.amazon.com', 'csm-e.amazon.com',
+          ]);
+        }
+      } catch {}
+    }
+    loadBlocked();
+  }, []);
   const domains = Object.keys(rules);
 
   // Load IP database
@@ -84,11 +106,15 @@ export default function WhitelistTab({ settings, onSaveSettings }: WhitelistTabP
       <div className="flex gap-1 p-1 rounded-lg" style={{ background: 'var(--bg-elevated)' }}>
         <button onClick={() => setActiveSection('whitelist')}
           className={`subtab flex-1 text-center ${activeSection === 'whitelist' ? 'active' : ''}`}>
-          Domain Rules
+          Rules
         </button>
         <button onClick={() => setActiveSection('iptrack')}
           className={`subtab flex-1 text-center ${activeSection === 'iptrack' ? 'active' : ''}`}>
-          IP Tracking
+          IP Track
+        </button>
+        <button onClick={() => setActiveSection('blocklist')}
+          className={`subtab flex-1 text-center ${activeSection === 'blocklist' ? 'active' : ''}`}>
+          Blocklist
         </button>
       </div>
 
@@ -293,6 +319,61 @@ export default function WhitelistTab({ settings, onSaveSettings }: WhitelistTabP
                     </div>
                     <button onClick={() => clearIPRecord(record.ip)}
                       style={{ color: 'var(--red)', fontSize: '16px', padding: '0 4px', background: 'none', border: 'none', cursor: 'pointer' }}>&times;</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {activeSection === 'blocklist' && (
+        <>
+          {/* Add blocked domain */}
+          <div className="card" style={{ padding: '10px' }}>
+            <div className="section-label">Block Tracking Domains</div>
+            <div className="row-desc" style={{ marginBottom: '8px' }}>
+              Requests to these domains are blocked entirely. Prevents fingerprinting endpoints from loading.
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={newBlocked}
+                onChange={(e) => setNewBlocked(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newBlocked.trim()) {
+                    const updated = [...blockedDomains, newBlocked.trim()];
+                    setBlockedDomains(updated);
+                    browser.storage.local.set({ blockedTrackingDomains: updated });
+                    setNewBlocked('');
+                  }
+                }}
+                placeholder="tracking.example.com"
+                style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: '12px' }}
+              />
+              <button onClick={() => {
+                if (newBlocked.trim()) {
+                  const updated = [...blockedDomains, newBlocked.trim()];
+                  setBlockedDomains(updated);
+                  browser.storage.local.set({ blockedTrackingDomains: updated });
+                  setNewBlocked('');
+                }
+              }} className="btn btn-sm" style={{ padding: '6px 12px' }}>Add</button>
+            </div>
+          </div>
+
+          {/* Blocked domains list */}
+          {blockedDomains.length > 0 && (
+            <div className="card">
+              <div className="section-label">Blocked Domains ({blockedDomains.length})</div>
+              <div>
+                {blockedDomains.map((domain) => (
+                  <div key={domain} className="row">
+                    <span style={{ flex: 1, fontSize: '11px', fontFamily: 'monospace' }}>{domain}</span>
+                    <button onClick={() => {
+                      const updated = blockedDomains.filter(d => d !== domain);
+                      setBlockedDomains(updated);
+                      browser.storage.local.set({ blockedTrackingDomains: updated });
+                    }} style={{ color: 'var(--red)', fontSize: '16px', padding: '0 4px', background: 'none', border: 'none', cursor: 'pointer' }}>&times;</button>
                   </div>
                 ))}
               </div>
