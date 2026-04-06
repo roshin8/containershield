@@ -23,21 +23,48 @@ declare const browser: typeof chrome;
 
 // Inject spoofer script SYNCHRONOUSLY at document_start
 // No async operations - this MUST run before any page scripts
+//
+// Strategy: Try multiple injection methods for maximum reliability.
+// 1. wrappedJSObject.eval (Firefox-specific, runs in page context directly)
+// 2. Inline <script> tag via sync XHR
+// 3. <script src> fallback (async, less reliable)
 (function injectImmediately() {
   const scriptUrl = browser.runtime.getURL('inject/index.js');
+  let scriptContent: string | null = null;
+
+  // Fetch the script content synchronously
   try {
     const xhr = new XMLHttpRequest();
     xhr.open('GET', scriptUrl, false);
     xhr.send();
     if (xhr.status === 200) {
-      const script = document.createElement('script');
-      script.textContent = xhr.responseText;
-      (document.documentElement || document.head).insertBefore(
-        script, (document.documentElement || document.head).firstChild
-      );
-      script.remove();
+      scriptContent = xhr.responseText;
     }
+  } catch {}
+
+  if (!scriptContent) return;
+
+  // Method 1: wrappedJSObject.eval — most reliable for Firefox
+  // This runs code directly in the page's JS context, bypassing all CSP restrictions
+  // and ensuring it executes BEFORE any page scripts.
+  try {
+    const pageWindow = (window as any).wrappedJSObject;
+    if (pageWindow) {
+      pageWindow.eval(scriptContent);
+      return;
+    }
+  } catch {}
+
+  // Method 2: Inline <script> tag
+  try {
+    const script = document.createElement('script');
+    script.textContent = scriptContent;
+    (document.documentElement || document.head).insertBefore(
+      script, (document.documentElement || document.head).firstChild
+    );
+    script.remove();
   } catch {
+    // Method 3: <script src> fallback (async)
     const script = document.createElement('script');
     script.src = scriptUrl;
     (document.documentElement || document.head).insertBefore(

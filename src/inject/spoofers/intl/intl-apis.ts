@@ -5,18 +5,18 @@
  * that can be used for fingerprinting.
  */
 
-import type { ProtectionMode } from '@/types';
+import type { ProtectionMode, AssignedProfileData } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 
 /**
  * Initialize Intl APIs spoofing
  */
-export function initIntlSpoofer(mode: ProtectionMode, prng: PRNG): void {
+export function initIntlSpoofer(mode: ProtectionMode, prng: PRNG, assignedProfile?: AssignedProfileData): void {
   if (mode === 'off') return;
 
-  // Common locale to use
-  const spoofedLocale = 'en-US';
+  // Use profile language, not hardcoded en-US
+  const spoofedLocale = assignedProfile?.languages?.[0] || 'en-US';
 
   // Spoof Intl.ListFormat
   if (typeof Intl.ListFormat !== 'undefined') {

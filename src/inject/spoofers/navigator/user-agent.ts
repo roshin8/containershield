@@ -71,6 +71,45 @@ export function initNavigatorSpoofer(
       logNav();
       return vendor;
     });
+
+    // oscpu - Firefox-specific, must match the spoofed UA
+    const oscpu = uaProfile?.oscpu;
+    if (oscpu) {
+      // Firefox profile: set oscpu to profile value
+      try {
+        overrideGetter(Navigator.prototype, 'oscpu', () => {
+          logNav();
+          return oscpu;
+        });
+      } catch {
+        try {
+          Object.defineProperty(navigator, 'oscpu', {
+            get: () => { logNav(); return oscpu; },
+            configurable: true,
+          });
+        } catch {}
+      }
+    } else if ('oscpu' in navigator) {
+      // Non-Firefox profile (Chrome/Edge/Safari): hide oscpu entirely
+      // Chrome doesn't have navigator.oscpu, so it must not be visible
+      try {
+        Object.defineProperty(Navigator.prototype, 'oscpu', {
+          get: () => undefined,
+          configurable: true,
+        });
+      } catch {}
+    }
+
+    // buildID - Firefox-specific. Chrome/Edge/Safari don't have it.
+    if ('buildID' in navigator && !uaProfile?.oscpu) {
+      // Non-Firefox profile: hide buildID
+      try {
+        Object.defineProperty(Navigator.prototype, 'buildID', {
+          get: () => undefined,
+          configurable: true,
+        });
+      } catch {}
+    }
   }
 
   // Languages
@@ -134,7 +173,8 @@ export function initNavigatorSpoofer(
   }
 
   // Client Hints (userAgentData)
-  if (settings.clientHints !== 'off' && 'userAgentData' in navigator) {
+  // Must add even in Firefox if spoofing a Chrome UA — CreepJS checks for its existence
+  if (settings.clientHints !== 'off' && (uaProfile?.brands || 'userAgentData' in navigator)) {
     const brands = uaProfile?.brands || [
       { brand: 'Chromium', version: prng.pick(['120', '121', '122', '123']) },
       { brand: 'Not_A Brand', version: '8' },
@@ -159,9 +199,26 @@ export function initNavigatorSpoofer(
       toJSON: () => ({ brands, mobile, platform: platformName }),
     };
 
-    overrideGetter(Navigator.prototype, 'userAgentData', () => {
-      logAccess('navigator.userAgentData', { spoofed: true });
-      return spoofedUserAgentData;
-    });
+    // Try prototype-level override first (works if property already exists)
+    try {
+      overrideGetter(Navigator.prototype, 'userAgentData', () => {
+        logAccess('navigator.userAgentData', { spoofed: true });
+        return spoofedUserAgentData;
+      });
+    } catch {}
+
+    // If property doesn't exist (Firefox), add it directly
+    if (!('userAgentData' in navigator)) {
+      try {
+        Object.defineProperty(Navigator.prototype, 'userAgentData', {
+          get() {
+            logAccess('navigator.userAgentData', { spoofed: true });
+            return spoofedUserAgentData;
+          },
+          configurable: true,
+          enumerable: true,
+        });
+      } catch {}
+    }
   }
 }

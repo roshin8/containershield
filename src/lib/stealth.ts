@@ -52,7 +52,7 @@ export function initStealth(): void {
 /**
  * Register a function as native-looking for toString detection.
  */
-function registerNative(fn: object, name: string): void {
+export function registerNative(fn: object, name: string): void {
   nativeStrings.set(fn, `function ${name}() { [native code] }`);
 }
 

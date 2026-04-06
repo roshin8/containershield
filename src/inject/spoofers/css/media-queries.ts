@@ -6,7 +6,7 @@
  * check all of these.
  */
 
-import type { ProtectionMode } from '@/types';
+import type { ProtectionMode, AssignedProfileData } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { overrideMethod } from '@/lib/stealth';
 import { logAccess } from '../../monitor/fingerprint-monitor';
@@ -26,10 +26,15 @@ interface MediaQueryOverrides {
   'any-hover': 'none' | 'hover';
 }
 
-export function initCSSSpoofer(mode: ProtectionMode, prng: PRNG): void {
+export function initCSSSpoofer(mode: ProtectionMode, prng: PRNG, assignedProfile?: AssignedProfileData): void {
   if (mode === 'off') return;
 
   const originalMatchMedia = window.matchMedia;
+
+  // Get spoofed screen dimensions to match CSS queries
+  const spoofedWidth = assignedProfile?.screen?.width;
+  const spoofedHeight = assignedProfile?.screen?.height;
+  const spoofedDPR = assignedProfile?.screen?.devicePixelRatio;
 
   const overrides: MediaQueryOverrides = {
     'prefers-color-scheme': prng.pick(['light', 'dark']),
@@ -59,6 +64,35 @@ export function initCSSSpoofer(mode: ProtectionMode, prng: PRNG): void {
     }
     if (/\(\s*monochrome\s*:\s*0\s*\)/.test(query)) {
       return createFakeMediaQueryList(query, true);
+    }
+
+    // Handle screen dimension queries (width, height, device-width, device-height)
+    if (spoofedWidth && spoofedHeight) {
+      // Match queries like (width: 1680px), (max-width: 1680px), (min-width: 1024px)
+      const dimQueries: Array<{ pattern: RegExp; evaluate: (val: number) => boolean }> = [
+        { pattern: /\(\s*(?:device-)?width\s*:\s*(\d+)(?:px)?\s*\)/i, evaluate: (v) => v === spoofedWidth },
+        { pattern: /\(\s*max-(?:device-)?width\s*:\s*(\d+)(?:px)?\s*\)/i, evaluate: (v) => spoofedWidth <= v },
+        { pattern: /\(\s*min-(?:device-)?width\s*:\s*(\d+)(?:px)?\s*\)/i, evaluate: (v) => spoofedWidth >= v },
+        { pattern: /\(\s*(?:device-)?height\s*:\s*(\d+)(?:px)?\s*\)/i, evaluate: (v) => v === spoofedHeight },
+        { pattern: /\(\s*max-(?:device-)?height\s*:\s*(\d+)(?:px)?\s*\)/i, evaluate: (v) => spoofedHeight <= v },
+        { pattern: /\(\s*min-(?:device-)?height\s*:\s*(\d+)(?:px)?\s*\)/i, evaluate: (v) => spoofedHeight >= v },
+      ];
+
+      if (spoofedDPR) {
+        dimQueries.push(
+          { pattern: /\(\s*(?:-webkit-)?device-pixel-ratio\s*:\s*([\d.]+)\s*\)/i, evaluate: (v) => v === spoofedDPR },
+          { pattern: /\(\s*(?:-webkit-)?min-device-pixel-ratio\s*:\s*([\d.]+)\s*\)/i, evaluate: (v) => spoofedDPR >= v },
+          { pattern: /\(\s*(?:-webkit-)?max-device-pixel-ratio\s*:\s*([\d.]+)\s*\)/i, evaluate: (v) => spoofedDPR <= v },
+          { pattern: /\(\s*resolution\s*:\s*([\d.]+)dppx\s*\)/i, evaluate: (v) => v === spoofedDPR },
+        );
+      }
+
+      for (const { pattern, evaluate } of dimQueries) {
+        const dimMatch = query.match(pattern);
+        if (dimMatch) {
+          return createFakeMediaQueryList(query, evaluate(parseFloat(dimMatch[1])));
+        }
+      }
     }
 
     // Handle feature queries we override

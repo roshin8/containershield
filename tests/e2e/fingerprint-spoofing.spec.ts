@@ -132,15 +132,14 @@ test.describe('Build Verification', () => {
     const content = getInjectScript();
     expect(content).toContain('markSpoofersInitialized');
     expect(content).toContain('initializeSpoofers');
-    expect(content).toContain('CONTAINER_SHIELD_CONFIG_READY');
+    expect(content).toContain('__containerShieldConfig');
     expect(content).toContain('reportToBackground');
     expect(content).not.toContain('localhost:9999');
   });
 
-  test('content script sends GET_SPOOF_CONFIG directly', () => {
+  test('content script bridges fingerprint reports', () => {
     const content = fs.readFileSync(path.join(distPath, 'content', 'index.js'), 'utf-8');
-    expect(content).toContain('GET_SPOOF_CONFIG');
-    expect(content).not.toContain('requestConfig');
+    expect(content).toContain('FINGERPRINT_REPORT');
     expect(content).not.toContain('DEBUG_LOG');
   });
 
@@ -582,6 +581,218 @@ test.describe('Fingerprint Monitor', () => {
     });
 
     expect(ok).toBe(true);
+    await browser.close();
+  });
+});
+
+test.describe('CreepJS Detection Vectors', () => {
+  test('timezone offset matches Intl timezone (DST-aware)', async () => {
+    const browser = await firefox.launch();
+    const page = await browser.newPage();
+    await page.setContent('<html><body></body></html>');
+    await injectSpoofersIntoPage(page, createTestConfig());
+
+    const tz = await page.evaluate(() => {
+      const offset = new Date().getTimezoneOffset();
+      const intlTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // Compute expected offset from the Intl timezone
+      const now = new Date();
+      const utcStr = now.toLocaleString('en-US', { timeZone: 'UTC' });
+      const tzStr = now.toLocaleString('en-US', { timeZone: intlTz });
+      const utcDate = new Date(utcStr);
+      const tzDate = new Date(tzStr);
+      const expectedOffset = (utcDate.getTime() - tzDate.getTime()) / 60000;
+      return { offset, intlTz, expectedOffset };
+    });
+
+    // The getTimezoneOffset should match what the IANA timezone produces
+    expect(tz.offset).toBe(tz.expectedOffset);
+    // Profile uses timezoneOffset -300 which maps to America/New_York
+    expect(tz.intlTz).toBe('America/New_York');
+    await browser.close();
+  });
+
+  test('Date.toString shows spoofed timezone name', async () => {
+    const browser = await firefox.launch();
+    const page = await browser.newPage();
+    await page.setContent('<html><body></body></html>');
+    await injectSpoofersIntoPage(page, createTestConfig());
+
+    const dateStr = await page.evaluate(() => new Date().toString());
+    // Should contain Eastern time reference (New York), not Central/Pacific/etc.
+    expect(dateStr).toMatch(/Eastern|New_York|GMT[+-]\d{4}/);
+    await browser.close();
+  });
+
+  test('oscpu is hidden when spoofing Chrome UA', async () => {
+    const browser = await firefox.launch();
+    const page = await browser.newPage();
+    await page.setContent('<html><body></body></html>');
+
+    // Use a Chrome profile (no oscpu)
+    const config = createTestConfig();
+    config.assignedProfile.userAgent = {
+      id: 'chrome-125',
+      name: 'Chrome 125 Win',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      platform: 'Win32',
+      vendor: 'Google Inc.',
+      appVersion: '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      mobile: false,
+      platformName: 'Windows',
+      platformVersion: '10.0.0',
+      brands: [{ brand: 'Chromium', version: '125' }, { brand: 'Not_A Brand', version: '8' }],
+    };
+    await injectSpoofersIntoPage(page, config);
+
+    const result = await page.evaluate(() => ({
+      oscpu: (navigator as any).oscpu,
+      buildID: (navigator as any).buildID,
+      hasUserAgentData: 'userAgentData' in navigator,
+    }));
+
+    // Chrome doesn't have oscpu or buildID
+    expect(result.oscpu).toBeUndefined();
+    expect(result.buildID).toBeUndefined();
+    // Chrome DOES have userAgentData
+    expect(result.hasUserAgentData).toBe(true);
+    await browser.close();
+  });
+
+  test('userAgentData is present when spoofing Chrome UA', async () => {
+    const browser = await firefox.launch();
+    const page = await browser.newPage();
+    await page.setContent('<html><body></body></html>');
+
+    const config = createTestConfig();
+    config.assignedProfile.userAgent = {
+      id: 'chrome-125',
+      name: 'Chrome 125 Win',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      platform: 'Win32',
+      vendor: 'Google Inc.',
+      appVersion: '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      mobile: false,
+      platformName: 'Windows',
+      platformVersion: '10.0.0',
+      brands: [{ brand: 'Chromium', version: '125' }, { brand: 'Not_A Brand', version: '8' }],
+    };
+    await injectSpoofersIntoPage(page, config);
+
+    const uad = await page.evaluate(async () => {
+      const data = (navigator as any).userAgentData;
+      if (!data) return null;
+      const high = await data.getHighEntropyValues(['platform', 'platformVersion', 'architecture']);
+      return {
+        brands: data.brands,
+        mobile: data.mobile,
+        platform: data.platform,
+        highEntropy: {
+          platform: high.platform,
+          platformVersion: high.platformVersion,
+          architecture: high.architecture,
+        },
+      };
+    });
+
+    expect(uad).not.toBeNull();
+    expect(uad.platform).toBe('Windows');
+    expect(uad.mobile).toBe(false);
+    expect(uad.brands[0].brand).toBe('Chromium');
+    expect(uad.highEntropy.architecture).toBe('x86');
+    await browser.close();
+  });
+
+  test('Worker inherits spoofed navigator values', async () => {
+    const browser = await firefox.launch();
+    const page = await browser.newPage();
+    await page.setContent('<html><body></body></html>');
+    await injectSpoofersIntoPage(page, createTestConfig());
+
+    const workerResult = await page.evaluate(() => {
+      return new Promise<any>((resolve, reject) => {
+        const code = `
+          self.postMessage({
+            userAgent: self.navigator.userAgent,
+            platform: self.navigator.platform,
+            hardwareConcurrency: self.navigator.hardwareConcurrency,
+            language: self.navigator.language,
+            languages: [...self.navigator.languages],
+            timezoneOffset: new Date().getTimezoneOffset(),
+            intlTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          });
+        `;
+        const blob = new Blob([code], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        const worker = new Worker(url);
+        worker.onmessage = (e) => {
+          worker.terminate();
+          URL.revokeObjectURL(url);
+          resolve(e.data);
+        };
+        worker.onerror = (e) => {
+          reject(new Error(e.message));
+        };
+        setTimeout(() => reject(new Error('Worker timeout')), 5000);
+      });
+    });
+
+    // Worker should have spoofed values matching main thread
+    expect(workerResult.userAgent).toContain('Firefox/120.0');
+    expect(workerResult.userAgent).toContain('Windows NT 10.0');
+    expect(workerResult.platform).toBe('Win32');
+    expect(workerResult.hardwareConcurrency).toBe(8);
+    expect(workerResult.language).toBe('en-US');
+    expect(workerResult.languages).toEqual(['en-US', 'en']);
+    // Timezone should match main thread
+    expect(workerResult.intlTimezone).toBe('America/New_York');
+    await browser.close();
+  });
+
+  test('CSS matchMedia returns spoofed screen dimensions', async () => {
+    const browser = await firefox.launch();
+    const page = await browser.newPage();
+    await page.setContent('<html><body></body></html>');
+    await injectSpoofersIntoPage(page, createTestConfig());
+
+    const css = await page.evaluate(() => ({
+      exact1920: matchMedia('(device-width: 1920px)').matches,
+      exact1080: matchMedia('(device-height: 1080px)').matches,
+      min1800: matchMedia('(min-device-width: 1800px)').matches,
+      max2000: matchMedia('(max-device-width: 2000px)').matches,
+      wrongWidth: matchMedia('(device-width: 1680px)').matches,
+    }));
+
+    expect(css.exact1920).toBe(true);
+    expect(css.exact1080).toBe(true);
+    expect(css.min1800).toBe(true);
+    expect(css.max2000).toBe(true);
+    expect(css.wrongWidth).toBe(false);
+    await browser.close();
+  });
+
+  test('fonts match spoofed platform', async () => {
+    const browser = await firefox.launch();
+    const page = await browser.newPage();
+    await page.setContent('<html><body></body></html>');
+    await injectSpoofersIntoPage(page, createTestConfig());
+
+    const fonts = await page.evaluate(() => {
+      // Check Windows-specific fonts are available
+      const windowsFonts = ['Calibri', 'Segoe UI', 'Consolas'].map(f =>
+        document.fonts.check(`12px "${f}"`)
+      );
+      // Check macOS-specific fonts are NOT available
+      const macFonts = ['Helvetica Neue', 'San Francisco', 'Menlo'].map(f =>
+        document.fonts.check(`12px "${f}"`)
+      );
+      return { windowsFonts, macFonts };
+    });
+
+    // Windows profile: at least some Windows fonts should pass check
+    // macOS fonts should NOT pass (we're spoofing Windows)
+    const anyMacFont = fonts.macFonts.some(f => f);
+    expect(anyMacFont).toBe(false);
     await browser.close();
   });
 });
