@@ -151,4 +151,27 @@ export function initPerformanceSpoofer(mode: ProtectionMode, prng: PRNG): void {
     return wrapEntries(originalGetEntriesByName(name, type));
   };
 
+  // Add timing noise to WebAssembly compilation/instantiation
+  // Fingerprinters compare JS vs WASM execution timing to profile hardware
+  if (typeof WebAssembly !== 'undefined') {
+    const origCompile = WebAssembly.compile;
+    WebAssembly.compile = async function(bytes: BufferSource): Promise<WebAssembly.Module> {
+      logAccess('WebAssembly.compile', { spoofed: true });
+      const jitterMs = prng.nextFloat() * 5;
+      await new Promise(r => setTimeout(r, jitterMs));
+      return origCompile(bytes);
+    };
+
+    const origInstantiate = WebAssembly.instantiate;
+    WebAssembly.instantiate = async function(
+      source: BufferSource | WebAssembly.Module,
+      imports?: WebAssembly.Imports
+    ): Promise<any> {
+      logAccess('WebAssembly.instantiate', { spoofed: true });
+      const jitterMs = prng.nextFloat() * 5;
+      await new Promise(r => setTimeout(r, jitterMs));
+      return origInstantiate(source as any, imports);
+    };
+  }
+
 }

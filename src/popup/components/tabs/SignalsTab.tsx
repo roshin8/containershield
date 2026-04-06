@@ -93,8 +93,12 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
       <G label="Hardware">
         <S name="Screen" cat="hardware" k="screen" val={vals['screen.width']} />
         <S name="Screen Frame" cat="hardware" k="screenFrame" />
+        <S name="Screen Extended" cat="hardware" k="screenExtended" />
+        <S name="Orientation" cat="hardware" k="orientation" />
+        <S name="Visual Viewport" cat="hardware" k="visualViewport" />
         <S name="Device Memory" cat="hardware" k="deviceMemory" val={vals['navigator.deviceMemory']} />
         <S name="CPU Cores" cat="hardware" k="hardwareConcurrency" val={vals['navigator.hardwareConcurrency']} />
+        <S name="Architecture" cat="hardware" k="architecture" />
         <S name="Media Devices" cat="hardware" k="mediaDevices" opts={MEDIA_DEVICE_OPTIONS} />
         <S name="Battery" cat="hardware" k="battery" opts={BATTERY_OPTIONS} />
         <S name="Touch" cat="hardware" k="touch" opts={TOUCH_OPTIONS} />
@@ -105,8 +109,13 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
         <S name="Languages" cat="navigator" k="languages" val={vals['navigator.languages']} />
         <S name="Plugins" cat="navigator" k="plugins" opts={PLUGINS_OPTIONS} />
         <S name="Client Hints" cat="navigator" k="clientHints" val={vals['navigator.userAgentData']} />
+        <S name="Clipboard" cat="navigator" k="clipboard" />
+        <S name="Vibration" cat="navigator" k="vibration" />
+        <S name="Vendor Flavors" cat="navigator" k="vendorFlavors" />
+        <S name="Font Preferences" cat="navigator" k="fontPreferences" />
         <S name="Window.name" cat="navigator" k="windowName" />
         <S name="Tab History" cat="navigator" k="tabHistory" opts={HISTORY_OPTIONS} />
+        <S name="Media Capabilities" cat="navigator" k="mediaCapabilities" />
       </G>
       <G label="Network">
         <SignalRow name="WebRTC" mode={get('network', 'webrtc')}
@@ -131,18 +140,36 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
         <S name="Emoji" cat="rendering" k="emoji" />
         <S name="MathML" cat="rendering" k="mathml" />
       </G>
+      <G label="CSS">
+        <S name="Media Queries" cat="css" k="mediaQueries" />
+      </G>
+      <G label="Storage">
+        <S name="Storage Estimate" cat="storage" k="estimate" />
+        <S name="IndexedDB" cat="storage" k="indexedDB" />
+        <S name="WebSQL" cat="storage" k="webSQL" />
+        <S name="Private Mode" cat="storage" k="privateModeProtection" />
+      </G>
+      <G label="Permissions">
+        <S name="Permissions API" cat="permissions" k="query" />
+        <S name="Notification" cat="permissions" k="notification" />
+      </G>
+      <G label="Devices">
+        <S name="Gamepad" cat="devices" k="gamepad" />
+        <S name="MIDI" cat="devices" k="midi" />
+        <S name="Bluetooth" cat="devices" k="bluetooth" />
+        <S name="USB" cat="devices" k="usb" />
+        <S name="Serial" cat="devices" k="serial" />
+        <S name="HID" cat="devices" k="hid" />
+      </G>
       <G label="Other">
         <S name="Math" cat="math" k="functions" opts={MATH_NOISE_OPTIONS} />
         <S name="Keyboard" cat="keyboard" k="layout" />
         <S name="Key Cadence" cat="keyboard" k="cadence" />
         <S name="Speech" cat="speech" k="synthesis" />
-        <S name="Permissions" cat="permissions" k="query" />
-        <S name="Media Capabilities" cat="navigator" k="mediaCapabilities" />
-        <S name="Storage" cat="storage" k="estimate" />
-        <S name="Private Mode" cat="storage" k="privateModeProtection" />
         <S name="Features" cat="features" k="detection" />
         <S name="Crypto" cat="crypto" k="webCrypto" />
         <S name="Errors" cat="errors" k="stackTrace" />
+        <S name="Apple Pay" cat="payment" k="applePay" />
         <S name="Workers" cat="workers" k="fingerprint" />
         <S name="Service Workers" cat="workers" k="serviceWorker" />
       </G>

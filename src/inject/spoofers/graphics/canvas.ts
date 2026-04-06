@@ -84,4 +84,26 @@ export function initCanvasSpoofer(mode: ProtectionMode, prng: PRNG): void {
       return original.apply(thisArg, args);
     });
   }
+
+  // Block canvas.captureStream — returns unnoised video stream
+  if (HTMLCanvasElement.prototype.captureStream) {
+    overrideMethod(HTMLCanvasElement.prototype, 'captureStream', (original, thisArg, args) => {
+      logAccess('HTMLCanvasElement.captureStream', { spoofed: true });
+      if (mode === 'block') {
+        // Return empty MediaStream
+        return new MediaStream();
+      }
+      // Noise mode: add noise to canvas before capturing
+      const canvas = thisArg as HTMLCanvasElement;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        try {
+          const imageData = ctx.getImageData(0, 0, 1, 1);
+          farbleImageData(imageData.data, prng);
+          ctx.putImageData(imageData, 0, 0);
+        } catch {}
+      }
+      return original.apply(thisArg, args);
+    });
+  }
 }

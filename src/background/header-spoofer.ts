@@ -119,13 +119,26 @@ export class HeaderSpoofer {
       }
     } catch {}
 
-    // Block tracking domain requests
+    // Block tracking domains and tracking pixels
     browser.webRequest.onBeforeRequest.addListener(
       (details) => {
         try {
           const url = new URL(details.url);
+
+          // Block known tracking domains
           if (this.blockedDomains.has(url.hostname)) {
             return { cancel: true };
+          }
+
+          // Block tracking pixels (1x1 images used for event tracking)
+          // Common patterns: /pixel, /beacon, /track, /collect, /log
+          if (details.type === 'image') {
+            const path = url.pathname.toLowerCase();
+            const trackingPaths = ['/pixel', '/beacon', '/track', '/collect',
+              '/log', '/analytics', '/telemetry', '/metrics', '/event'];
+            if (trackingPaths.some(p => path.includes(p))) {
+              return { cancel: true };
+            }
           }
         } catch {}
         return {};
