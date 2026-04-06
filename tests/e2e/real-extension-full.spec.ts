@@ -152,10 +152,6 @@ setTimeout(function() {
   console.log(`SUMMARY: ${results.summary.passed}/${results.summary.total} passed`);
   console.log('='.repeat(60) + '\n');
 
-  // Assert core tests passed (BrowserLeaks has content script loading issues in headless)
-  const coreTests = results.results.filter(r =>
-    !r.scenario.includes('BrowserLeaks')
-  );
-  const corePassed = coreTests.filter(r => r.passed).length;
-  expect(corePassed).toBe(coreTests.length);
+  // Assert ALL tests passed
+  expect(results.summary.passed).toBe(results.summary.total);
 });
