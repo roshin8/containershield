@@ -6,6 +6,7 @@ import browser from 'webextension-polyfill';
 import type { SettingsStore } from './settings-store';
 import type { ContainerManager } from './container-manager';
 import type { HeaderConfig } from '@/types';
+import { DNSProtection } from './dns-protection';
 
 /** Default tracking domains — user can add/remove via UI */
 export const DEFAULT_TRACKING_DOMAINS = [
@@ -127,6 +128,11 @@ export class HeaderSpoofer {
 
           // Block known tracking domains
           if (this.blockedDomains.has(url.hostname)) {
+            return { cancel: true };
+          }
+
+          // Block DNS leak test domains (they reveal real ISP)
+          if (DNSProtection.isDNSLeakTestDomain(url.hostname)) {
             return { cancel: true };
           }
 

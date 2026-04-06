@@ -248,7 +248,7 @@ export function initializeSpoofers(config: InjectConfig): void {
   if (settings.devices.hid !== 'off') initHIDSpoofer(settings.devices.hid, pagePRNG);
 
   // Features
-  if (settings.features.detection !== 'off') initFeatureSpoofer(settings.features.detection, pagePRNG);
+  safe('features', () => { if (settings.features.detection !== 'off') initFeatureSpoofer(settings.features.detection, pagePRNG); });
 
   // Payment
   if (settings.payment.applePay !== 'off') initApplePaySpoofer(settings.payment.applePay, pagePRNG);
