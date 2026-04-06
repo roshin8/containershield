@@ -108,9 +108,18 @@ var _iso=function(s){return /^\\d{4}-\\d{2}-\\d{2}$/.test(s.trim())};
 self.Date=function(){var a=arguments;
 if(!(this instanceof self.Date))return new _OD().toString();
 if(!a.length)return new _OD();
-if(a.length===1&&typeof a[0]==='string')return _iso(a[0])?new _OD(a[0]):new _OD(_OD.parse(a[0])+_od);
-return new _OD(a[0],a[1],a[2],a[3],a[4],a[5],a[6]);
-};self.Date.prototype=_OD.prototype;self.Date.now=_OD.now;self.Date.UTC=_OD.UTC;
+if(a.length===1){
+if(typeof a[0]==='string')return _iso(a[0])?new _OD(a[0]):new _OD(_OD.parse(a[0])+_od);
+return new _OD(a[0]);
+}
+switch(a.length){
+case 2:return new _OD(a[0],a[1]);
+case 3:return new _OD(a[0],a[1],a[2]);
+case 4:return new _OD(a[0],a[1],a[2],a[3]);
+case 5:return new _OD(a[0],a[1],a[2],a[3],a[4]);
+case 6:return new _OD(a[0],a[1],a[2],a[3],a[4],a[5]);
+default:return new _OD(a[0],a[1],a[2],a[3],a[4],a[5],a[6]);
+}};self.Date.prototype=_OD.prototype;self.Date.now=_OD.now;self.Date.UTC=_OD.UTC;
 self.Date.parse=function(s){return _iso(s)?_OD.parse(s):_OD.parse(s)+_od};`;
   }
 
