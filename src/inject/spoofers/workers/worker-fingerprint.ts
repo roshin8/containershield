@@ -86,6 +86,10 @@ if(p===0x1F01)return ${JSON.stringify(gpuRenderer)};
 return _origGetParam(p);
 };
 }
+if(ctx&&t==='2d'){
+var _origGID=ctx.getImageData.bind(ctx);
+ctx.getImageData=function(){var d=_origGID.apply(this,arguments);if(d.data.length>0)d.data[0]=(d.data[0]+1)%256;return d};
+}
 return ctx;
 };
 }}catch(e){}`;

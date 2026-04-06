@@ -40,6 +40,8 @@ export function initIframePatcher(config: IframePatchConfig): void {
       patchScreen(win, screen, settings);
       patchNavigator(win, ua, hc, dm, langs, settings);
       patchTimezone(win, targetTimezone, mainFrameOffset, settings);
+      patchCanvas(win, settings);
+      patchAudio(win, settings);
       if (screen) patchCSSScreenQuery(win, screen);
     } catch {
       // Cross-origin or detached
@@ -256,6 +258,92 @@ function patchTimezone(
       };
     } catch {}
   }
+}
+
+function patchCanvas(win: Window, settings: SpooferSettings): void {
+  if (settings.graphics?.canvas === 'off') return;
+
+  try {
+    const iframeCanvas = (win as any).HTMLCanvasElement?.prototype;
+    if (!iframeCanvas) return;
+
+    // Patch toDataURL — add subtle pixel noise
+    const origToDataURL = iframeCanvas.toDataURL;
+    iframeCanvas.toDataURL = function(this: HTMLCanvasElement, ...args: any[]): string {
+      if (settings.graphics.canvas === 'block') return 'data:image/png;base64,';
+      const ctx = this.getContext('2d');
+      if (ctx) {
+        try {
+          const imageData = ctx.getImageData(0, 0, 1, 1);
+          imageData.data[0] = (imageData.data[0] + 1) % 256;
+          ctx.putImageData(imageData, 0, 0);
+        } catch {}
+      }
+      return origToDataURL.apply(this, args);
+    };
+
+    // Patch toBlob
+    const origToBlob = iframeCanvas.toBlob;
+    iframeCanvas.toBlob = function(this: HTMLCanvasElement, cb: BlobCallback, ...args: any[]): void {
+      if (settings.graphics.canvas === 'block') {
+        cb(new Blob([], { type: 'image/png' }));
+        return;
+      }
+      const ctx = this.getContext('2d');
+      if (ctx) {
+        try {
+          const imageData = ctx.getImageData(0, 0, 1, 1);
+          imageData.data[0] = (imageData.data[0] + 1) % 256;
+          ctx.putImageData(imageData, 0, 0);
+        } catch {}
+      }
+      origToBlob.call(this, cb, ...args);
+    };
+
+    // Patch getImageData on 2D context
+    const iframeCtx2D = (win as any).CanvasRenderingContext2D?.prototype;
+    if (iframeCtx2D) {
+      const origGetImageData = iframeCtx2D.getImageData;
+      iframeCtx2D.getImageData = function(this: CanvasRenderingContext2D, ...args: any[]): ImageData {
+        const data = origGetImageData.apply(this, args);
+        if (settings.graphics.canvas !== 'block' && data.data.length > 0) {
+          data.data[0] = (data.data[0] + 1) % 256;
+        }
+        return data;
+      };
+    }
+  } catch {}
+}
+
+function patchAudio(win: Window, settings: SpooferSettings): void {
+  if (settings.audio?.audioContext === 'off') return;
+
+  try {
+    // Patch AnalyserNode.getFloatFrequencyData
+    const iframeAnalyser = (win as any).AnalyserNode?.prototype;
+    if (iframeAnalyser) {
+      const origGetFloat = iframeAnalyser.getFloatFrequencyData;
+      if (origGetFloat) {
+        iframeAnalyser.getFloatFrequencyData = function(this: AnalyserNode, array: Float32Array): void {
+          origGetFloat.call(this, array);
+          if (array.length > 0) array[0] += 0.0001;
+        };
+      }
+    }
+
+    // Patch AudioBuffer.getChannelData
+    const iframeAudioBuf = (win as any).AudioBuffer?.prototype;
+    if (iframeAudioBuf) {
+      const origGetChannel = iframeAudioBuf.getChannelData;
+      if (origGetChannel) {
+        iframeAudioBuf.getChannelData = function(this: AudioBuffer, channel: number): Float32Array {
+          const data = origGetChannel.call(this, channel);
+          if (data.length > 0) data[0] += 0.0000001;
+          return data;
+        };
+      }
+    }
+  } catch {}
 }
 
 function patchCSSScreenQuery(

@@ -96,4 +96,17 @@ export function initAudioSpoofer(mode: ProtectionMode, prng: PRNG): void {
     });
   }
 
+  // Patch getOutputTimestamp to add noise
+  if (typeof AudioContext !== 'undefined' && AudioContext.prototype.getOutputTimestamp) {
+    overrideMethod(AudioContext.prototype, 'getOutputTimestamp', (original, thisArg, _args) => {
+      const ts = original.call(thisArg);
+      logAccess('AudioContext.getOutputTimestamp', { spoofed: true });
+      if (mode === 'block') return { contextTime: 0, performanceTime: 0 };
+      return {
+        contextTime: ts.contextTime + prng.nextFloat() * 0.0001,
+        performanceTime: ts.performanceTime + prng.nextFloat() * 0.01,
+      };
+    });
+  }
+
 }

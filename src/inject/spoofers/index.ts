@@ -41,6 +41,7 @@ import { initVendorFlavorSpoofer } from './navigator/vendor-flavors';
 import { initFontPreferencesSpoofer } from './navigator/font-preferences';
 import { initWindowNameSpoofer } from './navigator/window-name';
 import { initTabHistorySpoofer } from './navigator/tab-history';
+import { initMediaCapabilitiesSpoofer } from './navigator/media-capabilities';
 
 // Timezone
 import { initTimezoneSpoofer } from './timezone/intl';
@@ -198,6 +199,7 @@ export function initializeSpoofers(config: InjectConfig): void {
   safe('fontPrefs', () => { if (settings.navigator.fontPreferences !== 'off') initFontPreferencesSpoofer(settings.navigator.fontPreferences, pagePRNG); });
   safe('windowName', () => { if (settings.navigator.windowName !== 'off') initWindowNameSpoofer(settings.navigator.windowName, pagePRNG); });
   safe('tabHistory', () => { if (settings.navigator.tabHistory !== 'off') initTabHistorySpoofer(settings.navigator.tabHistory, pagePRNG); });
+  safe('mediaCapabilities', () => { initMediaCapabilitiesSpoofer('noise', pagePRNG); });
 
   safe('timezone', () => {
     if (settings.timezone.intl !== 'off' || settings.timezone.date !== 'off') {

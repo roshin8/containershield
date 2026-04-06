@@ -79,14 +79,20 @@ export function initNetworkSpoofer(mode: ProtectionMode, prng: PRNG): void {
 
   const fakeConnectionProxy = new Proxy(fakeConnection, proxyHandler);
 
+  // Override on both prototype and instance for maximum coverage
   try {
-    Object.defineProperty(navigator, 'connection', {
-      value: fakeConnectionProxy,
+    Object.defineProperty(Navigator.prototype, 'connection', {
+      get: () => fakeConnectionProxy,
       configurable: true,
       enumerable: true,
     });
-  } catch {
-    // Can't override
-  }
+  } catch {}
+  try {
+    Object.defineProperty(navigator, 'connection', {
+      get: () => fakeConnectionProxy,
+      configurable: true,
+      enumerable: true,
+    });
+  } catch {}
 
 }
