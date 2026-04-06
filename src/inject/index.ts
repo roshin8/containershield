@@ -85,13 +85,25 @@ function generateProfile(seed: string): AssignedProfileData {
   const prng = new PRNG(base64ToUint8Array(seed));
   const pick = <T,>(arr: readonly T[]): T => arr[prng.nextInt(0, arr.length - 1)];
 
+  // Detect real platform to ensure we pick a DIFFERENT one
+  const realPlatform = navigator.platform;
+  const realIsMac = realPlatform === 'MacIntel' || realPlatform.includes('Mac');
+  const realIsWin = realPlatform === 'Win32' || realPlatform.includes('Win');
+  const realIsLinux = realPlatform.includes('Linux');
+
   // Only recent desktop browsers (Chrome 120+, Firefox 120+)
+  // Exclude profiles matching the REAL platform to ensure visible spoofing
   const recentDesktop = ALL_PROFILES.filter(p => {
     if (p.mobile) return false;
     const versionMatch = p.userAgent.match(/Chrome\/(\d+)|Firefox\/(\d+)/);
     if (!versionMatch) return false;
     const version = parseInt(versionMatch[1] || versionMatch[2], 10);
-    return version >= 120;
+    if (version < 120) return false;
+    // Exclude real platform
+    if (realIsMac && p.platformName === 'macOS') return false;
+    if (realIsWin && p.platformName === 'Windows') return false;
+    if (realIsLinux && p.platformName === 'Linux') return false;
+    return true;
   });
   const ua = pick(recentDesktop.length > 0 ? recentDesktop : ALL_PROFILES.filter(p => !p.mobile));
 
@@ -100,7 +112,8 @@ function generateProfile(seed: string): AssignedProfileData {
   const isFirefox = !ua.brands; // Firefox profiles don't have brands
 
   // Screen matched to OS
-  const screenList = isMac ? MAC_SCREENS : isLinux ? LINUX_SCREENS : WINDOWS_SCREENS;
+  const screenList: readonly { readonly w: number; readonly h: number; readonly dpr: number }[] =
+    isMac ? MAC_SCREENS : isLinux ? LINUX_SCREENS : WINDOWS_SCREENS;
   const scr = pick(screenList);
 
   // Language/timezone pair

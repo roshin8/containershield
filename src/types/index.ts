@@ -157,7 +157,7 @@ export interface AssignedProfileData {
     devicePixelRatio: number;
   };
   hardwareConcurrency: number;
-  deviceMemory: number;
+  deviceMemory?: number; // undefined for Firefox profiles (Firefox doesn't expose this API)
   timezoneOffset: number;
   languages: string[];
 }

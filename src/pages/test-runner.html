@@ -25,6 +25,10 @@
 </head>
 <body>
   <h1>Container Shield Test Runner</h1>
+  <div style="margin-bottom: 12px; display: flex; gap: 8px;">
+    <button onclick="location.search='?fresh=1'" style="padding: 4px 12px; border-radius: 4px; background: #21262d; border: 1px solid #30363d; color: #c9d1d9; cursor: pointer; font-size: 12px;">Run Fresh</button>
+    <button onclick="location.search=''" style="padding: 4px 12px; border-radius: 4px; background: #21262d; border: 1px solid #30363d; color: #c9d1d9; cursor: pointer; font-size: 12px;">Resume</button>
+  </div>
   <div id="progress">Initializing...</div>
   <div id="summary"></div>
   <div id="scenarios"></div>

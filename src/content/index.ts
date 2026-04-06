@@ -60,22 +60,25 @@ browser.runtime.onMessage.addListener((message: { type: string; settings?: unkno
     window.postMessage({ type: PAGE_MSG_GET_RECOMMENDATIONS, settings: message.settings }, '*');
     return true;
   }
-  // Test runner: read spoofed values from the page
+  // Test runner: read spoofed values from the PAGE context (not isolated world)
+  // Use wrappedJSObject to access the page's spoofed navigator/screen/etc.
   if (message.type === 'EXEC_READ_VALUES') {
     const r: Record<string, any> = {};
-    try { r.ua = navigator.userAgent; } catch {}
-    try { r.platform = navigator.platform; } catch {}
-    try { r.vendor = navigator.vendor; } catch {}
-    try { r.cores = navigator.hardwareConcurrency; } catch {}
-    try { r.tzo = new Date().getTimezoneOffset(); } catch {}
-    try { r.screenW = screen.width; } catch {}
-    try { r.screenH = screen.height; } catch {}
+    const pageWin = (window as any).wrappedJSObject || window;
+    const pageNav = pageWin.navigator;
+    try { r.ua = pageNav.userAgent; } catch {}
+    try { r.platform = pageNav.platform; } catch {}
+    try { r.vendor = pageNav.vendor; } catch {}
+    try { r.cores = pageNav.hardwareConcurrency; } catch {}
+    try { r.tzo = new pageWin.Date().getTimezoneOffset(); } catch {}
+    try { r.screenW = pageWin.screen.width; } catch {}
+    try { r.screenH = pageWin.screen.height; } catch {}
     try {
-      const c = document.createElement('canvas');
+      const c = pageWin.document.createElement('canvas');
       const gl = c.getContext('webgl');
       const ext = gl?.getExtension('WEBGL_debug_renderer_info');
-      r.glVendor = ext ? gl!.getParameter(ext.UNMASKED_VENDOR_WEBGL) : 'no ext';
-      r.glRenderer = ext ? gl!.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'no ext';
+      r.glVendor = ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : 'no ext';
+      r.glRenderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'no ext';
     } catch {}
     return Promise.resolve(r);
   }

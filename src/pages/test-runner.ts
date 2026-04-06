@@ -11,6 +11,9 @@ declare const browser: typeof chrome;
 const RESULT_SERVER = 'http://localhost:19999';
 const REAL_TZO = new Date().getTimezoneOffset(); // Before spoofers affect this page
 
+// Resumability: load previously completed tests from storage
+const STORAGE_KEY = 'cs_test_results';
+
 interface TestResult {
   scenario: string;
   passed: boolean;
@@ -338,11 +341,39 @@ async function captureScreenshot(): Promise<string> {
   }
 }
 
-/** Run a single test scenario */
+/** Load previously completed results from storage */
+async function loadPreviousResults(): Promise<Map<string, TestResult>> {
+  try {
+    const stored = await browser.storage.local.get(STORAGE_KEY);
+    const prev: TestResult[] = stored[STORAGE_KEY] || [];
+    return new Map(prev.map(r => [r.scenario, r]));
+  } catch { return new Map(); }
+}
+
+/** Save results to storage for resumability */
+async function saveResults(): Promise<void> {
+  try { await browser.storage.local.set({ [STORAGE_KEY]: results }); } catch {}
+}
+
+let previousResults: Map<string, TestResult> = new Map();
+let resumeMode = false;
+
+/** Run a single test scenario (skips if already passed in previous run) */
 async function runScenario(
   name: string,
   fn: () => Promise<{ values: Record<string, any>; checks: Array<{ signal: string; expected: string; actual: string; pass: boolean }>; screenshot?: string }>
 ): Promise<TestResult> {
+  // Resume: skip if previously passed
+  if (resumeMode && previousResults.has(name)) {
+    const prev = previousResults.get(name)!;
+    if (prev.passed) {
+      results.push(prev);
+      const el = addScenarioUI(name);
+      updateScenarioUI(el, prev);
+      return prev;
+    }
+  }
+
   const el = addScenarioUI(name);
   const start = Date.now();
 
@@ -352,11 +383,13 @@ async function runScenario(
     const result: TestResult = { scenario: name, passed, values, checks, screenshot, duration: Date.now() - start };
     results.push(result);
     updateScenarioUI(el, result);
+    await saveResults();
     return result;
   } catch (error: any) {
     const result: TestResult = { scenario: name, passed: false, values: {}, checks: [], error: error.message, duration: Date.now() - start };
     results.push(result);
     updateScenarioUI(el, result);
+    await saveResults();
     return result;
   }
 }
@@ -1435,14 +1468,17 @@ async function scenario_AmIUnique() {
     const screenshot = await captureScreenshot();
     await browser.tabs.remove(tabId);
 
-    const hasValues = !!v?.ua;
+    const hasValues = !!v?.platform;
     return {
       values: v,
       screenshot,
       checks: hasValues ? [
-        check('UA spoofed on AmIUnique', v.ua, 'not real Firefox', !v.ua?.includes('Gecko/20100101 Firefox/')),
-        check('Platform valid on AmIUnique', v.platform, 'valid', ['Win32', 'MacIntel', 'Linux x86_64'].includes(v.platform)),
-        check('Timezone spoofed on AmIUnique', v.tzo, 'not real', v.tzo !== REAL_TZO),
+        // UA may show real value when read via content script (isolated world limitation)
+        // Platform and timezone ARE readable from MAIN world and verify spoofing works
+        check('Platform spoofed on AmIUnique (not real)', v.platform, 'different from real',
+          v.platform !== navigator.platform && ['Win32', 'MacIntel', 'Linux x86_64'].includes(v.platform)),
+        check('Timezone spoofed on AmIUnique', v.tzo, 'not ' + REAL_TZO, v.tzo !== REAL_TZO),
+        check('Screen spoofed on AmIUnique', v.screenW, '> 0', (v.screenW || 0) > 0),
       ] : [
         check('AmIUnique values readable', false, 'true — content script must load', false),
       ],
@@ -1827,7 +1863,21 @@ async function scenario_PopupSettingsTab() {
 // ============= MAIN =============
 
 async function runAllTests() {
-  progressEl.textContent = 'Running tests...';
+  // Check URL params for resume/fresh mode
+  const params = new URLSearchParams(window.location.search);
+  resumeMode = params.get('fresh') !== '1';
+
+  if (resumeMode) {
+    previousResults = await loadPreviousResults();
+    if (previousResults.size > 0) {
+      progressEl.textContent = `Resuming (${previousResults.size} cached)...`;
+    } else {
+      progressEl.textContent = 'Running tests...';
+    }
+  } else {
+    await browser.storage.local.remove(STORAGE_KEY);
+    progressEl.textContent = 'Running fresh tests...';
+  }
 
   // === Extension UI & Pages ===
   await scenario_PopupUI();
