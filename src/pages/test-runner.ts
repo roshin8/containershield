@@ -1408,7 +1408,8 @@ async function scenario_HeaderRefererDNT() {
 
 async function scenario_AmIUnique() {
   return runScenario('AmIUnique.org — spoofed values detected', async () => {
-    const tabId = await openTab('https://amiunique.org/fingerprint', 15000);
+    // Use root URL — /fingerprint is SPA route that may not trigger content script reload
+    const tabId = await openTab('https://amiunique.org/', 15000);
 
     let v: Record<string, any> = {};
     // Try scripting API first, then content script message
@@ -1443,7 +1444,7 @@ async function scenario_AmIUnique() {
         check('Platform valid on AmIUnique', v.platform, 'valid', ['Win32', 'MacIntel', 'Linux x86_64'].includes(v.platform)),
         check('Timezone spoofed on AmIUnique', v.tzo, 'not real', v.tzo !== REAL_TZO),
       ] : [
-        check('AmIUnique accessible', true, 'true (graceful — site may block scripting)', true),
+        check('AmIUnique values readable', false, 'true — content script must load', false),
       ],
     };
   });
@@ -1541,32 +1542,53 @@ async function clickInTab(tabId: number, selector: string): Promise<boolean> {
 }
 
 async function scenario_PopupProtectionButtons() {
-  return runScenario('Popup — protection level buttons work', async () => {
+  return runScenario('Popup — protection level buttons click and change settings', async () => {
     const tabId = await openPopupTab();
+    const checks: ReturnType<typeof check>[] = [];
 
-    // Read current state from DOM
-    const state = await execInTab(tabId, () => {
-      const root = document.getElementById('root');
-      const text = root?.textContent || '';
-      // Check if protection level indicators exist
-      const hasBalanced = text.includes('Balanced') || text.includes('balanced');
-      const hasStrict = text.includes('Strict') || text.includes('strict');
-      const hasDashboard = text.includes('Dashboard') || text.includes('dashboard');
-      return { hasBalanced, hasStrict, hasDashboard, textLen: text.length };
+    // Find and verify protection level buttons exist (Off, Low, Balanced, Strict)
+    const btnInfo = await execInTab(tabId, () => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const levelBtns = buttons.filter(b => {
+        const t = b.textContent?.trim() || '';
+        return ['Off', 'Low', 'Balanced', 'Strict'].some(l => t.includes(l));
+      });
+      return {
+        count: levelBtns.length,
+        labels: levelBtns.map(b => b.textContent?.trim().substring(0, 20)),
+      };
     });
+
+    checks.push(check('Protection buttons found', btnInfo?.count, '4', (btnInfo?.count || 0) >= 4));
+
+    // Click "Strict" button
+    await execInTab(tabId, () => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const strictBtn = buttons.find(b => b.textContent?.includes('Strict'));
+      if (strictBtn) strictBtn.click();
+      return !!strictBtn;
+    });
+    await new Promise(r => setTimeout(r, 500));
+
+    // Verify settings changed via backend
+    const s1 = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' }) as any;
+    checks.push(check('Strict mode activated', s1?.protectionLevel, '3', s1?.protectionLevel === 3));
+
+    // Click "Balanced" to restore
+    await execInTab(tabId, () => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const btn = buttons.find(b => b.textContent?.includes('Balanced'));
+      if (btn) btn.click();
+    });
+    await new Promise(r => setTimeout(r, 500));
+
+    const s2 = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' }) as any;
+    checks.push(check('Balanced mode restored', s2?.protectionLevel, '2', s2?.protectionLevel === 2));
 
     const screenshot = await captureScreenshot();
     await browser.tabs.remove(tabId);
 
-    return {
-      values: { state },
-      screenshot,
-      checks: [
-        check('Popup has content', state?.textLen, '> 50', (state?.textLen || 0) > 50),
-        check('Dashboard visible', state?.hasDashboard, 'true', !!state?.hasDashboard),
-        check('Protection levels shown', state?.hasBalanced || state?.hasStrict, 'true', !!(state?.hasBalanced || state?.hasStrict)),
-      ],
-    };
+    return { values: { btnInfo, levels: [s1?.protectionLevel, s2?.protectionLevel] }, screenshot, checks };
   });
 }
 
