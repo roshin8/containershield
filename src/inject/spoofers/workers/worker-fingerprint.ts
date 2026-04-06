@@ -206,55 +206,44 @@ export function initWorkerSpoofer(
     } catch {}
   }
 
-  // Handle ServiceWorker: We can't inject preamble into SW scripts,
-  // but we DON'T block registration — that breaks websites using SWs
-  // for push notifications, offline support, etc.
-  //
-  // Instead, intercept messages FROM ServiceWorkers and replace
-  // navigator-related values with spoofed ones. CreepJS reads navigator
-  // props inside the SW and posts them back via postMessage.
-  if ('serviceWorker' in navigator && workerPreamble && assignedProfile) {
+  // Handle ServiceWorker: Intercept register() to inject preamble into SW scripts.
+  // CreepJS creates a SW and reads navigator/WebGL/timezone directly inside it.
+  // We fetch the script content, prepend our overrides, and register the modified version.
+  if ('serviceWorker' in navigator && workerPreamble) {
     try {
-      const spoofedNav = {
-        userAgent: assignedProfile.userAgent?.userAgent,
-        appVersion: assignedProfile.userAgent?.appVersion,
-        platform: assignedProfile.userAgent?.platform,
-        vendor: assignedProfile.userAgent?.vendor || '',
-        hardwareConcurrency: assignedProfile.hardwareConcurrency,
-        deviceMemory: assignedProfile.deviceMemory,
-        language: assignedProfile.languages?.[0],
-        languages: assignedProfile.languages,
-      };
+      const origRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+      const OrigBlob = window.Blob;
 
-      // Wrap navigator.serviceWorker.onmessage and addEventListener
-      // to intercept SW responses and replace navigator values
-      const origSWContainer = navigator.serviceWorker;
-      const origAddListener = origSWContainer.addEventListener.bind(origSWContainer);
+      navigator.serviceWorker.register = async function(
+        scriptURL: string | URL, options?: RegistrationOptions
+      ): Promise<ServiceWorkerRegistration> {
+        logAccess('ServiceWorker.register', { spoofed: true, value: 'injected' });
+        const urlStr = String(scriptURL);
 
-      const spoofMessageData = (data: any): any => {
-        if (!data || typeof data !== 'object') return data;
-        const patched = { ...data };
-        // Replace navigator values if present in the message
-        for (const key of Object.keys(spoofedNav)) {
-          if (key in patched && (spoofedNav as any)[key] !== undefined) {
-            patched[key] = (spoofedNav as any)[key];
-          }
+        try {
+          // Fetch the original SW script content
+          const resp = urlStr.startsWith('blob:')
+            ? await fetch(urlStr)
+            : await fetch(urlStr, { credentials: 'same-origin' });
+          const text = await resp.text();
+
+          // Create new blob with preamble prepended
+          const newBlob = new OrigBlob(
+            [workerPreamble + text],
+            { type: 'application/javascript' }
+          );
+          const newUrl = URL.createObjectURL(newBlob);
+
+          // Register the modified script
+          // Preserve scope from original options, default to '/'
+          return origRegister(newUrl, {
+            ...options,
+            scope: options?.scope || new URL(urlStr, location.href).pathname.replace(/[^/]*$/, '') || '/',
+          });
+        } catch {
+          // If injection fails, register original (websites still work)
+          return origRegister(scriptURL, options);
         }
-        return patched;
-      };
-
-      origSWContainer.addEventListener = function(type: string, listener: any, options?: any) {
-        if (type === 'message') {
-          const wrapped = function(this: any, event: MessageEvent) {
-            const spoofed = spoofMessageData(event.data);
-            if (spoofed !== event.data) {
-              Object.defineProperty(event, 'data', { value: spoofed });
-            }
-            return listener.call(this, event);
-          };
-          return origAddListener(type, wrapped, options);
-        }
-        return origAddListener(type, listener, options);
       };
     } catch {}
   }
