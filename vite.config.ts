@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => ({
         'ip-warning': resolve(__dirname, 'src/pages/ip-warning.html'),
         onboarding: resolve(__dirname, 'src/pages/onboarding.html'),
         options: resolve(__dirname, 'src/pages/options.html'),
+        'test-runner': resolve(__dirname, 'src/pages/test-runner.html'),
       },
       output: {
         format: 'es',

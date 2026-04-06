@@ -48,6 +48,8 @@ function fixPagePaths() {
       content = content.replace(/\.\.\/\.\.\/chunks\//g, '../chunks/');
       // Fix paths: ../../assets/ -> ../assets/
       content = content.replace(/\.\.\/\.\.\/assets\//g, '../assets/');
+      // Fix paths: ../../test-runner.js -> ../test-runner.js (or similar root-level JS)
+      content = content.replace(/\.\.\/\.\.\/([\w-]+\.js)/g, '../$1');
 
       writeFileSync(filePath, content);
       console.log(`Fixed paths in pages/${file}`);

@@ -55,6 +55,7 @@
     {
       "resources": [
         "pages/ip-warning.html",
+        "pages/test-runner.html",
         "icons/*.svg",
         "chunks/*.js"
       ],
