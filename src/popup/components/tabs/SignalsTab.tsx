@@ -23,11 +23,28 @@ interface SignalsTabProps {
  * Build a map of API name -> value from the fingerprint access log.
  * For APIs that appear multiple times, the most recent value wins.
  */
+/** Quick hash for display — 8-char hex, like CreepJS */
+function quickHash(str: string): string {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+/** Format a value for display — show hash for long/binary data, truncate for text */
+function formatValue(val: string): string {
+  if (!val) return '';
+  // Data URLs → hash
+  if (val.startsWith('data:')) return quickHash(val);
+  // Long values → hash
+  if (val.length > 30) return quickHash(val);
+  return val;
+}
+
 function buildValueMap(apis: FingerprintAccess[]): Record<string, string> {
   const map: Record<string, string> = {};
   for (const a of apis) {
     if (a.value && a.spoofed) {
-      map[a.api] = a.value;
+      map[a.api] = formatValue(a.value);
     }
   }
   return map;
@@ -74,56 +91,56 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
   return (
     <div className="space-y-2">
       <G label="Graphics">
-        <S name="Canvas" cat="graphics" k="canvas" opts={CANVAS_NOISE_OPTIONS} />
+        <S name="Canvas" cat="graphics" k="canvas" opts={CANVAS_NOISE_OPTIONS} val={vals['HTMLCanvasElement.toDataURL']} />
         <S name="WebGL" cat="graphics" k="webgl" opts={WEBGL_NOISE_OPTIONS} val={vals['WebGLRenderingContext.getParameter']} />
         <S name="WebGL2" cat="graphics" k="webgl2" opts={WEBGL_NOISE_OPTIONS} val={vals['WebGL2RenderingContext.getParameter']} />
-        <S name="DOMRect" cat="graphics" k="domRect" opts={DOMRECT_NOISE_OPTIONS} />
-        <S name="Text Metrics" cat="graphics" k="textMetrics" opts={DOMRECT_NOISE_OPTIONS} />
-        <S name="SVG" cat="graphics" k="svg" opts={SVG_NOISE_OPTIONS} />
-        <S name="OffscreenCanvas" cat="graphics" k="offscreenCanvas" opts={CANVAS_NOISE_OPTIONS} />
+        <S name="DOMRect" cat="graphics" k="domRect" opts={DOMRECT_NOISE_OPTIONS} val={vals['Element.getBoundingClientRect']} />
+        <S name="Text Metrics" cat="graphics" k="textMetrics" opts={DOMRECT_NOISE_OPTIONS} val={vals['CanvasRenderingContext2D.measureText']} />
+        <S name="SVG" cat="graphics" k="svg" opts={SVG_NOISE_OPTIONS} val={vals['SVGGraphicsElement.getBBox']} />
+        <S name="OffscreenCanvas" cat="graphics" k="offscreenCanvas" opts={CANVAS_NOISE_OPTIONS} val={vals['OffscreenCanvas.convertToBlob']} />
         <S name="WebGL Shaders" cat="graphics" k="webglShaders" />
-        <S name="WebGPU" cat="graphics" k="webgpu" />
+        <S name="WebGPU" cat="graphics" k="webgpu" val={vals['navigator.gpu.requestAdapter']} />
         <S name="GPU" cat="hardware" k="gpu" />
       </G>
       <G label="Audio">
-        <S name="AudioContext" cat="audio" k="audioContext" opts={AUDIO_NOISE_OPTIONS} />
-        <S name="Offline Audio" cat="audio" k="offlineAudio" opts={AUDIO_NOISE_OPTIONS} />
+        <S name="AudioContext" cat="audio" k="audioContext" opts={AUDIO_NOISE_OPTIONS} val={vals['AnalyserNode.getFloatFrequencyData']} />
+        <S name="Offline Audio" cat="audio" k="offlineAudio" opts={AUDIO_NOISE_OPTIONS} val={vals['OfflineAudioContext.startRendering']} />
         <S name="Audio Latency" cat="audio" k="latency" val={vals['AudioContext.baseLatency']} />
-        <S name="Codecs" cat="audio" k="codecs" />
+        <S name="Codecs" cat="audio" k="codecs" val={vals['HTMLMediaElement.canPlayType']} />
       </G>
       <G label="Hardware">
         <S name="Screen" cat="hardware" k="screen" val={vals['screen.width']} />
-        <S name="Screen Frame" cat="hardware" k="screenFrame" />
+        <S name="Screen Frame" cat="hardware" k="screenFrame" val={vals['window.outerWidth']} />
         <S name="Screen Extended" cat="hardware" k="screenExtended" />
-        <S name="Orientation" cat="hardware" k="orientation" />
+        <S name="Orientation" cat="hardware" k="orientation" val={vals['screen.orientation.type']} />
         <S name="Visual Viewport" cat="hardware" k="visualViewport" />
         <S name="Device Memory" cat="hardware" k="deviceMemory" val={vals['navigator.deviceMemory']} />
         <S name="CPU Cores" cat="hardware" k="hardwareConcurrency" val={vals['navigator.hardwareConcurrency']} />
         <S name="Architecture" cat="hardware" k="architecture" />
-        <S name="Media Devices" cat="hardware" k="mediaDevices" opts={MEDIA_DEVICE_OPTIONS} />
-        <S name="Battery" cat="hardware" k="battery" opts={BATTERY_OPTIONS} />
-        <S name="Touch" cat="hardware" k="touch" opts={TOUCH_OPTIONS} />
-        <S name="Sensors" cat="hardware" k="sensors" />
+        <S name="Media Devices" cat="hardware" k="mediaDevices" opts={MEDIA_DEVICE_OPTIONS} val={vals['navigator.mediaDevices.enumerateDevices']} />
+        <S name="Battery" cat="hardware" k="battery" opts={BATTERY_OPTIONS} val={vals['navigator.getBattery']} />
+        <S name="Touch" cat="hardware" k="touch" opts={TOUCH_OPTIONS} val={vals['navigator.maxTouchPoints']} />
+        <S name="Sensors" cat="hardware" k="sensors" val={vals['DeviceMotionEvent']} />
       </G>
       <G label="Navigator">
         <S name="User Agent" cat="navigator" k="userAgent" val={vals['navigator.userAgent']} />
         <S name="Languages" cat="navigator" k="languages" val={vals['navigator.languages']} />
         <S name="Plugins" cat="navigator" k="plugins" opts={PLUGINS_OPTIONS} />
         <S name="Client Hints" cat="navigator" k="clientHints" val={vals['navigator.userAgentData']} />
-        <S name="Clipboard" cat="navigator" k="clipboard" />
-        <S name="Vibration" cat="navigator" k="vibration" />
+        <S name="Clipboard" cat="navigator" k="clipboard" val={vals['navigator.clipboard']} />
+        <S name="Vibration" cat="navigator" k="vibration" val={vals['navigator.vibrate']} />
         <S name="Vendor Flavors" cat="navigator" k="vendorFlavors" />
         <S name="Font Preferences" cat="navigator" k="fontPreferences" />
-        <S name="Window.name" cat="navigator" k="windowName" />
-        <S name="Tab History" cat="navigator" k="tabHistory" opts={HISTORY_OPTIONS} />
-        <S name="Media Capabilities" cat="navigator" k="mediaCapabilities" />
+        <S name="Window.name" cat="navigator" k="windowName" val={vals['window.name']} />
+        <S name="Tab History" cat="navigator" k="tabHistory" opts={HISTORY_OPTIONS} val={vals['history.length']} />
+        <S name="Media Capabilities" cat="navigator" k="mediaCapabilities" val={vals['navigator.mediaCapabilities.decodingInfo']} />
       </G>
       <G label="Network">
         <SignalRow name="WebRTC" mode={get('network', 'webrtc')}
           onModeChange={(m) => set('network', 'webrtc', m)}
           customModes={[{id:'off',name:'Off'},{id:'public_only',name:'Public Only'},{id:'block',name:'Block'}]} />
-        <S name="Connection" cat="network" k="connection" />
-        <S name="Geolocation" cat="network" k="geolocation" />
+        <S name="Connection" cat="network" k="connection" val={vals['navigator.connection']} />
+        <S name="Geolocation" cat="network" k="geolocation" val={vals['navigator.geolocation.getCurrentPosition']} />
         <SignalRow name="WebSocket" mode={get('network', 'websocket')}
           onModeChange={(m) => set('network', 'websocket', m)}
           customModes={[{id:'off',name:'Off'},{id:'noise',name:'3rd Party Only'},{id:'block',name:'Block All'}]} />
@@ -131,49 +148,49 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
       <G label="Timing & Timezone">
         <S name="Performance" cat="timing" k="performance" opts={TIMING_PRECISION_OPTIONS} val={vals['performance.now']} />
         <S name="Memory" cat="timing" k="memory" />
-        <S name="Event Loop Jitter" cat="timing" k="eventLoop" />
+        <S name="Event Loop Jitter" cat="timing" k="eventLoop" val={vals['setTimeout']} />
         <S name="Timezone" cat="timezone" k="intl" val={vals['Intl.DateTimeFormat'] || vals['Date.getTimezoneOffset']} />
         <S name="Date" cat="timezone" k="date" val={vals['Date.getTimezoneOffset']} />
-        <S name="Intl APIs" cat="intl" k="apis" />
+        <S name="Intl APIs" cat="intl" k="apis" val={vals['Intl.NumberFormat']} />
       </G>
       <G label="Fonts & Rendering">
-        <S name="Font Enum" cat="fonts" k="enumeration" opts={FONT_LIST_OPTIONS} />
-        <S name="CSS Fonts" cat="fonts" k="cssDetection" />
+        <S name="Font Enum" cat="fonts" k="enumeration" opts={FONT_LIST_OPTIONS} val={vals['document.fonts.check']} />
+        <S name="CSS Fonts" cat="fonts" k="cssDetection" val={vals['getComputedStyle(fontFamily)']} />
         <S name="Emoji" cat="rendering" k="emoji" />
-        <S name="MathML" cat="rendering" k="mathml" />
+        <S name="MathML" cat="rendering" k="mathml" val={vals['MathML.getBoundingClientRect']} />
       </G>
       <G label="CSS">
-        <S name="Media Queries" cat="css" k="mediaQueries" />
+        <S name="Media Queries" cat="css" k="mediaQueries" val={vals['matchMedia']} />
       </G>
       <G label="Storage">
-        <S name="Storage Estimate" cat="storage" k="estimate" />
-        <S name="IndexedDB" cat="storage" k="indexedDB" />
-        <S name="WebSQL" cat="storage" k="webSQL" />
-        <S name="Private Mode" cat="storage" k="privateModeProtection" />
+        <S name="Storage Estimate" cat="storage" k="estimate" val={vals['navigator.storage.estimate']} />
+        <S name="IndexedDB" cat="storage" k="indexedDB" val={vals['indexedDB.open']} />
+        <S name="WebSQL" cat="storage" k="webSQL" val={vals['openDatabase']} />
+        <S name="Private Mode" cat="storage" k="privateModeProtection" val={vals['navigator.storage.persisted']} />
       </G>
       <G label="Permissions">
-        <S name="Permissions API" cat="permissions" k="query" />
-        <S name="Notification" cat="permissions" k="notification" />
+        <S name="Permissions API" cat="permissions" k="query" val={vals['navigator.permissions.query']} />
+        <S name="Notification" cat="permissions" k="notification" val={vals['Notification.permission']} />
       </G>
       <G label="Devices">
-        <S name="Gamepad" cat="devices" k="gamepad" />
-        <S name="MIDI" cat="devices" k="midi" />
-        <S name="Bluetooth" cat="devices" k="bluetooth" />
-        <S name="USB" cat="devices" k="usb" />
-        <S name="Serial" cat="devices" k="serial" />
-        <S name="HID" cat="devices" k="hid" />
+        <S name="Gamepad" cat="devices" k="gamepad" val={vals['navigator.getGamepads']} />
+        <S name="MIDI" cat="devices" k="midi" val={vals['navigator.requestMIDIAccess']} />
+        <S name="Bluetooth" cat="devices" k="bluetooth" val={vals['navigator.bluetooth.requestDevice']} />
+        <S name="USB" cat="devices" k="usb" val={vals['navigator.usb.getDevices']} />
+        <S name="Serial" cat="devices" k="serial" val={vals['navigator.serial.getPorts']} />
+        <S name="HID" cat="devices" k="hid" val={vals['navigator.hid.getDevices']} />
       </G>
       <G label="Other">
         <S name="Math" cat="math" k="functions" opts={MATH_NOISE_OPTIONS} />
-        <S name="Keyboard" cat="keyboard" k="layout" />
-        <S name="Key Cadence" cat="keyboard" k="cadence" />
-        <S name="Speech" cat="speech" k="synthesis" />
-        <S name="Features" cat="features" k="detection" />
-        <S name="Crypto" cat="crypto" k="webCrypto" />
-        <S name="Errors" cat="errors" k="stackTrace" />
-        <S name="Apple Pay" cat="payment" k="applePay" />
-        <S name="Workers" cat="workers" k="fingerprint" />
-        <S name="Service Workers" cat="workers" k="serviceWorker" />
+        <S name="Keyboard" cat="keyboard" k="layout" val={vals['navigator.keyboard.getLayoutMap']} />
+        <S name="Key Cadence" cat="keyboard" k="cadence" val={vals['KeyboardEvent.timing']} />
+        <S name="Speech" cat="speech" k="synthesis" val={vals['speechSynthesis.getVoices']} />
+        <S name="Features" cat="features" k="detection" val={vals['navigator.webdriver']} />
+        <S name="Crypto" cat="crypto" k="webCrypto" val={vals['crypto.getRandomValues']} />
+        <S name="Errors" cat="errors" k="stackTrace" val={vals['Error.captureStackTrace']} />
+        <S name="Apple Pay" cat="payment" k="applePay" val={vals['ApplePaySession.canMakePayments']} />
+        <S name="Workers" cat="workers" k="fingerprint" val={vals['Worker.constructor']} />
+        <S name="Service Workers" cat="workers" k="serviceWorker" val={vals['ServiceWorker.register']} />
         <div style={{ padding: '2px 8px', fontSize: '10px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
           Spoof/Block: blocks SW registration — sites fall back to SharedWorker/DedicatedWorker which are fully spoofed. Firefox does not allow injecting into ServiceWorker scripts. Off: no interception (real values may leak).
         </div>
