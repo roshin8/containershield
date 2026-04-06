@@ -175,7 +175,7 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
         <S name="Workers" cat="workers" k="fingerprint" />
         <S name="Service Workers" cat="workers" k="serviceWorker" />
         <div style={{ padding: '2px 8px', fontSize: '10px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-          Spoof: tries injecting into SW script. If Firefox rejects, falls back to SharedWorker (also spoofed). Block: rejects all SW registration.
+          Spoof/Block: blocks SW registration — sites fall back to SharedWorker/DedicatedWorker which are fully spoofed. Firefox does not allow injecting into ServiceWorker scripts. Off: no interception (real values may leak).
         </div>
       </G>
     </div>
