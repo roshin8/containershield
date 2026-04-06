@@ -159,6 +159,21 @@ export function initWebGLSpoofer(
         }
         return ctx;
       });
+
+      // Also patch OffscreenCanvas.prototype.getContext (used by workers and fingerprinters)
+      if (typeof OffscreenCanvas !== 'undefined') {
+        const origOCGetCtx = OffscreenCanvas.prototype.getContext;
+        OffscreenCanvas.prototype.getContext = function(this: OffscreenCanvas, id: string, ...rest: any[]) {
+          const ctx = origOCGetCtx.call(this, id, ...rest);
+          if (ctx && (id === 'webgl' || id === 'experimental-webgl') && webglMode !== 'off') {
+            patchCtx(ctx, webglMode, _origWGL1GetParam);
+          }
+          if (ctx && id === 'webgl2' && webgl2Mode !== 'off' && _origWGL2GetParam) {
+            patchCtx(ctx, webgl2Mode, _origWGL2GetParam);
+          }
+          return ctx;
+        } as any;
+      }
     } catch {}
   }
 

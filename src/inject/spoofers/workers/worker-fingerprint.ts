@@ -170,7 +170,10 @@ export function initWorkerSpoofer(
       return new OriginalWorker(scriptURL, options);
     } as unknown as typeof Worker;
 
+    // Match constructor name for detection checks (CreepJS validates constructor.name)
+    Object.defineProperty(WorkerProxy, 'name', { value: 'Worker' });
     WorkerProxy.prototype = OriginalWorker.prototype;
+    WorkerProxy.prototype.constructor = WorkerProxy;
     Object.setPrototypeOf(WorkerProxy, OriginalWorker);
 
     try {
@@ -199,7 +202,9 @@ export function initWorkerSpoofer(
       }
     } as unknown as typeof SharedWorker;
 
+    Object.defineProperty(SharedWorkerProxy, 'name', { value: 'SharedWorker' });
     SharedWorkerProxy.prototype = OriginalSharedWorker.prototype;
+    SharedWorkerProxy.prototype.constructor = SharedWorkerProxy;
     Object.setPrototypeOf(SharedWorkerProxy, OriginalSharedWorker);
 
     try {
@@ -207,45 +212,26 @@ export function initWorkerSpoofer(
     } catch {}
   }
 
-  // Handle ServiceWorker: off = no interception, noise = inject preamble, block = reject
+  // Handle ServiceWorker
+  // Block mode: reject registration. Spoof mode: let it register normally
+  // but make it fail quickly so CreepJS falls back to DedicatedWorker.
+  // We can't inject into SW scripts (blob URL registration fails in Firefox).
   if ('serviceWorker' in navigator && workerPreamble && serviceWorkerMode !== 'off') {
     try {
       const origRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
-      const OrigBlob = window.Blob;
 
       navigator.serviceWorker.register = async function(
         scriptURL: string | URL, options?: RegistrationOptions
       ): Promise<ServiceWorkerRegistration> {
-        // Block mode: reject registration entirely
         if (serviceWorkerMode === 'block') {
           logAccess('ServiceWorker.register', { spoofed: true, value: 'blocked' });
           throw new DOMException('The operation is insecure.', 'SecurityError');
         }
 
-        // Inject mode: fetch script, prepend preamble, register modified version
-        logAccess('ServiceWorker.register', { spoofed: true, value: 'injected' });
-        const urlStr = String(scriptURL);
-
-        try {
-          const resp = urlStr.startsWith('blob:')
-            ? await fetch(urlStr)
-            : await fetch(urlStr, { credentials: 'same-origin' });
-          const text = await resp.text();
-
-          const newBlob = new OrigBlob(
-            [workerPreamble + text],
-            { type: 'application/javascript' }
-          );
-          const newUrl = URL.createObjectURL(newBlob);
-
-          return origRegister(newUrl, {
-            ...options,
-            scope: options?.scope || new URL(urlStr, location.href).pathname.replace(/[^/]*$/, '') || '/',
-          });
-        } catch {
-          // Injection failed — register original so website still works
-          return origRegister(scriptURL, options);
-        }
+        // Spoof mode: reject SW so CreepJS falls back to DedicatedWorker
+        // (which we fully intercept with preamble injection)
+        logAccess('ServiceWorker.register', { spoofed: true, value: 'rejected-for-fallback' });
+        throw new DOMException('The operation is insecure.', 'SecurityError');
       };
     } catch {}
   }
