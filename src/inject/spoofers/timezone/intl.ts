@@ -121,6 +121,10 @@ export function initTimezoneSpoofer(
   // Use DIRECT defineProperty (not overrideMethod/Proxy) because
   // Firefox Proxy-wrapped getTimezoneOffset may not intercept all call paths
   if (settings.date !== 'off') {
+    // Save REAL getTimezoneOffset BEFORE overriding (needed for Date constructor offset computation)
+    const _realGetTZO = Date.prototype.getTimezoneOffset;
+    const realOffset = _realGetTZO.call(new Date());
+
     let tzLogged = false;
     const spoofedGetTZO = function getTimezoneOffset(this: Date): number {
       if (!tzLogged) {
@@ -149,7 +153,7 @@ export function initTimezoneSpoofer(
     //
     // We shift LOCAL-parsed dates but NOT UTC-parsed (ISO date-only) dates.
     const OrigDate = Date;
-    const realOffset = OrigDate.prototype.getTimezoneOffset.call(new OrigDate());
+    // realOffset was saved before the override above
     const offsetDiffMs = (currentOffset - realOffset) * 60000;
 
     // ISO date-only format (YYYY-MM-DD) is parsed as UTC per spec — don't shift

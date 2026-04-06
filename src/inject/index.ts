@@ -24,11 +24,15 @@ initStealth();
 const FALLBACK_SALT = ':containershield:fallback';
 
 const DESKTOP_SCREENS = [
-  { w: 1920, h: 1080, dpr: 1 },
   { w: 1366, h: 768, dpr: 1 },
-  { w: 1536, h: 864, dpr: 1.25 },
   { w: 1440, h: 900, dpr: 1 },
+  { w: 1536, h: 864, dpr: 1.25 },
+  { w: 1600, h: 900, dpr: 1 },
+  { w: 1680, h: 1050, dpr: 1 },
+  { w: 1920, h: 1200, dpr: 1 },
   { w: 2560, h: 1440, dpr: 1 },
+  { w: 2560, h: 1600, dpr: 1 },
+  { w: 3440, h: 1440, dpr: 1 },
 ] as const;
 
 const LOCALE_TIMEZONE_PAIRS = [

@@ -133,48 +133,30 @@ export function initWorkerSpoofer(
     const WorkerProxy = function(this: any, scriptURL: string | URL, options?: WorkerOptions): Worker {
       logAccess('Worker.constructor', { spoofed: true, value: 'injected' });
 
-      // Resolve relative URLs to absolute (importScripts inside blob Workers can't resolve relative paths)
-      const urlStr = new URL(String(scriptURL), location.href).href;
+      try {
+        // Resolve relative URLs to absolute (importScripts inside blob Workers can't resolve relative paths)
+        const urlStr = new URL(String(scriptURL), location.href).href;
 
-      // For ALL non-module workers: use importScripts wrapper
-      // This works for both blob: URLs and regular URLs in Firefox
-      if (!options?.type || options.type !== 'module') {
-        try {
+        // For ALL non-module workers: use importScripts wrapper
+        if (!options?.type || options.type !== 'module') {
           const wrapper = workerPreamble + 'importScripts(' + JSON.stringify(urlStr) + ');\n';
           const blob = new OriginalBlob([wrapper], { type: 'application/javascript' });
           const blobUrl = URL.createObjectURL(blob);
           const w = new OriginalWorker(blobUrl, options);
           setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
           return w;
-        } catch {
-          // importScripts failed (e.g., cross-origin), try inline approach
         }
+      } catch {
+        // Injection failed — fall through to original
       }
 
-      // For module workers or failed importScripts: try inline blob approach
-      if (urlStr.startsWith('blob:')) {
-        try {
-          const xhr = new XMLHttpRequest();
-          xhr.open('GET', urlStr, false);
-          xhr.send();
-          if (xhr.status === 200) {
-            const newBlob = new OriginalBlob([workerPreamble + xhr.responseText], { type: 'application/javascript' });
-            const newUrl = URL.createObjectURL(newBlob);
-            const w = new OriginalWorker(newUrl, options);
-            setTimeout(() => URL.revokeObjectURL(newUrl), 10000);
-            return w;
-          }
-        } catch {}
-      }
-
-      // Fallback: can't inject
+      // Fallback: create original Worker (no injection)
       return new OriginalWorker(scriptURL, options);
     } as unknown as typeof Worker;
 
-    // Match constructor name for detection checks (CreepJS validates constructor.name)
+    // Preserve constructor identity for detection checks
     Object.defineProperty(WorkerProxy, 'name', { value: 'Worker' });
     WorkerProxy.prototype = OriginalWorker.prototype;
-    WorkerProxy.prototype.constructor = WorkerProxy;
     Object.setPrototypeOf(WorkerProxy, OriginalWorker);
 
     try {
@@ -205,7 +187,6 @@ export function initWorkerSpoofer(
 
     Object.defineProperty(SharedWorkerProxy, 'name', { value: 'SharedWorker' });
     SharedWorkerProxy.prototype = OriginalSharedWorker.prototype;
-    SharedWorkerProxy.prototype.constructor = SharedWorkerProxy;
     Object.setPrototypeOf(SharedWorkerProxy, OriginalSharedWorker);
 
     try {
