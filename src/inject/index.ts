@@ -60,8 +60,15 @@ function generateProfile(seed: string): AssignedProfileData {
   const prng = new PRNG(base64ToUint8Array(seed));
   const pick = <T,>(arr: readonly T[]): T => arr[prng.nextInt(0, arr.length - 1)];
 
-  const desktopProfiles = ALL_PROFILES.filter(p => !p.mobile);
-  const ua = pick(desktopProfiles.length > 0 ? desktopProfiles : ALL_PROFILES);
+  // Only recent desktop browsers (Chrome 120+, Firefox 120+, Edge 120+)
+  const recentDesktop = ALL_PROFILES.filter(p => {
+    if (p.mobile) return false;
+    const versionMatch = p.userAgent.match(/Chrome\/(\d+)|Firefox\/(\d+)/);
+    if (!versionMatch) return false;
+    const version = parseInt(versionMatch[1] || versionMatch[2], 10);
+    return version >= 120;
+  });
+  const ua = pick(recentDesktop.length > 0 ? recentDesktop : ALL_PROFILES.filter(p => !p.mobile));
 
   const isMac = ua.platformName === 'macOS';
   const scr = pick(DESKTOP_SCREENS);
@@ -78,10 +85,11 @@ function generateProfile(seed: string): AssignedProfileData {
       width: scr.w, height: scr.h,
       availWidth: scr.w, availHeight: scr.h - 40,
       colorDepth: isMac ? 30 : 24, pixelDepth: isMac ? 30 : 24,
-      devicePixelRatio: isMac ? 2 : scr.dpr,
+      devicePixelRatio: scr.dpr,
     },
-    hardwareConcurrency: pick([4, 6, 8, 12]),
-    deviceMemory: pick([8, 16]),
+    // Realistic hardware for a modern desktop
+    hardwareConcurrency: pick([8, 12, 16]),
+    deviceMemory: pick([8, 16, 32]),
     timezoneOffset: locale.tz,
     languages: [...locale.lang],
   };

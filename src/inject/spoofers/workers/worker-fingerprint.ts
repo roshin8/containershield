@@ -206,34 +206,56 @@ export function initWorkerSpoofer(
     } catch {}
   }
 
-  // Handle ServiceWorker: We can't inject preamble into ServiceWorker scripts.
-  // Block registration entirely so fingerprinters fall back to SharedWorker/DedicatedWorker.
-  if ('serviceWorker' in navigator && workerPreamble) {
+  // Handle ServiceWorker: We can't inject preamble into SW scripts,
+  // but we DON'T block registration — that breaks websites using SWs
+  // for push notifications, offline support, etc.
+  //
+  // Instead, intercept messages FROM ServiceWorkers and replace
+  // navigator-related values with spoofed ones. CreepJS reads navigator
+  // props inside the SW and posts them back via postMessage.
+  if ('serviceWorker' in navigator && workerPreamble && assignedProfile) {
     try {
-      // Save reference before hiding
-      const origSW = navigator.serviceWorker;
+      const spoofedNav = {
+        userAgent: assignedProfile.userAgent?.userAgent,
+        appVersion: assignedProfile.userAgent?.appVersion,
+        platform: assignedProfile.userAgent?.platform,
+        vendor: assignedProfile.userAgent?.vendor || '',
+        hardwareConcurrency: assignedProfile.hardwareConcurrency,
+        deviceMemory: assignedProfile.deviceMemory,
+        language: assignedProfile.languages?.[0],
+        languages: assignedProfile.languages,
+      };
 
-      // Override the getter to return a fake that blocks registration
-      // Use a never-resolving promise for 'ready' (avoids unhandled rejection)
-      const neverReady = new Promise<void>(() => {});
-      Object.defineProperty(Navigator.prototype, 'serviceWorker', {
-        get() {
-          return {
-            register: () => Promise.reject(new DOMException('SecurityError', 'SecurityError')),
-            getRegistration: () => Promise.resolve(undefined),
-            getRegistrations: () => Promise.resolve([]),
-            ready: neverReady,
-            controller: null,
-            oncontrollerchange: null,
-            onmessage: null,
-            onmessageerror: null,
-            addEventListener: () => {},
-            removeEventListener: () => {},
-            dispatchEvent: () => true,
+      // Wrap navigator.serviceWorker.onmessage and addEventListener
+      // to intercept SW responses and replace navigator values
+      const origSWContainer = navigator.serviceWorker;
+      const origAddListener = origSWContainer.addEventListener.bind(origSWContainer);
+
+      const spoofMessageData = (data: any): any => {
+        if (!data || typeof data !== 'object') return data;
+        const patched = { ...data };
+        // Replace navigator values if present in the message
+        for (const key of Object.keys(spoofedNav)) {
+          if (key in patched && (spoofedNav as any)[key] !== undefined) {
+            patched[key] = (spoofedNav as any)[key];
+          }
+        }
+        return patched;
+      };
+
+      origSWContainer.addEventListener = function(type: string, listener: any, options?: any) {
+        if (type === 'message') {
+          const wrapped = function(this: any, event: MessageEvent) {
+            const spoofed = spoofMessageData(event.data);
+            if (spoofed !== event.data) {
+              Object.defineProperty(event, 'data', { value: spoofed });
+            }
+            return listener.call(this, event);
           };
-        },
-        configurable: true,
-      });
+          return origAddListener(type, wrapped, options);
+        }
+        return origAddListener(type, listener, options);
+      };
     } catch {}
   }
 

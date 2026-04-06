@@ -108,16 +108,27 @@ export function initFontSpoofer(mode: ProtectionMode, prng: PRNG, assignedProfil
     ]);
   }
 
+  // System font keywords that reveal the real OS
+  const MAC_SYSTEM_FONTS = new Set(['-apple-system', 'BlinkMacSystemFont', '.AppleSystemUIFont', 'Apple Color Emoji']);
+  const WIN_SYSTEM_FONTS = new Set(['Segoe UI', 'Segoe UI Emoji', 'Segoe UI Symbol']);
+  const LINUX_SYSTEM_FONTS = new Set(['Cantarell', 'Ubuntu', 'Noto Sans']);
+
+  // Block system fonts from wrong platform
+  const blockedSystemFonts = new Set<string>();
+  if (platformName !== 'macOS') MAC_SYSTEM_FONTS.forEach(f => blockedSystemFonts.add(f));
+  if (platformName !== 'Windows') WIN_SYSTEM_FONTS.forEach(f => blockedSystemFonts.add(f));
+  if (platformName !== 'Linux') LINUX_SYSTEM_FONTS.forEach(f => blockedSystemFonts.add(f));
+
   // Override document.fonts if available
   if ('fonts' in document && document.fonts) {
     const originalCheck = document.fonts.check.bind(document.fonts);
 
     document.fonts.check = function (font: string, text?: string): boolean {
       logAccess('document.fonts.check', { spoofed: true, value: `${availableFonts.size} fonts` });
-      // Extract font family from font string (e.g., "12px Arial" -> "Arial")
       const fontFamily = extractFontFamily(font);
 
-      if (fontFamily && !availableFonts.has(fontFamily)) {
+      // Block fonts not in our platform set or wrong-platform system fonts
+      if (fontFamily && (blockedSystemFonts.has(fontFamily) || !availableFonts.has(fontFamily))) {
         return false;
       }
 
@@ -139,6 +150,8 @@ export function initFontSpoofer(mode: ProtectionMode, prng: PRNG, assignedProfil
     });
   }
 
+  const GENERIC_FONTS = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-sans-serif', 'ui-serif', 'ui-monospace']);
+
   // Override CSS font-family resolution via computed styles
   overrideMethod(window as any, 'getComputedStyle', (original, _thisArg, args) => {
     logAccess('getComputedStyle(fontFamily)', { spoofed: true, value: `${availableFonts.size} fonts` });
@@ -151,7 +164,7 @@ export function initFontSpoofer(mode: ProtectionMode, prng: PRNG, assignedProfil
         if (prop === 'fontFamily' && typeof value === 'string') {
           const families = value.split(',').map((f: string) => f.trim().replace(/["']/g, ''));
           const filtered = families.filter(
-            (f: string) => availableFonts.has(f) || f === 'serif' || f === 'sans-serif' || f === 'monospace'
+            (f: string) => !blockedSystemFonts.has(f) && (availableFonts.has(f) || GENERIC_FONTS.has(f))
           );
           return filtered.join(', ') || 'sans-serif';
         }

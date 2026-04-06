@@ -166,7 +166,7 @@ function patchTimezone(
     return mainFrameOffset;
   };
 
-  // Patch Intl.DateTimeFormat — use iframe's own origDTF to avoid cross-realm issues
+  // Patch Intl.DateTimeFormat — inject target timezone
   const origDTF = (win as any).Intl?.DateTimeFormat;
   if (origDTF) {
     try {
@@ -176,6 +176,13 @@ function patchTimezone(
       };
       (win as any).Intl.DateTimeFormat.supportedLocalesOf = origDTF.supportedLocalesOf;
       (win as any).Intl.DateTimeFormat.prototype = origDTF.prototype;
+
+      // Also patch resolvedOptions to return our timezone
+      const origResolved = origDTF.prototype.resolvedOptions;
+      origDTF.prototype.resolvedOptions = function() {
+        const opts = origResolved.call(this);
+        return { ...opts, timeZone: opts.timeZone || tz };
+      };
     } catch {}
   }
 }
