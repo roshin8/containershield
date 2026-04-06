@@ -40,6 +40,7 @@ export function initIframePatcher(config: IframePatchConfig): void {
       patchScreen(win, screen, settings);
       patchNavigator(win, ua, hc, dm, langs, settings);
       patchTimezone(win, targetTimezone, mainFrameOffset, settings);
+      if (screen) patchCSSScreenQuery(win, screen);
     } catch {
       // Cross-origin or detached
     }
@@ -255,4 +256,30 @@ function patchTimezone(
       };
     } catch {}
   }
+}
+
+function patchCSSScreenQuery(
+  win: Window,
+  screen: AssignedProfileData['screen']
+): void {
+  if (!screen) return;
+
+  try {
+    const iframeCSSProto = (win as any).CSSStyleDeclaration?.prototype;
+    if (!iframeCSSProto) return;
+
+    const origGetPV = iframeCSSProto.getPropertyValue;
+    iframeCSSProto.getPropertyValue = function(prop: string): string {
+      const val = origGetPV.call(this, prop);
+      if (prop === '--device-width' && val.trim()) return String(screen.width);
+      if (prop === '--device-height' && val.trim()) return String(screen.height);
+      if (prop === '--device-screen' && val.trim()) return `${screen.width} x ${screen.height}`;
+      if (prop === '--device-aspect-ratio' && val.trim()) {
+        const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
+        const d = gcd(screen.width, screen.height);
+        return `${screen.width / d}/${screen.height / d}`;
+      }
+      return val;
+    };
+  } catch {}
 }
