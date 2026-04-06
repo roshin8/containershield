@@ -141,6 +141,29 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
         <S name="Crypto" cat="crypto" k="webCrypto" />
         <S name="Errors" cat="errors" k="stackTrace" />
         <S name="Workers" cat="workers" k="fingerprint" />
+        <div className="signal-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px' }}>
+          <span style={{ fontSize: '0.85em' }}>Block Service Workers</span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={settings.spoofers?.workers?.blockServiceWorker ?? false}
+              onChange={(e) => {
+                onSaveSettings({
+                  spoofers: {
+                    ...settings.spoofers,
+                    workers: {
+                      ...settings.spoofers?.workers,
+                      blockServiceWorker: e.target.checked,
+                    },
+                  },
+                } as Partial<ContainerSettings>);
+              }}
+            />
+            <span style={{ fontSize: '0.8em', opacity: 0.7 }}>
+              {settings.spoofers?.workers?.blockServiceWorker ? 'Blocked' : 'Inject'}
+            </span>
+          </label>
+        </div>
       </G>
     </div>
   );
