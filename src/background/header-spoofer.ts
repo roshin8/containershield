@@ -176,15 +176,31 @@ export class HeaderSpoofer {
         return {};
       }
 
-      // Modify headers
+      // Check if the inject script has posted an active profile for this tab
+      // (the inject script generates its own profile from domain seed — HTTP headers must match)
+      let effectiveProfile = settings.profile;
+      try {
+        const stored = await browser.storage.local.get(`activeProfile:${details.tabId}`);
+        const active = stored[`activeProfile:${details.tabId}`];
+        if (active?.profile?.userAgent) {
+          effectiveProfile = {
+            ...settings.profile,
+            userAgent: active.profile.userAgent.userAgent,
+            language: active.profile.userAgent.languages?.[0] ?
+              active.profile.userAgent.languages.join(',') : settings.profile.language,
+          };
+        }
+      } catch {}
+
+      // Modify headers using the effective profile (synced with inject script)
       const headers = this.modifyHeaders(
         details.requestHeaders || [],
         settings.headers,
-        settings.profile
+        effectiveProfile
       );
 
       // Reorder headers to match spoofed browser's typical order
-      const reordered = this.reorderHeaders(headers, settings.profile);
+      const reordered = this.reorderHeaders(headers, effectiveProfile);
       return { requestHeaders: reordered };
     } catch {
       return {};

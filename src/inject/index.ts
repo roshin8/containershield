@@ -23,27 +23,8 @@ initStealth();
 
 const FALLBACK_SALT = ':containershield:fallback';
 
-const DESKTOP_SCREENS = [
-  { w: 1366, h: 768, dpr: 1 },
-  { w: 1440, h: 900, dpr: 1 },
-  { w: 1536, h: 864, dpr: 1.25 },
-  { w: 1600, h: 900, dpr: 1 },
-  { w: 1680, h: 1050, dpr: 1 },
-  { w: 1920, h: 1200, dpr: 1 },
-  { w: 2560, h: 1440, dpr: 1 },
-  { w: 2560, h: 1600, dpr: 1 },
-  { w: 3440, h: 1440, dpr: 1 },
-] as const;
-
-const LOCALE_TIMEZONE_PAIRS = [
-  { lang: ['en-US', 'en'], tz: -300 },
-  { lang: ['en-GB', 'en'], tz: 0 },
-  { lang: ['de-DE', 'de'], tz: 60 },
-  { lang: ['fr-FR', 'fr'], tz: 60 },
-  { lang: ['ja-JP', 'ja'], tz: 540 },
-  { lang: ['es-ES', 'es'], tz: 60 },
-  { lang: ['pt-BR', 'pt'], tz: -180 },
-] as const;
+// Old DESKTOP_SCREENS and LOCALE_TIMEZONE_PAIRS removed — now defined inside generateProfile
+// with platform-specific variants
 
 function generateSeed(domain: string): string {
   const bytes = new Uint8Array(32);
@@ -60,11 +41,51 @@ function generateSeed(domain: string): string {
   return btoa(binary);
 }
 
+// Platform-specific screen sizes
+const WINDOWS_SCREENS = [
+  { w: 1366, h: 768, dpr: 1 },
+  { w: 1440, h: 900, dpr: 1 },
+  { w: 1536, h: 864, dpr: 1.25 },
+  { w: 1600, h: 900, dpr: 1 },
+  { w: 1680, h: 1050, dpr: 1 },
+  { w: 1920, h: 1200, dpr: 1 },
+  { w: 2560, h: 1440, dpr: 1 },
+] as const;
+
+const MAC_SCREENS = [
+  { w: 1440, h: 900, dpr: 2 },
+  { w: 1512, h: 982, dpr: 2 },
+  { w: 1680, h: 1050, dpr: 2 },
+  { w: 1728, h: 1117, dpr: 2 },
+  { w: 1800, h: 1169, dpr: 2 },
+  { w: 2560, h: 1600, dpr: 2 },
+] as const;
+
+const LINUX_SCREENS = [
+  { w: 1366, h: 768, dpr: 1 },
+  { w: 1920, h: 1080, dpr: 1 },
+  { w: 2560, h: 1440, dpr: 1 },
+  { w: 3440, h: 1440, dpr: 1 },
+] as const;
+
+// Language-timezone pairs matched to common locales for each language
+const LOCALE_TIMEZONE_PAIRS = [
+  { lang: ['en-US', 'en'], tz: -300 },
+  { lang: ['en-US', 'en'], tz: -480 },
+  { lang: ['en-US', 'en'], tz: -360 },
+  { lang: ['en-GB', 'en'], tz: 0 },
+  { lang: ['de-DE', 'de', 'en'], tz: 60 },
+  { lang: ['fr-FR', 'fr', 'en'], tz: 60 },
+  { lang: ['ja-JP', 'ja'], tz: 540 },
+  { lang: ['es-ES', 'es', 'en'], tz: 60 },
+  { lang: ['pt-BR', 'pt', 'en'], tz: -180 },
+] as const;
+
 function generateProfile(seed: string): AssignedProfileData {
   const prng = new PRNG(base64ToUint8Array(seed));
   const pick = <T,>(arr: readonly T[]): T => arr[prng.nextInt(0, arr.length - 1)];
 
-  // Only recent desktop browsers (Chrome 120+, Firefox 120+, Edge 120+)
+  // Only recent desktop browsers (Chrome 120+, Firefox 120+)
   const recentDesktop = ALL_PROFILES.filter(p => {
     if (p.mobile) return false;
     const versionMatch = p.userAgent.match(/Chrome\/(\d+)|Firefox\/(\d+)/);
@@ -75,7 +96,14 @@ function generateProfile(seed: string): AssignedProfileData {
   const ua = pick(recentDesktop.length > 0 ? recentDesktop : ALL_PROFILES.filter(p => !p.mobile));
 
   const isMac = ua.platformName === 'macOS';
-  const scr = pick(DESKTOP_SCREENS);
+  const isLinux = ua.platformName === 'Linux';
+  const isFirefox = !ua.brands; // Firefox profiles don't have brands
+
+  // Screen matched to OS
+  const screenList = isMac ? MAC_SCREENS : isLinux ? LINUX_SCREENS : WINDOWS_SCREENS;
+  const scr = pick(screenList);
+
+  // Language/timezone pair
   const locale = pick(LOCALE_TIMEZONE_PAIRS);
 
   return {
@@ -87,12 +115,12 @@ function generateProfile(seed: string): AssignedProfileData {
     },
     screen: {
       width: scr.w, height: scr.h,
-      availWidth: scr.w, availHeight: scr.h - 40,
+      availWidth: scr.w, availHeight: scr.h - (isMac ? 25 : 40),
       colorDepth: isMac ? 30 : 24, pixelDepth: isMac ? 30 : 24,
       devicePixelRatio: scr.dpr,
     },
-    hardwareConcurrency: pick([4, 8, 12, 16]),
-    deviceMemory: pick([4, 8]), // Chrome spec: 0.25/0.5/1/2/4/8 — stick to realistic desktop values
+    hardwareConcurrency: pick(isMac ? [8, 10, 12] as const : [4, 8, 12, 16] as const),
+    deviceMemory: isFirefox ? undefined : pick([4, 8] as const), // Firefox doesn't expose deviceMemory
     timezoneOffset: locale.tz,
     languages: [...locale.lang],
   };
