@@ -105,7 +105,7 @@ setTimeout(function() {
     '--start-url', 'http://localhost:19998/trigger',
     '--no-reload',
   ], {
-    env: { ...process.env, ...(process.env.HEADED ? {} : { MOZ_HEADLESS: '1' }) },
+    env: { ...process.env, ...(process.env.HEADLESS ? { MOZ_HEADLESS: '1' } : {}) },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 

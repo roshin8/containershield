@@ -19,7 +19,7 @@
     "test:e2e": "npx playwright test",
     "test:e2e:headed": "npx playwright test --headed",
     "test:real": "npm run build && npx playwright test tests/e2e/real-extension-full.spec.ts --project=real-extension",
-    "test:real:headed": "npm run build && HEADED=1 npx playwright test tests/e2e/real-extension-full.spec.ts --project=real-extension",
+    "test:real:headless": "npm run build && HEADLESS=1 npx playwright test tests/e2e/real-extension-full.spec.ts --project=real-extension",
     "test:e2e:debug": "npx playwright test --debug",
     "test:fingerprint": "npx playwright test -g 'manual fingerprint check'",
     "test:extension": "node scripts/test-extension.js",
