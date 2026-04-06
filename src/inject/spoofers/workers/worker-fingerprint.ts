@@ -111,7 +111,8 @@ Date.prototype.getTimezoneOffset=function(){return ${mainOffset}};`;
 export function initWorkerSpoofer(
   mode: ProtectionMode,
   prng: PRNG,
-  assignedProfile?: AssignedProfileData
+  assignedProfile?: AssignedProfileData,
+  blockServiceWorker?: boolean
 ): void {
   if (mode === 'off') return;
 
@@ -206,9 +207,7 @@ export function initWorkerSpoofer(
     } catch {}
   }
 
-  // Handle ServiceWorker: Intercept register() to inject preamble into SW scripts.
-  // CreepJS creates a SW and reads navigator/WebGL/timezone directly inside it.
-  // We fetch the script content, prepend our overrides, and register the modified version.
+  // Handle ServiceWorker: either inject preamble or block entirely (user option).
   if ('serviceWorker' in navigator && workerPreamble) {
     try {
       const origRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
@@ -217,31 +216,34 @@ export function initWorkerSpoofer(
       navigator.serviceWorker.register = async function(
         scriptURL: string | URL, options?: RegistrationOptions
       ): Promise<ServiceWorkerRegistration> {
+        // Block mode: reject registration entirely
+        if (blockServiceWorker) {
+          logAccess('ServiceWorker.register', { spoofed: true, value: 'blocked' });
+          throw new DOMException('The operation is insecure.', 'SecurityError');
+        }
+
+        // Inject mode: fetch script, prepend preamble, register modified version
         logAccess('ServiceWorker.register', { spoofed: true, value: 'injected' });
         const urlStr = String(scriptURL);
 
         try {
-          // Fetch the original SW script content
           const resp = urlStr.startsWith('blob:')
             ? await fetch(urlStr)
             : await fetch(urlStr, { credentials: 'same-origin' });
           const text = await resp.text();
 
-          // Create new blob with preamble prepended
           const newBlob = new OrigBlob(
             [workerPreamble + text],
             { type: 'application/javascript' }
           );
           const newUrl = URL.createObjectURL(newBlob);
 
-          // Register the modified script
-          // Preserve scope from original options, default to '/'
           return origRegister(newUrl, {
             ...options,
             scope: options?.scope || new URL(urlStr, location.href).pathname.replace(/[^/]*$/, '') || '/',
           });
         } catch {
-          // If injection fails, register original (websites still work)
+          // Injection failed — register original so website still works
           return origRegister(scriptURL, options);
         }
       };
