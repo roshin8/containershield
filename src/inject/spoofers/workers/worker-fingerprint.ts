@@ -112,7 +112,7 @@ export function initWorkerSpoofer(
   mode: ProtectionMode,
   prng: PRNG,
   assignedProfile?: AssignedProfileData,
-  blockServiceWorker?: boolean
+  serviceWorkerMode?: ProtectionMode
 ): void {
   if (mode === 'off') return;
 
@@ -207,8 +207,8 @@ export function initWorkerSpoofer(
     } catch {}
   }
 
-  // Handle ServiceWorker: either inject preamble or block entirely (user option).
-  if ('serviceWorker' in navigator && workerPreamble) {
+  // Handle ServiceWorker: off = no interception, noise = inject preamble, block = reject
+  if ('serviceWorker' in navigator && workerPreamble && serviceWorkerMode !== 'off') {
     try {
       const origRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
       const OrigBlob = window.Blob;
@@ -217,7 +217,7 @@ export function initWorkerSpoofer(
         scriptURL: string | URL, options?: RegistrationOptions
       ): Promise<ServiceWorkerRegistration> {
         // Block mode: reject registration entirely
-        if (blockServiceWorker) {
+        if (serviceWorkerMode === 'block') {
           logAccess('ServiceWorker.register', { spoofed: true, value: 'blocked' });
           throw new DOMException('The operation is insecure.', 'SecurityError');
         }

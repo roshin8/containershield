@@ -207,7 +207,7 @@ export interface KeyboardSpoofers {
  */
 export interface WorkersSpoofers {
   fingerprint: ProtectionMode;
-  blockServiceWorker: boolean;
+  serviceWorker: ProtectionMode;
 }
 
 /**
@@ -470,7 +470,7 @@ export function createDefaultSettings(): ContainerSettings {
       },
       workers: {
         fingerprint: 'noise',
-        blockServiceWorker: false,
+        serviceWorker: 'noise',
       },
       errors: {
         stackTrace: 'noise',
