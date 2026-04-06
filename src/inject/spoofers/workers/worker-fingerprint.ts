@@ -90,27 +90,18 @@ return ctx;
 }}catch(e){}`;
   }
 
-  // Spoof timezone in Worker context
+  // Spoof timezone in Worker context — embed pre-computed offset from main frame
   if (tzName) {
-    // Compute offset dynamically in the Worker (handles DST correctly)
+    // Read the main frame's spoofed offset (already patched by timezone spoofer)
+    const mainOffset = new Date().getTimezoneOffset();
+
     code += `
 var _tz=${JSON.stringify(tzName)};
 var _origDTF=Intl.DateTimeFormat;
 Intl.DateTimeFormat=function(l,o){return new _origDTF(l,Object.assign({},o,{timeZone:o&&o.timeZone||_tz}))};
 Intl.DateTimeFormat.supportedLocalesOf=_origDTF.supportedLocalesOf;
 try{Intl.DateTimeFormat.prototype=_origDTF.prototype}catch(e){}
-Date.prototype.getTimezoneOffset=function(){
-try{
-var n=new Date();var p={};
-new _origDTF('en-US',{timeZone:_tz,year:'numeric',month:'numeric',day:'numeric',
-hour:'numeric',minute:'numeric',second:'numeric',hourCycle:'h23'}).formatToParts(n)
-.forEach(function(x){if(x.type!=='literal')p[x.type]=parseInt(x.value,10)});
-var tz=Date.UTC(p.year,p.month-1,p.day,p.hour,p.minute,p.second);
-var u=Date.UTC(n.getUTCFullYear(),n.getUTCMonth(),n.getUTCDate(),
-n.getUTCHours(),n.getUTCMinutes(),n.getUTCSeconds());
-return(u-tz)/60000;
-}catch(e){return 0}
-};`;
+Date.prototype.getTimezoneOffset=function(){return ${mainOffset}};`;
   }
 
   code += `\n}catch(e){}})();\n`;
@@ -215,15 +206,32 @@ export function initWorkerSpoofer(
     } catch {}
   }
 
-  // Handle ServiceWorker: We can't inject preamble into ServiceWorker scripts
-  // (Firefox requires same-origin URL, not blob). Hide serviceWorker so
-  // fingerprinters fall back to SharedWorker → DedicatedWorker (which we intercept).
+  // Handle ServiceWorker: We can't inject preamble into ServiceWorker scripts.
+  // Block registration entirely so fingerprinters fall back to SharedWorker/DedicatedWorker.
   if ('serviceWorker' in navigator && workerPreamble) {
     try {
-      // Make serviceWorker.register reject gracefully (not throw synchronously)
-      // so CreepJS tries the next worker type
+      // Save reference before hiding
+      const origSW = navigator.serviceWorker;
+
+      // Override the getter to return a fake that blocks registration
+      // Use a never-resolving promise for 'ready' (avoids unhandled rejection)
+      const neverReady = new Promise<void>(() => {});
       Object.defineProperty(Navigator.prototype, 'serviceWorker', {
-        get() { return undefined; },
+        get() {
+          return {
+            register: () => Promise.reject(new DOMException('SecurityError', 'SecurityError')),
+            getRegistration: () => Promise.resolve(undefined),
+            getRegistrations: () => Promise.resolve([]),
+            ready: neverReady,
+            controller: null,
+            oncontrollerchange: null,
+            onmessage: null,
+            onmessageerror: null,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            dispatchEvent: () => true,
+          };
+        },
         configurable: true,
       });
     } catch {}

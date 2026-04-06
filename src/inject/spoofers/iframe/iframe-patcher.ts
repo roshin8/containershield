@@ -30,6 +30,9 @@ export function initIframePatcher(config: IframePatchConfig): void {
   const tzOffset = assignedProfile?.timezoneOffset;
   const targetTimezone = tzOffset !== undefined ? (TIMEZONE_IANA[tzOffset] || null) : null;
 
+  // Pre-compute the main frame's spoofed timezone offset (already correct)
+  const mainFrameOffset = new Date().getTimezoneOffset();
+
   const patchedIframes = new WeakSet<HTMLIFrameElement>();
 
   function patchWindow(iframeWin: Window): void {
@@ -37,7 +40,7 @@ export function initIframePatcher(config: IframePatchConfig): void {
       patchWebGL(iframeWin, selectedGPU, settings);
       patchScreen(iframeWin, screen, settings);
       patchNavigator(iframeWin, ua, hc, dm, langs, settings);
-      patchTimezone(iframeWin, targetTimezone, settings);
+      patchTimezone(iframeWin, targetTimezone, mainFrameOffset, settings);
     } catch {
       // Iframe may be cross-origin or already detached
     }
@@ -150,6 +153,7 @@ function patchNavigator(
 function patchTimezone(
   win: Window,
   targetTimezone: string | null,
+  mainFrameOffset: number,
   settings: SpooferSettings
 ): void {
   if (!targetTimezone || settings.timezone?.date === 'off') return;
@@ -157,33 +161,21 @@ function patchTimezone(
   const iframeDate = (win as any).Date;
   if (!iframeDate) return;
 
-  const origDTF = (win as any).Intl?.DateTimeFormat;
-  if (!origDTF) return;
-
-  // Patch getTimezoneOffset
-  iframeDate.prototype.getTimezoneOffset = function(this: Date): number {
-    try {
-      const parts: Record<string, number> = {};
-      new origDTF('en-US', {
-        timeZone: targetTimezone, year: 'numeric', month: 'numeric',
-        day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
-        hourCycle: 'h23',
-      }).formatToParts(this).forEach((p: Intl.DateTimeFormatPart) => {
-        if (p.type !== 'literal') parts[p.type] = parseInt(p.value, 10);
-      });
-      const tzAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
-      const utc = Date.UTC(this.getUTCFullYear(), this.getUTCMonth(), this.getUTCDate(),
-        this.getUTCHours(), this.getUTCMinutes(), this.getUTCSeconds());
-      return (utc - tzAsUtc) / 60000;
-    } catch { return 0; }
+  // Use the main frame's already-computed offset (guaranteed correct)
+  iframeDate.prototype.getTimezoneOffset = function(): number {
+    return mainFrameOffset;
   };
 
-  // Patch Intl.DateTimeFormat
-  try {
-    (win as any).Intl.DateTimeFormat = function(locales?: string | string[], options?: Intl.DateTimeFormatOptions) {
-      return new origDTF(locales, { ...options, timeZone: options?.timeZone || targetTimezone });
-    };
-    (win as any).Intl.DateTimeFormat.supportedLocalesOf = origDTF.supportedLocalesOf;
-    (win as any).Intl.DateTimeFormat.prototype = origDTF.prototype;
-  } catch {}
+  // Patch Intl.DateTimeFormat — use iframe's own origDTF to avoid cross-realm issues
+  const origDTF = (win as any).Intl?.DateTimeFormat;
+  if (origDTF) {
+    try {
+      const tz = targetTimezone;
+      (win as any).Intl.DateTimeFormat = function(locales?: string | string[], options?: Intl.DateTimeFormatOptions) {
+        return new origDTF(locales, { ...options, timeZone: options?.timeZone || tz });
+      };
+      (win as any).Intl.DateTimeFormat.supportedLocalesOf = origDTF.supportedLocalesOf;
+      (win as any).Intl.DateTimeFormat.prototype = origDTF.prototype;
+    } catch {}
+  }
 }

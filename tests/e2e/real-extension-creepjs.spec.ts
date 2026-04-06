@@ -113,7 +113,7 @@ test('real MV3 extension fingerprint check', async () => {
     '--firefox', '/Applications/Firefox.app/Contents/MacOS/firefox',
     '--firefox-profile', profileDir,
     '--keep-profile-changes',
-    '--start-url', 'http://localhost:9876/',
+    '--start-url', 'http://localhost:9876/', '--start-url', 'https://abrahamjuliot.github.io/creepjs/',
     '--no-reload',
   ], {
     env: { ...process.env, MOZ_HEADLESS: '1' },
