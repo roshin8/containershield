@@ -173,12 +173,11 @@ export function initNavigatorSpoofer(
   }
 
   // Client Hints (userAgentData)
-  // Must add even in Firefox if spoofing a Chrome UA — CreepJS checks for its existence
-  if (settings.clientHints !== 'off' && (uaProfile?.brands || 'userAgentData' in navigator)) {
-    const brands = uaProfile?.brands || [
-      { brand: 'Chromium', version: prng.pick(['120', '121', '122', '123']) },
-      { brand: 'Not_A Brand', version: '8' },
-    ];
+  // Only add when profile is a Chromium-based browser (has brands).
+  // Firefox profiles should NOT have userAgentData — it's a detection vector.
+  const isChromiumProfile = !!uaProfile?.brands;
+  if (settings.clientHints !== 'off' && isChromiumProfile) {
+    const brands = uaProfile.brands!;
     const platformName = uaProfile?.platformName || 'Windows';
     const platformVersion = uaProfile?.platformVersion || '10.0.0';
     const mobile = uaProfile?.mobile ?? false;
@@ -220,5 +219,13 @@ export function initNavigatorSpoofer(
         });
       } catch {}
     }
+  } else if (!isChromiumProfile && 'userAgentData' in navigator) {
+    // Firefox profile: hide userAgentData (real Firefox doesn't have it)
+    try {
+      Object.defineProperty(Navigator.prototype, 'userAgentData', {
+        get: () => undefined,
+        configurable: true,
+      });
+    } catch {}
   }
 }

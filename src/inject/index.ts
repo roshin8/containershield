@@ -91,9 +91,8 @@ function generateProfile(seed: string): AssignedProfileData {
       colorDepth: isMac ? 30 : 24, pixelDepth: isMac ? 30 : 24,
       devicePixelRatio: scr.dpr,
     },
-    // Realistic hardware for a modern desktop
-    hardwareConcurrency: pick([8, 12, 16]),
-    deviceMemory: pick([8, 16, 32]),
+    hardwareConcurrency: pick([4, 8, 12, 16]),
+    deviceMemory: pick([4, 8]), // Chrome spec: 0.25/0.5/1/2/4/8 — stick to realistic desktop values
     timezoneOffset: locale.tz,
     languages: [...locale.lang],
   };
