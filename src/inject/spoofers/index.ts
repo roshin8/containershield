@@ -149,106 +149,89 @@ export function initializeSpoofers(config: InjectConfig): void {
 
   const { settings, assignedProfile } = config;
 
+  // Wrap each spoofer init so one failure doesn't crash all others
+  const safe = (name: string, fn: () => void) => {
+    try { fn(); } catch { /* spoofer init failed — continue with others */ }
+  };
+
   // Graphics
-  if (settings.graphics.canvas !== 'off') initCanvasSpoofer(settings.graphics.canvas, pagePRNG);
+  safe('canvas', () => { if (settings.graphics.canvas !== 'off') initCanvasSpoofer(settings.graphics.canvas, pagePRNG); });
   let selectedGPURef: { vendor: string; renderer: string } | null = null;
-  if (settings.graphics.webgl !== 'off' || settings.graphics.webgl2 !== 'off') {
-    initWebGLSpoofer(settings.graphics.webgl, settings.graphics.webgl2, pagePRNG, assignedProfile);
-    selectedGPURef = getSelectedGPU();
-  }
-  if (settings.graphics.offscreenCanvas !== 'off') initOffscreenCanvasSpoofer(settings.graphics.offscreenCanvas, pagePRNG);
-  if (settings.graphics.webglShaders !== 'off') initWebGLShaderSpoofer(settings.graphics.webglShaders, pagePRNG);
-  if (settings.graphics.webgpu !== 'off') initWebGPUSpoofer(settings.graphics.webgpu, pagePRNG);
-  if (settings.graphics.domRect !== 'off') initDOMRectSpoofer(settings.graphics.domRect, pagePRNG);
-  if (settings.graphics.textMetrics !== 'off') initTextMetricsSpoofer(settings.graphics.textMetrics, pagePRNG);
-  if (settings.graphics.svg !== 'off') initSVGSpoofer(settings.graphics.svg, pagePRNG);
+  safe('webgl', () => {
+    if (settings.graphics.webgl !== 'off' || settings.graphics.webgl2 !== 'off') {
+      initWebGLSpoofer(settings.graphics.webgl, settings.graphics.webgl2, pagePRNG, assignedProfile);
+      selectedGPURef = getSelectedGPU();
+    }
+  });
+  safe('offscreen', () => { if (settings.graphics.offscreenCanvas !== 'off') initOffscreenCanvasSpoofer(settings.graphics.offscreenCanvas, pagePRNG); });
+  safe('webglShaders', () => { if (settings.graphics.webglShaders !== 'off') initWebGLShaderSpoofer(settings.graphics.webglShaders, pagePRNG); });
+  safe('webgpu', () => { if (settings.graphics.webgpu !== 'off') initWebGPUSpoofer(settings.graphics.webgpu, pagePRNG); });
+  safe('domRect', () => { if (settings.graphics.domRect !== 'off') initDOMRectSpoofer(settings.graphics.domRect, pagePRNG); });
+  safe('textMetrics', () => { if (settings.graphics.textMetrics !== 'off') initTextMetricsSpoofer(settings.graphics.textMetrics, pagePRNG); });
+  safe('svg', () => { if (settings.graphics.svg !== 'off') initSVGSpoofer(settings.graphics.svg, pagePRNG); });
 
-  // Audio
-  if (settings.audio.audioContext !== 'off') initAudioSpoofer(settings.audio.audioContext, pagePRNG);
-  if (settings.audio.offlineAudio !== 'off') initOfflineAudioSpoofer(settings.audio.offlineAudio, pagePRNG);
-  if (settings.audio.latency !== 'off') initAudioLatencySpoofer(settings.audio.latency, pagePRNG);
-  if (settings.audio.codecs !== 'off') initCodecSpoofer(settings.audio.codecs, pagePRNG);
+  safe('audio', () => { if (settings.audio.audioContext !== 'off') initAudioSpoofer(settings.audio.audioContext, pagePRNG); });
+  safe('offlineAudio', () => { if (settings.audio.offlineAudio !== 'off') initOfflineAudioSpoofer(settings.audio.offlineAudio, pagePRNG); });
+  safe('audioLatency', () => { if (settings.audio.latency !== 'off') initAudioLatencySpoofer(settings.audio.latency, pagePRNG); });
+  safe('codecs', () => { if (settings.audio.codecs !== 'off') initCodecSpoofer(settings.audio.codecs, pagePRNG); });
 
-  // Hardware
-  if (settings.hardware.screen !== 'off') initScreenSpoofer(settings.hardware.screen, pagePRNG, assignedProfile?.screen);
-  if (settings.hardware.screenFrame !== 'off') initScreenFrameSpoofer(settings.hardware.screenFrame, pagePRNG);
-  if (settings.hardware.orientation !== 'off') initScreenOrientationSpoofer(settings.hardware.orientation, pagePRNG);
-  if (settings.hardware.deviceMemory !== 'off' || settings.hardware.hardwareConcurrency !== 'off') {
-    initDeviceSpoofer(settings.hardware.deviceMemory, settings.hardware.hardwareConcurrency, pagePRNG, assignedProfile);
-  }
-  if (settings.hardware.battery !== 'off') initBatterySpoofer(settings.hardware.battery, pagePRNG);
-  if (settings.hardware.mediaDevices !== 'off') initMediaDevicesSpoofer(settings.hardware.mediaDevices, pagePRNG);
-  if (settings.hardware.touch !== 'off') initTouchSpoofer(settings.hardware.touch, pagePRNG, assignedProfile);
-  if (settings.hardware.sensors !== 'off') initSensorSpoofer(settings.hardware.sensors, pagePRNG);
-  if (settings.hardware.architecture !== 'off') initArchitectureSpoofer(settings.hardware.architecture, pagePRNG);
-  if (settings.hardware.visualViewport !== 'off') initVisualViewportSpoofer(settings.hardware.visualViewport, pagePRNG);
-  if (settings.hardware.screenExtended !== 'off') initScreenExtendedSpoofer(settings.hardware.screenExtended, pagePRNG);
+  safe('screen', () => { if (settings.hardware.screen !== 'off') initScreenSpoofer(settings.hardware.screen, pagePRNG, assignedProfile?.screen); });
+  safe('screenFrame', () => { if (settings.hardware.screenFrame !== 'off') initScreenFrameSpoofer(settings.hardware.screenFrame, pagePRNG); });
+  safe('orientation', () => { if (settings.hardware.orientation !== 'off') initScreenOrientationSpoofer(settings.hardware.orientation, pagePRNG); });
+  safe('device', () => {
+    if (settings.hardware.deviceMemory !== 'off' || settings.hardware.hardwareConcurrency !== 'off') {
+      initDeviceSpoofer(settings.hardware.deviceMemory, settings.hardware.hardwareConcurrency, pagePRNG, assignedProfile);
+    }
+  });
+  safe('battery', () => { if (settings.hardware.battery !== 'off') initBatterySpoofer(settings.hardware.battery, pagePRNG); });
+  safe('mediaDevices', () => { if (settings.hardware.mediaDevices !== 'off') initMediaDevicesSpoofer(settings.hardware.mediaDevices, pagePRNG); });
+  safe('touch', () => { if (settings.hardware.touch !== 'off') initTouchSpoofer(settings.hardware.touch, pagePRNG, assignedProfile); });
+  safe('sensors', () => { if (settings.hardware.sensors !== 'off') initSensorSpoofer(settings.hardware.sensors, pagePRNG); });
+  safe('architecture', () => { if (settings.hardware.architecture !== 'off') initArchitectureSpoofer(settings.hardware.architecture, pagePRNG); });
+  safe('viewport', () => { if (settings.hardware.visualViewport !== 'off') initVisualViewportSpoofer(settings.hardware.visualViewport, pagePRNG); });
+  safe('screenExt', () => { if (settings.hardware.screenExtended !== 'off') initScreenExtendedSpoofer(settings.hardware.screenExtended, pagePRNG); });
 
-  // Navigator
-  if (settings.navigator.userAgent !== 'off') initNavigatorSpoofer(settings.navigator, pagePRNG, config.profile, assignedProfile);
-  if (settings.navigator.clipboard !== 'off') initClipboardSpoofer(settings.navigator.clipboard, pagePRNG);
-  if (settings.navigator.vibration !== 'off') initVibrationSpoofer(settings.navigator.vibration, pagePRNG);
-  if (settings.navigator.vendorFlavors !== 'off') initVendorFlavorSpoofer(settings.navigator.vendorFlavors, pagePRNG);
-  if (settings.navigator.fontPreferences !== 'off') initFontPreferencesSpoofer(settings.navigator.fontPreferences, pagePRNG);
-  if (settings.navigator.windowName !== 'off') initWindowNameSpoofer(settings.navigator.windowName, pagePRNG);
-  if (settings.navigator.tabHistory !== 'off') initTabHistorySpoofer(settings.navigator.tabHistory, pagePRNG);
+  safe('navigator', () => { if (settings.navigator.userAgent !== 'off') initNavigatorSpoofer(settings.navigator, pagePRNG, config.profile, assignedProfile); });
+  safe('clipboard', () => { if (settings.navigator.clipboard !== 'off') initClipboardSpoofer(settings.navigator.clipboard, pagePRNG); });
+  safe('vibration', () => { if (settings.navigator.vibration !== 'off') initVibrationSpoofer(settings.navigator.vibration, pagePRNG); });
+  safe('vendorFlavors', () => { if (settings.navigator.vendorFlavors !== 'off') initVendorFlavorSpoofer(settings.navigator.vendorFlavors, pagePRNG); });
+  safe('fontPrefs', () => { if (settings.navigator.fontPreferences !== 'off') initFontPreferencesSpoofer(settings.navigator.fontPreferences, pagePRNG); });
+  safe('windowName', () => { if (settings.navigator.windowName !== 'off') initWindowNameSpoofer(settings.navigator.windowName, pagePRNG); });
+  safe('tabHistory', () => { if (settings.navigator.tabHistory !== 'off') initTabHistorySpoofer(settings.navigator.tabHistory, pagePRNG); });
 
-  // Timezone
-  if (settings.timezone.intl !== 'off' || settings.timezone.date !== 'off') {
-    initTimezoneSpoofer(settings.timezone, pagePRNG, assignedProfile);
-  }
+  safe('timezone', () => {
+    if (settings.timezone.intl !== 'off' || settings.timezone.date !== 'off') {
+      initTimezoneSpoofer(settings.timezone, pagePRNG, assignedProfile);
+    }
+  });
 
-  // Fonts - pass assignedProfile so font list matches spoofed platform
-  if (settings.fonts.enumeration !== 'off') initFontSpoofer(settings.fonts.enumeration, pagePRNG, assignedProfile);
-  if (settings.fonts.cssDetection !== 'off') initCSSFontSpoofer(settings.fonts.cssDetection, pagePRNG);
+  safe('fonts', () => { if (settings.fonts.enumeration !== 'off') initFontSpoofer(settings.fonts.enumeration, pagePRNG, assignedProfile); });
+  safe('cssFonts', () => { if (settings.fonts.cssDetection !== 'off') initCSSFontSpoofer(settings.fonts.cssDetection, pagePRNG); });
 
-  // Network
-  if (settings.network.webrtc !== 'off') initWebRTCSpoofer(settings.network.webrtc, pagePRNG);
-  if (settings.network.connection !== 'off') initNetworkSpoofer(settings.network.connection, pagePRNG);
-  if (settings.network.geolocation !== 'off') initGeolocationSpoofer(settings.network.geolocation, pagePRNG);
-  if (settings.network.websocket !== 'off') initWebSocketSpoofer(settings.network.websocket, pagePRNG);
+  safe('webrtc', () => { if (settings.network.webrtc !== 'off') initWebRTCSpoofer(settings.network.webrtc, pagePRNG); });
+  safe('connection', () => { if (settings.network.connection !== 'off') initNetworkSpoofer(settings.network.connection, pagePRNG); });
+  safe('geolocation', () => { if (settings.network.geolocation !== 'off') initGeolocationSpoofer(settings.network.geolocation, pagePRNG); });
+  safe('websocket', () => { if (settings.network.websocket !== 'off') initWebSocketSpoofer(settings.network.websocket, pagePRNG); });
 
-  // Timing
-  if (settings.timing.performance !== 'off') initPerformanceSpoofer(settings.timing.performance, pagePRNG);
-  if (settings.timing.memory !== 'off') initMemorySpoofer(settings.timing.memory, pagePRNG);
+  safe('performance', () => { if (settings.timing.performance !== 'off') initPerformanceSpoofer(settings.timing.performance, pagePRNG); });
+  safe('memory', () => { if (settings.timing.memory !== 'off') initMemorySpoofer(settings.timing.memory, pagePRNG); });
 
-  // CSS
-  if (settings.css.mediaQueries !== 'off') initCSSSpoofer(settings.css.mediaQueries, pagePRNG, assignedProfile);
-
-  // Speech
-  if (settings.speech.synthesis !== 'off') initSpeechSpoofer(settings.speech.synthesis, pagePRNG);
-
-  // Permissions
-  if (settings.permissions.query !== 'off') initPermissionsSpoofer(settings.permissions.query, pagePRNG);
-  if (settings.permissions.notification !== 'off') initNotificationSpoofer(settings.permissions.notification, pagePRNG);
-
-  // Storage
-  if (settings.storage.estimate !== 'off') initStorageSpoofer(settings.storage.estimate, pagePRNG);
-  if (settings.storage.indexedDB !== 'off') initIndexedDBSpoofer(settings.storage.indexedDB, pagePRNG);
-  if (settings.storage.webSQL !== 'off') initWebSQLSpoofer(settings.storage.webSQL, pagePRNG);
-
-  // Math
-  if (settings.math.functions !== 'off') initMathSpoofer(settings.math.functions, pagePRNG);
-
-  // Keyboard
-  if (settings.keyboard.layout !== 'off') initKeyboardSpoofer(settings.keyboard.layout, pagePRNG);
-  if (settings.keyboard.cadence !== 'off') initKeyboardCadenceSpoofer(settings.keyboard.cadence, pagePRNG);
-
-  // Workers
-  if (settings.workers.fingerprint !== 'off') initWorkerSpoofer(settings.workers.fingerprint, pagePRNG, assignedProfile, settings.workers.serviceWorker);
-
-  // Errors
-  if (settings.errors.stackTrace !== 'off') initErrorSpoofer(settings.errors.stackTrace, pagePRNG);
-
-  // Rendering
-  if (settings.rendering.emoji !== 'off') initEmojiSpoofer(settings.rendering.emoji, pagePRNG);
-  if (settings.rendering.mathml !== 'off') initMathMLSpoofer(settings.rendering.mathml, pagePRNG);
-
-  // Intl
-  if (settings.intl.apis !== 'off') initIntlSpoofer(settings.intl.apis, pagePRNG, assignedProfile);
-
-  // Crypto
-  if (settings.crypto.webCrypto !== 'off') initCryptoSpoofer(settings.crypto.webCrypto, pagePRNG);
+  safe('css', () => { if (settings.css.mediaQueries !== 'off') initCSSSpoofer(settings.css.mediaQueries, pagePRNG, assignedProfile); });
+  safe('speech', () => { if (settings.speech.synthesis !== 'off') initSpeechSpoofer(settings.speech.synthesis, pagePRNG); });
+  safe('permissions', () => { if (settings.permissions.query !== 'off') initPermissionsSpoofer(settings.permissions.query, pagePRNG); });
+  safe('notification', () => { if (settings.permissions.notification !== 'off') initNotificationSpoofer(settings.permissions.notification, pagePRNG); });
+  safe('storage', () => { if (settings.storage.estimate !== 'off') initStorageSpoofer(settings.storage.estimate, pagePRNG); });
+  safe('indexedDB', () => { if (settings.storage.indexedDB !== 'off') initIndexedDBSpoofer(settings.storage.indexedDB, pagePRNG); });
+  safe('webSQL', () => { if (settings.storage.webSQL !== 'off') initWebSQLSpoofer(settings.storage.webSQL, pagePRNG); });
+  safe('math', () => { if (settings.math.functions !== 'off') initMathSpoofer(settings.math.functions, pagePRNG); });
+  safe('keyboard', () => { if (settings.keyboard.layout !== 'off') initKeyboardSpoofer(settings.keyboard.layout, pagePRNG); });
+  safe('cadence', () => { if (settings.keyboard.cadence !== 'off') initKeyboardCadenceSpoofer(settings.keyboard.cadence, pagePRNG); });
+  safe('workers', () => { if (settings.workers.fingerprint !== 'off') initWorkerSpoofer(settings.workers.fingerprint, pagePRNG, assignedProfile, settings.workers.serviceWorker); });
+  safe('errors', () => { if (settings.errors.stackTrace !== 'off') initErrorSpoofer(settings.errors.stackTrace, pagePRNG); });
+  safe('emoji', () => { if (settings.rendering.emoji !== 'off') initEmojiSpoofer(settings.rendering.emoji, pagePRNG); });
+  safe('mathml', () => { if (settings.rendering.mathml !== 'off') initMathMLSpoofer(settings.rendering.mathml, pagePRNG); });
+  safe('intl', () => { if (settings.intl.apis !== 'off') initIntlSpoofer(settings.intl.apis, pagePRNG, assignedProfile); });
+  safe('crypto', () => { if (settings.crypto.webCrypto !== 'off') initCryptoSpoofer(settings.crypto.webCrypto, pagePRNG); });
 
   // Devices
   if (settings.devices.gamepad !== 'off') initGamepadSpoofer(settings.devices.gamepad, pagePRNG);
