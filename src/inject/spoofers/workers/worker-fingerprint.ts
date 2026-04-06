@@ -210,13 +210,15 @@ export function initWorkerSpoofer(
     } catch {}
   }
 
-  // Handle ServiceWorker
-  // Block mode: reject registration. Spoof mode: let it register normally
-  // but make it fail quickly so CreepJS falls back to DedicatedWorker.
-  // We can't inject into SW scripts (blob URL registration fails in Firefox).
+  // Handle ServiceWorker:
+  // - Off: no interception
+  // - Spoof: try to inject preamble into SW script → if fails, reject to force
+  //   SharedWorker/DedicatedWorker fallback (which ARE fully spoofed)
+  // - Block: reject registration entirely
   if ('serviceWorker' in navigator && workerPreamble && serviceWorkerMode !== 'off') {
     try {
       const origRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+      const OrigBlob = window.Blob;
 
       navigator.serviceWorker.register = async function(
         scriptURL: string | URL, options?: RegistrationOptions
@@ -226,10 +228,33 @@ export function initWorkerSpoofer(
           throw new DOMException('The operation is insecure.', 'SecurityError');
         }
 
-        // Spoof mode: reject SW so CreepJS falls back to DedicatedWorker
-        // (which we fully intercept with preamble injection)
-        logAccess('ServiceWorker.register', { spoofed: true, value: 'rejected-for-fallback' });
-        throw new DOMException('The operation is insecure.', 'SecurityError');
+        // Spoof mode: attempt to inject preamble into the SW script
+        const urlStr = new URL(String(scriptURL), location.href).href;
+        try {
+          // Fetch original SW script
+          const resp = urlStr.startsWith('blob:')
+            ? await fetch(urlStr)
+            : await fetch(urlStr, { credentials: 'same-origin' });
+          const text = await resp.text();
+
+          // Create modified script with preamble
+          const modified = new OrigBlob([workerPreamble + text], { type: 'application/javascript' });
+          const blobUrl = URL.createObjectURL(modified);
+
+          // Try registering the modified SW — Firefox may reject blob: URLs for SWs
+          const reg = await origRegister(blobUrl, {
+            ...options,
+            scope: options?.scope || new URL(urlStr, location.href).pathname.replace(/[^/]*$/, '') || '/',
+          });
+          logAccess('ServiceWorker.register', { spoofed: true, value: 'injected' });
+          return reg;
+        } catch {
+          // SW injection failed (blob URL rejected by Firefox)
+          // Reject registration → forces fallback to SharedWorker/DedicatedWorker
+          // which ARE fully spoofed with preamble injection
+          logAccess('ServiceWorker.register', { spoofed: true, value: 'fallback-to-shared-worker' });
+          throw new DOMException('The operation is insecure.', 'SecurityError');
+        }
       };
     } catch {}
   }
