@@ -104,9 +104,25 @@ Intl.DateTimeFormat.supportedLocalesOf=_origDTF.supportedLocalesOf;
 try{Intl.DateTimeFormat.prototype=_origDTF.prototype}catch(e){}
 Date.prototype.getTimezoneOffset=function(){return ${spoofedOffset}};
 var _OD=Date;var _od=${offsetDiffMs};
-var _iso=function(s){return /^\\d{4}-\\d{2}-\\d{2}$/.test(s.trim())};
-var _origParse=_OD.parse;
-_OD.parse=function(s){try{return typeof s==='string'&&!_iso(s)?_origParse(s)+_od:_origParse(s)}catch(e){return _origParse(s)}};`;
+var _iso=function(s){return /^\\d{4}-\\d{2}-\\d{2}$/.test(String(s).trim())};
+var _origParse=_OD.parse.bind(_OD);
+_OD.parse=function(s){try{var v=typeof s==='string'&&!_iso(s)?_origParse(s)+_od:_origParse(s);return isNaN(v)?_origParse(s):v}catch(e){return _origParse(s)}};
+var _OrigDate=_OD;
+try{
+self.Date=function Date(){
+var a=[].slice.call(arguments);
+if(!a.length)return new _OrigDate();
+if(a.length===1){
+if(typeof a[0]==='string'&&!_iso(a[0]))return new _OrigDate(_origParse(a[0])+_od);
+return new _OrigDate(a[0]);
+}
+return new _OrigDate(a[0],a[1]||0,a[2]||1,a[3]||0,a[4]||0,a[5]||0,a[6]||0);
+};
+self.Date.prototype=_OrigDate.prototype;
+self.Date.now=_OrigDate.now.bind(_OrigDate);
+self.Date.UTC=_OrigDate.UTC.bind(_OrigDate);
+self.Date.parse=_OD.parse;
+}catch(e){}`;
   }
 
   code += `\n}catch(e){}})();\n`;
