@@ -96,6 +96,17 @@ export default function App() {
   const loadAssignedProfile = useCallback(async () => {
     if (!selectedContainer) return;
     try {
+      // Try to get the ACTUAL profile from the inject script (stored per-tab)
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        const stored = await browser.storage.local.get(`activeProfile:${tab.id}`);
+        const active = stored[`activeProfile:${tab.id}`];
+        if (active?.profile) {
+          setAssignedProfile(active.profile);
+          return;
+        }
+      }
+      // Fallback to background's assigned profile
       const profile = await browser.runtime.sendMessage({ type: MSG_GET_ASSIGNED_PROFILE, containerId: selectedContainer }) as AssignedProfile | null;
       setAssignedProfile(profile || undefined);
     } catch { setAssignedProfile(undefined); }

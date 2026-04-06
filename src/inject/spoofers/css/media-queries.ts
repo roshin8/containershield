@@ -107,7 +107,6 @@ export function initCSSSpoofer(mode: ProtectionMode, prng: PRNG, assignedProfile
     return original.apply(thisArg, args);
   });
 
-  // getComputedStyle is wrapped by font-preferences spoofer - don't double-wrap
 }
 
 function createFakeMediaQueryList(query: string, matches: boolean): MediaQueryList {
