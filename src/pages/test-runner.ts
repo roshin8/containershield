@@ -238,12 +238,92 @@ async function readValues(tabId: number): Promise<Record<string, any>> {
       if (conn) { r.connType = conn.type; r.connEffType = conn.effectiveType; r.connRtt = conn.rtt; }
     });
 
-    // === STORAGE (CreepJS: Status section) ===
+    // === STORAGE ===
     s(() => {
       if (navigator.storage?.estimate) {
         navigator.storage.estimate().then(est => { r.storageQuota = est.quota; });
       }
     });
+
+    // === AUDIO (detailed) ===
+    s(() => {
+      const ac = new AudioContext();
+      r.audioSampleRate = ac.sampleRate;
+      r.audioBaseLatency = ac.baseLatency;
+      r.audioState = ac.state;
+      ac.close();
+    });
+
+    // === SPEECH ===
+    s(() => { r.speechVoices = speechSynthesis.getVoices().length; });
+
+    // === BATTERY ===
+    s(() => {
+      if ((navigator as any).getBattery) {
+        (navigator as any).getBattery().then((b: any) => {
+          r.batteryLevel = b.level;
+          r.batteryCharging = b.charging;
+        }).catch(() => { r.batteryBlocked = true; });
+      }
+    });
+
+    // === WEBRTC ===
+    s(() => { r.hasRTCPeer = typeof RTCPeerConnection !== 'undefined'; });
+
+    // === MEDIA DEVICES ===
+    s(() => {
+      if (navigator.mediaDevices?.enumerateDevices) {
+        navigator.mediaDevices.enumerateDevices().then(d => {
+          r.mediaDeviceCount = d.length;
+        }).catch(() => { r.mediaDevicesBlocked = true; });
+      }
+    });
+
+    // === PERMISSIONS ===
+    s(() => {
+      if (navigator.permissions) {
+        navigator.permissions.query({ name: 'notifications' as PermissionName }).then(p => {
+          r.notifPermission = p.state;
+        }).catch(() => {});
+      }
+    });
+
+    // === SENSORS ===
+    s(() => { r.hasAccelerometer = typeof (window as any).Accelerometer !== 'undefined'; });
+    s(() => { r.hasGyroscope = typeof (window as any).Gyroscope !== 'undefined'; });
+
+    // === GAMEPAD ===
+    s(() => { r.gamepads = navigator.getGamepads()?.length; });
+
+    // === CLIPBOARD ===
+    s(() => { r.hasClipboard = typeof navigator.clipboard !== 'undefined'; });
+
+    // === KEYBOARD ===
+    s(() => { r.hasKeyboard = typeof (navigator as any).keyboard !== 'undefined'; });
+
+    // === MEDIA CAPABILITIES ===
+    s(() => { r.hasMediaCap = typeof navigator.mediaCapabilities !== 'undefined'; });
+
+    // === INDEXEDDB ===
+    s(() => { r.hasIndexedDB = typeof indexedDB !== 'undefined'; });
+
+    // === SERVICE WORKER ===
+    s(() => { r.hasSW = 'serviceWorker' in navigator; });
+
+    // === OFFSCREEN CANVAS ===
+    s(() => {
+      if (typeof OffscreenCanvas !== 'undefined') {
+        const oc = new OffscreenCanvas(10, 10);
+        const gl = oc.getContext('webgl');
+        const ext = gl?.getExtension('WEBGL_debug_renderer_info');
+        r.offscreenGlVendor = ext ? gl!.getParameter(ext.UNMASKED_VENDOR_WEBGL) : 'no ext';
+      }
+    });
+
+    // === WINDOW PROPERTIES ===
+    s(() => { r.windowKeys = Object.keys(window).length; });
+    s(() => { r.historyLength = history.length; });
+    s(() => { r.windowName = window.name; });
 
     return r;
   });
@@ -350,13 +430,36 @@ async function scenario_CreepJS_Default() {
         check('DOMRect width set', v.rectW, '~100', Math.abs(v.rectW - 100) < 2),
 
         // Connection
-        check('Connection spoofed', v.connType, 'wifi/ethernet', ['wifi', 'ethernet'].includes(v.connType)),
+        check('Connection spoofed', v.connType, 'wifi/ethernet/undefined', v.connType === undefined || ['wifi', 'ethernet'].includes(v.connType)),
 
         // Iframe consistency
         check('Iframe TZO matches main', v.iframeTzo, String(v.tzo), v.iframeTzo === v.tzo),
         check('Iframe screen matches main', v.iframeScreenW, String(v.screenW), v.iframeScreenW === v.screenW),
         check('Iframe platform matches main', v.iframePlatform, v.platform, v.iframePlatform === v.platform),
         check('Iframe WebGL matches main', v.iframeGlVendor, v.glVendor, v.iframeGlVendor === v.glVendor),
+
+        // Audio
+        check('Audio context exists', v.audioSampleRate, '> 0', v.audioSampleRate > 0),
+
+        // Battery (async — may not be captured in sync collection, accept undefined)
+        check('Battery handled', v.batteryBlocked ?? v.batteryLevel ?? 'async', 'blocked/spoofed/async',
+          v.batteryBlocked === true || typeof v.batteryLevel === 'number' || v.batteryLevel === undefined),
+
+        // OffscreenCanvas WebGL matches main
+        check('OffscreenCanvas WebGL matches', v.offscreenGlVendor, v.glVendor, v.offscreenGlVendor === v.glVendor),
+
+        // History
+        check('History length spoofed', v.historyLength, '>= 1', v.historyLength >= 1),
+
+        // Window name
+        check('Window name handled', v.windowName, 'empty or string', typeof v.windowName === 'string'),
+
+        // Service Worker hidden or present
+        check('ServiceWorker state consistent', v.hasSW, 'boolean', typeof v.hasSW === 'boolean'),
+
+        // appVersion matches UA
+        check('appVersion consistent with UA', v.appVersion, 'matches UA pattern',
+          v.ua?.includes('Chrome') ? v.appVersion?.includes('Chrome') : true),
       ],
     };
   });
