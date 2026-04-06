@@ -228,18 +228,30 @@ export default function DashboardTab({
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-3 gap-2">
-        {[
-          { label: 'Profile', value: assignedProfile?.userAgent?.name || 'Random' },
-          { label: 'Screen', value: assignedProfile?.screen ? `${assignedProfile.screen.width}x${assignedProfile.screen.height}` : 'Auto' },
-          { label: 'Language', value: assignedProfile?.languages?.[0] || 'Auto' },
-        ].map(({ label, value }) => (
-          <div key={label} className="card" style={{ padding: '8px 10px' }}>
-            <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{label}</div>
-            <div className="truncate" style={{ fontSize: '12px', fontWeight: 500, marginTop: '2px' }}>{value}</div>
-          </div>
-        ))}
+      {/* Active Profile Details */}
+      <div className="card" style={{ padding: '10px 12px' }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>
+          Active Spoofed Profile
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', fontSize: '11px' }}>
+          {[
+            { label: 'UA', value: assignedProfile?.userAgent?.name || 'Random' },
+            { label: 'Platform', value: assignedProfile?.userAgent?.platformName || 'Auto' },
+            { label: 'Screen', value: assignedProfile?.screen ? `${assignedProfile.screen.width}x${assignedProfile.screen.height}` : 'Auto' },
+            { label: 'DPR', value: assignedProfile?.screen?.devicePixelRatio?.toString() || 'Auto' },
+            { label: 'Language', value: assignedProfile?.languages?.[0] || 'Auto' },
+            { label: 'Timezone', value: assignedProfile?.timezoneOffset !== undefined ? `UTC${assignedProfile.timezoneOffset <= 0 ? '+' : '-'}${Math.abs(assignedProfile.timezoneOffset / 60)}` : 'Auto' },
+            { label: 'Cores', value: assignedProfile?.hardwareConcurrency?.toString() || 'Auto' },
+            { label: 'RAM', value: assignedProfile?.deviceMemory ? `${assignedProfile.deviceMemory}GB` : 'Hidden' },
+            { label: 'Browser', value: assignedProfile?.userAgent?.brands ? 'Chromium' : assignedProfile?.userAgent?.oscpu ? 'Firefox' : 'Auto' },
+            { label: 'GPU', value: 'Spoofed' },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+              <span className="truncate" style={{ maxWidth: '120px', fontWeight: 500 }}>{value}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Fingerprint Monitor */}

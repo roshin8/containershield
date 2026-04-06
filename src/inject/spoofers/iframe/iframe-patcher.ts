@@ -10,6 +10,7 @@
 
 import type { AssignedProfileData, SpooferSettings } from '@/types';
 import { GL, TIMEZONE_IANA } from '@/lib/constants';
+import { addCanvasNoise, addAudioNoise, overridePropWithGetter, overrideMethodDirect } from '@/lib/noise';
 
 interface IframePatchConfig {
   settings: SpooferSettings;
@@ -154,13 +155,11 @@ function patchWebGL(
     if (!Ctor?.prototype?.getParameter) continue;
 
     const origGP = Ctor.prototype.getParameter;
-    const spoofed = function(this: any, pname: number) {
+    overrideMethodDirect(Ctor.prototype, 'getParameter', function(this: any, pname: number) {
       if (pname === GL.UNMASKED_VENDOR || pname === GL.VENDOR) return gpu.vendor;
       if (pname === GL.UNMASKED_RENDERER || pname === GL.RENDERER) return gpu.renderer;
       return origGP.call(this, pname);
-    };
-    try { Object.defineProperty(Ctor.prototype, 'getParameter', { value: spoofed, writable: true, configurable: true }); } catch {}
-    try { Ctor.prototype.getParameter = spoofed; } catch {}
+    });
   }
 }
 
@@ -177,21 +176,13 @@ function patchScreen(
     colorDepth: screen.colorDepth, pixelDepth: screen.pixelDepth,
   };
 
-  // Patch on prototype
   const ScreenProto = (win as any).Screen?.prototype;
-  if (ScreenProto) {
-    for (const [prop, val] of Object.entries(props)) {
-      try { Object.defineProperty(ScreenProto, prop, { get: () => val, configurable: true }); } catch {}
-    }
-  }
-
-  // Also patch on instance
   for (const [prop, val] of Object.entries(props)) {
-    try { Object.defineProperty(win.screen, prop, { get: () => val, configurable: true }); } catch {}
+    overridePropWithGetter(ScreenProto, win.screen, prop, () => val);
   }
 
   if (screen.devicePixelRatio) {
-    try { Object.defineProperty(win, 'devicePixelRatio', { get: () => screen.devicePixelRatio, configurable: true }); } catch {}
+    overridePropWithGetter(null, win, 'devicePixelRatio', () => screen.devicePixelRatio);
   }
 }
 
@@ -206,21 +197,20 @@ function patchNavigator(
   if (!ua || settings.navigator?.userAgent === 'off') return;
 
   const nav = (win as any).Navigator?.prototype || win.navigator;
-  const navProps: Record<string, string> = {
+  const props: Record<string, any> = {
     userAgent: ua.userAgent, platform: ua.platform,
     vendor: ua.vendor || '', appVersion: ua.appVersion || '',
   };
-
-  for (const [prop, val] of Object.entries(navProps)) {
-    try { Object.defineProperty(nav, prop, { get: () => val, configurable: true }); } catch {}
-  }
-
-  if (hc) try { Object.defineProperty(nav, 'hardwareConcurrency', { get: () => hc, configurable: true }); } catch {}
-  if (dm) try { Object.defineProperty(nav, 'deviceMemory', { get: () => dm, configurable: true }); } catch {}
+  if (hc) props.hardwareConcurrency = hc;
+  if (dm) props.deviceMemory = dm;
   if (langs) {
     const frozen = Object.freeze([...langs]);
-    try { Object.defineProperty(nav, 'languages', { get: () => frozen, configurable: true }); } catch {}
-    try { Object.defineProperty(nav, 'language', { get: () => langs[0], configurable: true }); } catch {}
+    props.languages = frozen;
+    props.language = langs[0];
+  }
+
+  for (const [prop, val] of Object.entries(props)) {
+    overridePropWithGetter(nav, null, prop, () => val);
   }
 }
 
@@ -236,9 +226,7 @@ function patchTimezone(
   if (!iframeDate) return;
 
   // Patch getTimezoneOffset
-  const spoofedTZO = function(): number { return mainFrameOffset; };
-  try { Object.defineProperty(iframeDate.prototype, 'getTimezoneOffset', { value: spoofedTZO, writable: true, configurable: true }); } catch {}
-  try { iframeDate.prototype.getTimezoneOffset = spoofedTZO; } catch {}
+  overrideMethodDirect(iframeDate.prototype, 'getTimezoneOffset', () => mainFrameOffset);
 
   // Patch Intl.DateTimeFormat
   const origDTF = (win as any).Intl?.DateTimeFormat;
@@ -262,53 +250,32 @@ function patchTimezone(
 
 function patchCanvas(win: Window, settings: SpooferSettings): void {
   if (settings.graphics?.canvas === 'off') return;
+  const isBlock = settings.graphics.canvas === 'block';
 
   try {
-    const iframeCanvas = (win as any).HTMLCanvasElement?.prototype;
-    if (!iframeCanvas) return;
+    const proto = (win as any).HTMLCanvasElement?.prototype;
+    if (!proto) return;
 
-    // Patch toDataURL — add subtle pixel noise
-    const origToDataURL = iframeCanvas.toDataURL;
-    iframeCanvas.toDataURL = function(this: HTMLCanvasElement, ...args: any[]): string {
-      if (settings.graphics.canvas === 'block') return 'data:image/png;base64,';
-      const ctx = this.getContext('2d');
-      if (ctx) {
-        try {
-          const imageData = ctx.getImageData(0, 0, 1, 1);
-          imageData.data[0] = (imageData.data[0] + 1) % 256;
-          ctx.putImageData(imageData, 0, 0);
-        } catch {}
-      }
+    const origToDataURL = proto.toDataURL;
+    proto.toDataURL = function(this: HTMLCanvasElement, ...args: any[]): string {
+      if (isBlock) return 'data:image/png;base64,';
+      try { const ctx = this.getContext('2d'); if (ctx) addCanvasNoise(ctx.getImageData(0, 0, 1, 1).data); } catch {}
       return origToDataURL.apply(this, args);
     };
 
-    // Patch toBlob
-    const origToBlob = iframeCanvas.toBlob;
-    iframeCanvas.toBlob = function(this: HTMLCanvasElement, cb: BlobCallback, ...args: any[]): void {
-      if (settings.graphics.canvas === 'block') {
-        cb(new Blob([], { type: 'image/png' }));
-        return;
-      }
-      const ctx = this.getContext('2d');
-      if (ctx) {
-        try {
-          const imageData = ctx.getImageData(0, 0, 1, 1);
-          imageData.data[0] = (imageData.data[0] + 1) % 256;
-          ctx.putImageData(imageData, 0, 0);
-        } catch {}
-      }
+    const origToBlob = proto.toBlob;
+    proto.toBlob = function(this: HTMLCanvasElement, cb: BlobCallback, ...args: any[]): void {
+      if (isBlock) { cb(new Blob([], { type: 'image/png' })); return; }
+      try { const ctx = this.getContext('2d'); if (ctx) addCanvasNoise(ctx.getImageData(0, 0, 1, 1).data); } catch {}
       origToBlob.call(this, cb, ...args);
     };
 
-    // Patch getImageData on 2D context
-    const iframeCtx2D = (win as any).CanvasRenderingContext2D?.prototype;
-    if (iframeCtx2D) {
-      const origGetImageData = iframeCtx2D.getImageData;
-      iframeCtx2D.getImageData = function(this: CanvasRenderingContext2D, ...args: any[]): ImageData {
-        const data = origGetImageData.apply(this, args);
-        if (settings.graphics.canvas !== 'block' && data.data.length > 0) {
-          data.data[0] = (data.data[0] + 1) % 256;
-        }
+    const ctx2D = (win as any).CanvasRenderingContext2D?.prototype;
+    if (ctx2D) {
+      const origGID = ctx2D.getImageData;
+      ctx2D.getImageData = function(this: CanvasRenderingContext2D, ...args: any[]): ImageData {
+        const data = origGID.apply(this, args);
+        if (!isBlock) addCanvasNoise(data.data);
         return data;
       };
     }
@@ -319,29 +286,23 @@ function patchAudio(win: Window, settings: SpooferSettings): void {
   if (settings.audio?.audioContext === 'off') return;
 
   try {
-    // Patch AnalyserNode.getFloatFrequencyData
-    const iframeAnalyser = (win as any).AnalyserNode?.prototype;
-    if (iframeAnalyser) {
-      const origGetFloat = iframeAnalyser.getFloatFrequencyData;
-      if (origGetFloat) {
-        iframeAnalyser.getFloatFrequencyData = function(this: AnalyserNode, array: Float32Array): void {
-          origGetFloat.call(this, array);
-          if (array.length > 0) array[0] += 0.0001;
-        };
-      }
+    const analyser = (win as any).AnalyserNode?.prototype;
+    if (analyser?.getFloatFrequencyData) {
+      const orig = analyser.getFloatFrequencyData;
+      analyser.getFloatFrequencyData = function(this: AnalyserNode, arr: Float32Array): void {
+        orig.call(this, arr);
+        addAudioNoise(arr, 0.0001);
+      };
     }
 
-    // Patch AudioBuffer.getChannelData
-    const iframeAudioBuf = (win as any).AudioBuffer?.prototype;
-    if (iframeAudioBuf) {
-      const origGetChannel = iframeAudioBuf.getChannelData;
-      if (origGetChannel) {
-        iframeAudioBuf.getChannelData = function(this: AudioBuffer, channel: number): Float32Array {
-          const data = origGetChannel.call(this, channel);
-          if (data.length > 0) data[0] += 0.0000001;
-          return data;
-        };
-      }
+    const audioBuf = (win as any).AudioBuffer?.prototype;
+    if (audioBuf?.getChannelData) {
+      const orig = audioBuf.getChannelData;
+      audioBuf.getChannelData = function(this: AudioBuffer, ch: number): Float32Array {
+        const data = orig.call(this, ch);
+        addAudioNoise(data);
+        return data;
+      };
     }
   } catch {}
 }
