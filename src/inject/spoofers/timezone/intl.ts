@@ -141,30 +141,36 @@ export function initTimezoneSpoofer(
     // Direct assignment as fallback
     Date.prototype.getTimezoneOffset = spoofedGetTZO;
 
-    // Override Date constructor and Date.parse to spoof timezone for string-based
-    // offset computation. CreepJS computes timezone without getTimezoneOffset() by
-    // parsing date strings and comparing UTC vs local interpretation.
+    // Override Date constructor to spoof timezone for string-based offset computation.
+    // CreepJS computes timezone via:
+    //   utc = Date.parse(new Date("4/06/2026"))  ← local-parsed
+    //   now = +new Date("2026-04-06")             ← UTC-parsed (ISO date-only)
+    //   offset = (utc - now) / 60000
+    //
+    // We shift LOCAL-parsed dates but NOT UTC-parsed (ISO date-only) dates.
     const OrigDate = Date;
-    const realOffset = new OrigDate().getTimezoneOffset !== spoofedGetTZO
-      ? OrigDate.prototype.getTimezoneOffset.call(new OrigDate())
-      : 300; // fallback if already overridden
-    const offsetDiff = (currentOffset - realOffset) * 60000; // ms difference between real and spoofed
+    const realOffset = OrigDate.prototype.getTimezoneOffset.call(new OrigDate());
+    const offsetDiffMs = (currentOffset - realOffset) * 60000;
 
-    // Wrap Date constructor to adjust string-parsed dates
+    // ISO date-only format (YYYY-MM-DD) is parsed as UTC per spec — don't shift
+    const isISODateOnly = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s.trim());
+
     const SpoofedDate = function(this: any, ...args: any[]) {
       if (new.target) {
-        // Called with `new`
-        const d = args.length === 0
-          ? new OrigDate()
-          : args.length === 1 && typeof args[0] === 'string'
-            ? new OrigDate(new OrigDate(args[0]).getTime() + offsetDiff)
-            : new OrigDate(...args);
-        Object.setPrototypeOf(d, SpoofedDate.prototype);
-        return d;
+        if (args.length === 0) {
+          return new OrigDate();
+        }
+        if (args.length === 1 && typeof args[0] === 'string') {
+          const s = args[0];
+          if (isISODateOnly(s)) {
+            return new OrigDate(s); // UTC — no shift
+          }
+          // Local-parsed — shift to spoofed timezone
+          return new OrigDate(OrigDate.parse(s) + offsetDiffMs);
+        }
+        return new OrigDate(...args);
       }
-      // Called without `new` — returns string
-      const d = new OrigDate();
-      return d.toString();
+      return new OrigDate().toString();
     } as any;
 
     SpoofedDate.prototype = OrigDate.prototype;
@@ -172,7 +178,8 @@ export function initTimezoneSpoofer(
     SpoofedDate.now = OrigDate.now;
     SpoofedDate.UTC = OrigDate.UTC;
     SpoofedDate.parse = function(s: string): number {
-      return OrigDate.parse(s) + offsetDiff;
+      if (isISODateOnly(s)) return OrigDate.parse(s); // UTC — no shift
+      return OrigDate.parse(s) + offsetDiffMs;
     };
     registerNative(SpoofedDate, 'Date');
     registerNative(SpoofedDate.parse, 'parse');
