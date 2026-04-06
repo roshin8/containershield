@@ -105,12 +105,12 @@ setTimeout(function() {
     '--start-url', 'http://localhost:19998/trigger',
     '--no-reload',
   ], {
-    env: { ...process.env, MOZ_HEADLESS: '1' },
+    env: { ...process.env, ...(process.env.HEADED ? {} : { MOZ_HEADLESS: '1' }) },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
-  // Wait for results (3 minutes max — tests open multiple sites)
-  const timeout = new Promise<null>(r => setTimeout(() => r(null), 180000));
+  // Wait for results (6 minutes max — tests open multiple sites including deterministic checks)
+  const timeout = new Promise<null>(r => setTimeout(() => r(null), 360000));
   const results = await Promise.race([gotResults, timeout]);
 
   // Cleanup

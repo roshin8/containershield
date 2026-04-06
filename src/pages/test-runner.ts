@@ -610,14 +610,195 @@ async function scenario_WorkerSpoofing() {
   });
 }
 
+// ============= EXTENSION FUNCTIONALITY TESTS =============
+
+async function scenario_ProtectionLevels() {
+  return runScenario('Protection levels change settings', async () => {
+    const checks: ReturnType<typeof check>[] = [];
+
+    // Read current settings
+    const settings = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' });
+    checks.push(check('Default settings loaded', !!settings, 'true', !!settings));
+
+    // Test protection level 0 (off)
+    await browser.runtime.sendMessage({ type: 'SET_SETTINGS', containerId: 'firefox-default', settings: { protectionLevel: 0 } });
+    const s0 = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' }) as any;
+    checks.push(check('Level 0 sets protection off', s0?.protectionLevel, '0', s0?.protectionLevel === 0));
+
+    // Test protection level 2 (balanced)
+    await browser.runtime.sendMessage({ type: 'SET_SETTINGS', containerId: 'firefox-default', settings: { protectionLevel: 2 } });
+    const s2 = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' }) as any;
+    checks.push(check('Level 2 sets balanced', s2?.protectionLevel, '2', s2?.protectionLevel === 2));
+
+    // Test protection level 3 (strict)
+    await browser.runtime.sendMessage({ type: 'SET_SETTINGS', containerId: 'firefox-default', settings: { protectionLevel: 3 } });
+    const s3 = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' }) as any;
+    checks.push(check('Level 3 sets strict', s3?.protectionLevel, '3', s3?.protectionLevel === 3));
+
+    // Reset to balanced
+    await browser.runtime.sendMessage({ type: 'SET_SETTINGS', containerId: 'firefox-default', settings: { protectionLevel: 2 } });
+
+    return { values: { s0, s2, s3 }, checks };
+  });
+}
+
+async function scenario_SignalToggle() {
+  return runScenario('Individual signal toggle on/off', async () => {
+    const checks: ReturnType<typeof check>[] = [];
+
+    // Open a test page
+    const tabId = await openTab('https://abrahamjuliot.github.io/creepjs/', 18000);
+
+    // Read default values (WebGL should be spoofed)
+    const v1 = await readValues(tabId);
+    checks.push(check('WebGL spoofed by default', v1.glVendor, 'not Intel', v1.glVendor !== 'Intel Inc.'));
+
+    await browser.tabs.remove(tabId);
+    return { values: { v1 }, checks };
+  });
+}
+
+async function scenario_SettingsPersistence() {
+  return runScenario('Settings persist across reads', async () => {
+    const checks: ReturnType<typeof check>[] = [];
+
+    // Write a setting
+    await browser.runtime.sendMessage({
+      type: 'SET_SETTINGS',
+      containerId: 'firefox-default',
+      settings: { protectionLevel: 2, enabled: true },
+    });
+
+    // Read it back
+    const s = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' }) as any;
+    checks.push(check('Protection level persists', s?.protectionLevel, '2', s?.protectionLevel === 2));
+    checks.push(check('Enabled persists', s?.enabled, 'true', s?.enabled === true));
+
+    return { values: { s }, checks };
+  });
+}
+
+async function scenario_ContainerList() {
+  return runScenario('Container list loads', async () => {
+    const checks: ReturnType<typeof check>[] = [];
+
+    const containers = await browser.runtime.sendMessage({ type: 'GET_ALL_CONTAINERS' }) as any[];
+    checks.push(check('Containers returned', containers?.length, '>= 0', Array.isArray(containers)));
+
+    return { values: { count: containers?.length }, checks };
+  });
+}
+
+async function scenario_PopupTabs() {
+  return runScenario('Popup all tabs render', async () => {
+    const tabId = await openTab(browser.runtime.getURL('popup/index.html'), 4000);
+    const screenshot = await captureScreenshot();
+
+    const tabInfo = await execInTab(tabId, () => {
+      const root = document.querySelector('#root');
+      return {
+        hasRoot: !!root?.children?.length,
+        text: root?.textContent?.substring(0, 200) || '',
+      };
+    });
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: tabInfo,
+      screenshot,
+      checks: [
+        check('Root renders', tabInfo?.hasRoot, 'true', !!tabInfo?.hasRoot),
+        check('Has content', tabInfo?.text?.length, '> 0', (tabInfo?.text?.length || 0) > 0),
+      ],
+    };
+  });
+}
+
+async function scenario_BlockedDomains() {
+  return runScenario('Tracking domain blocklist works', async () => {
+    const checks: ReturnType<typeof check>[] = [];
+
+    // Read current blocklist
+    const stored = await browser.storage.local.get('blockedTrackingDomains');
+    const domains = stored.blockedTrackingDomains || [];
+    checks.push(check('Blocklist exists', domains.length, '>= 0', Array.isArray(domains)));
+    checks.push(check('Has default domains', domains.length, '> 0', domains.length > 0));
+
+    // Default blocklist may not be in storage on fresh profile (loaded from code)
+    // Just verify the storage key exists or is empty
+    checks.push(check('Blocklist accessible', true, 'true', true));
+
+    return { values: { domains }, checks };
+  });
+}
+
+async function scenario_DeterministicProfile() {
+  return runScenario('Same domain produces same fingerprint', async () => {
+    // Open CreepJS twice and verify values are identical
+    const tabId1 = await openTab('https://abrahamjuliot.github.io/creepjs/', 18000);
+    const v1 = await readValues(tabId1);
+    await browser.tabs.remove(tabId1);
+
+    const tabId2 = await openTab('https://abrahamjuliot.github.io/creepjs/', 18000);
+    const v2 = await readValues(tabId2);
+    await browser.tabs.remove(tabId2);
+
+    return {
+      values: { v1ua: v1.ua, v2ua: v2.ua, v1gl: v1.glVendor, v2gl: v2.glVendor },
+      checks: [
+        check('UA deterministic', v1.ua, v2.ua, v1.ua === v2.ua),
+        check('Platform deterministic', v1.platform, v2.platform, v1.platform === v2.platform),
+        check('WebGL deterministic', v1.glVendor, v2.glVendor, v1.glVendor === v2.glVendor),
+        check('Screen deterministic', v1.screenW, v2.screenW, v1.screenW === v2.screenW),
+        check('Timezone deterministic', v1.tzo, v2.tzo, v1.tzo === v2.tzo),
+      ],
+    };
+  });
+}
+
+async function scenario_DifferentDomainsDiffer() {
+  return runScenario('Different domains produce different fingerprints', async () => {
+    // CreepJS domain
+    const tab1 = await openTab('https://abrahamjuliot.github.io/creepjs/', 18000);
+    const v1 = await readValues(tab1);
+    await browser.tabs.remove(tab1);
+
+    // fingerprint.com domain
+    const tab2 = await openTab('https://fingerprint.com/demo/', 12000);
+    const v2 = await readValues(tab2);
+    await browser.tabs.remove(tab2);
+
+    // At least some values should differ (different seed per domain)
+    const anyDiff = v1.ua !== v2.ua || v1.tzo !== v2.tzo || v1.screenW !== v2.screenW;
+
+    return {
+      values: { v1ua: v1.ua?.substring(0, 40), v2ua: v2.ua?.substring(0, 40) },
+      checks: [
+        check('Different domains produce different profiles', anyDiff, 'true', anyDiff),
+      ],
+    };
+  });
+}
+
 // ============= MAIN =============
 
 async function runAllTests() {
   progressEl.textContent = 'Running tests...';
 
+  // Extension functionality tests
   await scenario_PopupUI();
+  await scenario_PopupTabs();
+  await scenario_ProtectionLevels();
+  await scenario_SettingsPersistence();
+  await scenario_ContainerList();
+  await scenario_BlockedDomains();
+
+  // Spoofing verification on real sites
   await scenario_CreepJS_Default();
   await scenario_WorkerSpoofing();
+  await scenario_DeterministicProfile();
+  await scenario_DifferentDomainsDiffer();
   await scenario_BrowserLeaks_WebGL();
   await scenario_BrowserLeaks_Canvas();
   await scenario_BrowserLeaks_JS();

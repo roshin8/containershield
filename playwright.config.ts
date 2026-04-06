@@ -28,7 +28,7 @@ export default defineConfig({
       name: 'real-extension',
       use: { browserName: 'firefox' },
       testMatch: /real-extension-full\.spec\.ts$/,
-      timeout: 240000,
+      timeout: 420000,
     },
   ],
 });
