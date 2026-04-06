@@ -355,11 +355,6 @@ export class MessageHandler {
         },
       });
     }
-    // Set the SW preamble for ServiceWorker injection via filterResponseData
-    if (message.workerPreamble) {
-      const { setSWPreamble } = await import('./sw-injector');
-      setSWPreamble(message.workerPreamble);
-    }
     return { success: true };
   }
 

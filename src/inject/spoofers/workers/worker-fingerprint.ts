@@ -211,28 +211,16 @@ export function initWorkerSpoofer(
   }
 
   // Handle ServiceWorker:
-  // - Off: no interception, SW runs with real values
-  // - Spoof: let SW register normally — background's filterResponseData injects
-  //   preamble into the SW script HTTP response. If filterResponseData unavailable,
-  //   falls back to rejecting SW → SharedWorker/DedicatedWorker (also spoofed).
-  // - Block: reject registration entirely
+  // - Off: no interception
+  // - Spoof/Block: reject SW registration → forces fallback to SharedWorker/DedicatedWorker
+  //   which ARE fully spoofed with preamble injection.
+  //   We can't inject into SW scripts in Firefox (filterResponseData doesn't intercept SW,
+  //   blob URLs fail for SW registration). Rejecting SW is the only reliable approach.
   if ('serviceWorker' in navigator && serviceWorkerMode !== 'off') {
     try {
-      const origRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
-
-      navigator.serviceWorker.register = async function(
-        scriptURL: string | URL, options?: RegistrationOptions
-      ): Promise<ServiceWorkerRegistration> {
-        if (serviceWorkerMode === 'block') {
-          logAccess('ServiceWorker.register', { spoofed: true, value: 'blocked' });
-          throw new DOMException('The operation is insecure.', 'SecurityError');
-        }
-
-        // Spoof mode: let SW register normally.
-        // The background script's filterResponseData will inject the preamble
-        // into the SW script's HTTP response before Firefox processes it.
-        logAccess('ServiceWorker.register', { spoofed: true, value: 'filter-injected' });
-        return origRegister(scriptURL, options);
+      navigator.serviceWorker.register = async function(): Promise<ServiceWorkerRegistration> {
+        logAccess('ServiceWorker.register', { spoofed: true, value: serviceWorkerMode === 'block' ? 'blocked' : 'rejected-for-spoofed-fallback' });
+        throw new DOMException('The operation is insecure.', 'SecurityError');
       };
     } catch {}
   }

@@ -15,7 +15,8 @@ import { getBadgeManager } from './badge-manager';
 import { ContextMenuManager } from './context-menu';
 import { KeyboardShortcuts } from './keyboard-shortcuts';
 import { EXTENSION_VERSION, STORAGE_KEYS } from '@/lib/constants';
-import { initSWInjector } from './sw-injector';
+// SW injection via filterResponseData doesn't work in Firefox (can't intercept SW scripts)
+// ServiceWorker spoof mode rejects SW → falls back to SharedWorker (spoofed)
 
 async function init(): Promise<void> {
   console.log(`[Container Shield] Initializing v${EXTENSION_VERSION}`);
@@ -32,8 +33,6 @@ async function init(): Promise<void> {
     const headerSpoofer = new HeaderSpoofer(settingsStore, containerManager);
     await headerSpoofer.init();
 
-    // Initialize SW script injection via filterResponseData
-    initSWInjector();
 
     const ipIsolation = new IPIsolation(settingsStore, containerManager);
     await ipIsolation.init();
@@ -78,10 +77,11 @@ async function checkFirstRun(): Promise<void> {
 
 /** Listen for test runner open requests */
 async function checkTestMode(): Promise<void> {
-  browser.runtime.onMessage.addListener((msg) => {
+  browser.runtime.onMessage.addListener((msg: any) => {
     if (msg.type === 'OPEN_TEST_RUNNER') {
       browser.storage.local.set({ onboardingComplete: true });
-      browser.tabs.create({ url: browser.runtime.getURL('pages/test-runner.html') });
+      const only = msg.only ? `?only=${encodeURIComponent(msg.only)}` : '';
+      browser.tabs.create({ url: browser.runtime.getURL(`pages/test-runner.html${only}`) });
       return Promise.resolve({ opened: true });
     }
   });

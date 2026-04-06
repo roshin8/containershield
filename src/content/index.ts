@@ -34,7 +34,7 @@ window.addEventListener('message', async (event) => {
   // Open test runner when requested by test harness
   if (type === 'CONTAINER_SHIELD_OPEN_TEST_RUNNER') {
     try {
-      await browser.runtime.sendMessage({ type: 'OPEN_TEST_RUNNER' });
+      await browser.runtime.sendMessage({ type: 'OPEN_TEST_RUNNER', only: data.only || '' });
     } catch {}
   }
 
@@ -82,6 +82,10 @@ browser.runtime.onMessage.addListener((message: { type: string; settings?: unkno
       r.glRenderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'no ext';
     } catch {}
     return Promise.resolve(r);
+  }
+  // Test runner: read page DOM text (for parsing CreepJS output)
+  if (message.type === 'EXEC_READ_DOM') {
+    return Promise.resolve({ text: document.body.innerText });
   }
   return false;
 });

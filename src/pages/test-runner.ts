@@ -11,8 +11,9 @@ declare const browser: typeof chrome;
 const RESULT_SERVER = 'http://localhost:19999';
 const REAL_TZO = new Date().getTimezoneOffset(); // Before spoofers affect this page
 
-// Resumability: load previously completed tests from storage
+// Resumability and filtering
 const STORAGE_KEY = 'cs_test_results';
+let onlyTestFilter = '';
 
 interface TestResult {
   scenario: string;
@@ -358,11 +359,16 @@ async function saveResults(): Promise<void> {
 let previousResults: Map<string, TestResult> = new Map();
 let resumeMode = false;
 
-/** Run a single test scenario (skips if already passed in previous run) */
+/** Run a single test scenario (skips if filtered or already passed) */
 async function runScenario(
   name: string,
   fn: () => Promise<{ values: Record<string, any>; checks: Array<{ signal: string; expected: string; actual: string; pass: boolean }>; screenshot?: string }>
 ): Promise<TestResult> {
+  // Filter: skip if doesn't match --only filter
+  if (onlyTestFilter && !name.toLowerCase().includes(onlyTestFilter.toLowerCase())) {
+    return { scenario: name, passed: true, values: {}, checks: [], duration: 0 };
+  }
+
   // Resume: skip if previously passed
   if (resumeMode && previousResults.has(name)) {
     const prev = previousResults.get(name)!;
@@ -669,6 +675,80 @@ async function scenario_WorkerSpoofing() {
           workerVals?.cores === v.cores),
         check('Worker platform matches main', workerVals?.platform, v.platform,
           workerVals?.platform === v.platform),
+      ],
+    };
+  });
+}
+
+async function scenario_CreepJS_WorkerSection() {
+  return runScenario('CreepJS — site Worker section spoofed (not synthetic)', async () => {
+    // CreepJS needs ~20s to finish fingerprinting + Worker section takes extra time
+    const tabId = await openTab('https://abrahamjuliot.github.io/creepjs/', 30000);
+
+    // Read CreepJS's OWN Worker section from the page DOM
+    // Poll until CreepJS has rendered the Worker section (contains "WorkerGlobalScope" or "blocked")
+    let bodyText = '';
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        bodyText = await execInTab(tabId, () => document.body.innerText) || '';
+      } catch {}
+      if (!bodyText || bodyText.length < 500) {
+        try {
+          const dom = await browser.tabs.sendMessage(tabId, { type: 'EXEC_READ_DOM' }) as any;
+          bodyText = dom?.text || bodyText;
+        } catch {}
+      }
+      if (bodyText.includes('WorkerGlobalScope') || bodyText.includes('gpu:\nblocked')) break;
+      await new Promise(r => setTimeout(r, 5000));
+    }
+
+    const workerInfo = (() => {
+      const body = bodyText;
+
+      // CreepJS renders Worker type in the heading, e.g. "SharedWorkerGlobalScope"
+      const workerType = body.match(/(SharedWorkerGlobalScope|DedicatedWorkerGlobalScope|ServiceWorkerGlobalScope)/)?.[1] || 'not found';
+
+      // Check if blocked
+      const isBlocked = body.includes('blocked\ngpu:\nblocked');
+
+      // CreepJS Worker section is rendered as text blocks. Find the section between
+      // the Worker heading and the next major section (WebGL).
+      // The Worker section text looks like:
+      // "SharedWorkerGlobalScope\nWorkerXXXXXX\nlang/timezone:\nen-US...\ngpu:\nGoogle Inc...\nuserAgent:\nMozilla..."
+      const workerSection = body.match(/(?:Shared|Dedicated|Service)WorkerGlobalScope\n[\s\S]*?(?=\d+\.\d+ms\s+WebGL|$)/)?.[0] || '';
+
+      const workerUA = workerSection.match(/userAgent:\n([^\n]+)/)?.[1]?.trim() || '';
+      const gpuLines = workerSection.match(/gpu:\n([^\n]+)\n([^\n]+)/);
+      const gpuVendor = gpuLines?.[1]?.trim() || '';
+      const gpuRenderer = gpuLines?.[2]?.trim() || '';
+      const tzLines = workerSection.match(/lang\/timezone:\n([^\n]+)\n([^\n]+)/);
+      const workerLang = tzLines?.[1]?.trim() || '';
+      const workerTz = tzLines?.[2]?.trim() || '';
+
+      return {
+        workerType, isBlocked, workerUA, gpuVendor, gpuRenderer, workerLang, workerTz,
+        sectionLength: workerSection.length,
+        bodyLength: body.length,
+      };
+    })();
+
+    const screenshot = await captureScreenshot();
+    await browser.tabs.remove(tabId);
+
+    const v = workerInfo || {} as any;
+    return {
+      values: v,
+      screenshot,
+      checks: [
+        check('DOM text read', v.bodyLength, '> 0', (v.bodyLength || 0) > 0),
+        check('Worker type detected', v.workerType, 'SW/Shared/Dedicated/blocked',
+          v.workerType !== 'not found' || v.isBlocked),
+        check('Worker UA not real Firefox', v.workerUA, 'not Gecko/Firefox',
+          v.isBlocked || !v.workerUA.includes('Gecko/20100101 Firefox/')),
+        check('Worker GPU not real Intel', v.gpuVendor, 'not Intel Inc.',
+          v.isBlocked || v.gpuVendor !== 'Intel Inc.'),
+        check('Worker timezone or lang present', v.workerLang || v.workerTz || v.sectionLength > 100, 'has section data',
+          v.isBlocked || !!(v.workerLang || v.workerTz) || (v.sectionLength || 0) > 100),
       ],
     };
   });
@@ -1993,9 +2073,12 @@ async function scenario_IndividualSignalToggle_Navigator() {
 async function runAllTests() {
   // Check URL params for resume/fresh mode
   const params = new URLSearchParams(window.location.search);
-  resumeMode = params.get('fresh') !== '1';
+  onlyTestFilter = params.get('only') || '';
+  resumeMode = params.get('fresh') !== '1' && !onlyTestFilter;
 
-  if (resumeMode) {
+  if (onlyTestFilter) {
+    progressEl.textContent = `Running only: ${onlyTestFilter}`;
+  } else if (resumeMode) {
     previousResults = await loadPreviousResults();
     if (previousResults.size > 0) {
       progressEl.textContent = `Resuming (${previousResults.size} cached)...`;
@@ -2047,6 +2130,7 @@ async function runAllTests() {
   // === Comprehensive CreepJS Verification ===
   await scenario_CreepJS_Default();
   await scenario_WorkerSpoofing();
+  await scenario_CreepJS_WorkerSection();
   await scenario_SignalToggleVerify();
   await scenario_SignalOffLeaks();
 

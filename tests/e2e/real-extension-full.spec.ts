@@ -78,7 +78,7 @@ setTimeout(function() {
   fetch('http://localhost:19999/trigger-ack').catch(function(){});
   // The background script listens for OPEN_TEST_RUNNER message
   // But content script bridges postMessage — send it
-  window.postMessage({ type: 'CONTAINER_SHIELD_OPEN_TEST_RUNNER' }, '*');
+  window.postMessage({ type: 'CONTAINER_SHIELD_OPEN_TEST_RUNNER', only: '${process.env.TEST_ONLY || ''}' }, '*');
 }, 2000);
 </script>
 <p>Opening test runner...</p>
