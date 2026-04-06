@@ -133,7 +133,8 @@ export function initWorkerSpoofer(
     const WorkerProxy = function(this: any, scriptURL: string | URL, options?: WorkerOptions): Worker {
       logAccess('Worker.constructor', { spoofed: true, value: 'injected' });
 
-      const urlStr = String(scriptURL);
+      // Resolve relative URLs to absolute (importScripts inside blob Workers can't resolve relative paths)
+      const urlStr = new URL(String(scriptURL), location.href).href;
 
       // For ALL non-module workers: use importScripts wrapper
       // This works for both blob: URLs and regular URLs in Firefox
@@ -189,7 +190,7 @@ export function initWorkerSpoofer(
     const SharedWorkerProxy = function(this: any, scriptURL: string | URL, nameOrOptions?: string | WorkerOptions): SharedWorker {
       logAccess('SharedWorker.constructor', { spoofed: true, value: 'injected' });
 
-      const urlStr = String(scriptURL);
+      const urlStr = new URL(String(scriptURL), location.href).href;
       try {
         const wrapper = workerPreamble + 'importScripts(' + JSON.stringify(urlStr) + ');\n';
         const blob = new OriginalBlob2([wrapper], { type: 'application/javascript' });
