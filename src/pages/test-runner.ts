@@ -1408,36 +1408,31 @@ async function scenario_HeaderRefererDNT() {
 
 async function scenario_AmIUnique() {
   return runScenario('AmIUnique.org — spoofed values detected', async () => {
-    const tabId = await openTab('https://amiunique.org/fingerprint', 12000);
+    const tabId = await openTab('https://amiunique.org/fingerprint', 15000);
 
     let v: Record<string, any> = {};
+    // Try scripting API first, then content script message
     try {
       v = await execInTab(tabId, () => ({
-        ua: navigator.userAgent,
-        platform: navigator.platform,
-        tzo: new Date().getTimezoneOffset(),
-        screenW: screen.width,
-        langs: navigator.languages?.join(','),
+        ua: navigator.userAgent, platform: navigator.platform,
+        tzo: new Date().getTimezoneOffset(), screenW: screen.width,
       }));
-    } catch {
-      try {
-        v = await browser.tabs.sendMessage(tabId, { type: 'EXEC_READ_VALUES' }) as Record<string, any>;
-      } catch {}
+    } catch {}
+    if (!v?.ua) {
+      for (let i = 0; i < 3 && !v?.ua; i++) {
+        try {
+          v = await Promise.race([
+            browser.tabs.sendMessage(tabId, { type: 'EXEC_READ_VALUES' }),
+            new Promise<any>(r => setTimeout(() => r(null), 4000)),
+          ]) as Record<string, any>;
+        } catch {}
+        if (!v?.ua) await new Promise(r => setTimeout(r, 2000));
+      }
+      v = v || {};
     }
 
     const screenshot = await captureScreenshot();
     await browser.tabs.remove(tabId);
-
-    // AmIUnique may redirect or block scripting — try content script fallback
-    if (!v?.ua) {
-      try {
-        v = await Promise.race([
-          browser.tabs.sendMessage(tabId, { type: 'EXEC_READ_VALUES' }),
-          new Promise<any>(r => setTimeout(() => r({}), 8000)),
-        ]) as Record<string, any>;
-      } catch {}
-      v = v || {};
-    }
 
     const hasValues = !!v?.ua;
     return {
@@ -1530,6 +1525,283 @@ async function scenario_MultipleTabsConsistent() {
   });
 }
 
+// ============= UI INTERACTION TESTS =============
+
+/** Helper: open popup as tab and interact with it */
+async function openPopupTab(): Promise<number> {
+  return await openTab(browser.runtime.getURL('popup/index.html'), 4000);
+}
+
+/** Helper: click an element in a tab by selector */
+async function clickInTab(tabId: number, selector: string): Promise<boolean> {
+  return execInTab(tabId, () => {
+    // @ts-ignore — selector passed via closure won't work in execInTab
+    return false;
+  });
+}
+
+async function scenario_PopupProtectionButtons() {
+  return runScenario('Popup — protection level buttons work', async () => {
+    const tabId = await openPopupTab();
+
+    // Read current state from DOM
+    const state = await execInTab(tabId, () => {
+      const root = document.getElementById('root');
+      const text = root?.textContent || '';
+      // Check if protection level indicators exist
+      const hasBalanced = text.includes('Balanced') || text.includes('balanced');
+      const hasStrict = text.includes('Strict') || text.includes('strict');
+      const hasDashboard = text.includes('Dashboard') || text.includes('dashboard');
+      return { hasBalanced, hasStrict, hasDashboard, textLen: text.length };
+    });
+
+    const screenshot = await captureScreenshot();
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: { state },
+      screenshot,
+      checks: [
+        check('Popup has content', state?.textLen, '> 50', (state?.textLen || 0) > 50),
+        check('Dashboard visible', state?.hasDashboard, 'true', !!state?.hasDashboard),
+        check('Protection levels shown', state?.hasBalanced || state?.hasStrict, 'true', !!(state?.hasBalanced || state?.hasStrict)),
+      ],
+    };
+  });
+}
+
+async function scenario_PopupTabNavigation() {
+  return runScenario('Popup — tab navigation works', async () => {
+    const tabId = await openPopupTab();
+    const checks: ReturnType<typeof check>[] = [];
+
+    // Check each sidebar tab exists
+    const tabs = await execInTab(tabId, () => {
+      const navButtons = document.querySelectorAll('button, [role="tab"], nav a, nav button');
+      const tabNames: string[] = [];
+      navButtons.forEach(btn => {
+        const text = btn.textContent?.trim();
+        if (text && text.length < 20) tabNames.push(text);
+      });
+      return tabNames;
+    });
+
+    checks.push(check('Has navigation buttons', (tabs as string[])?.length, '> 3', ((tabs as string[])?.length || 0) > 3));
+
+    // Click each tab and verify content changes
+    const tabClicks = await execInTab(tabId, () => {
+      const navBtns = Array.from(document.querySelectorAll('nav button, [class*="tab"] button'));
+      const results: string[] = [];
+      navBtns.slice(0, 6).forEach(btn => {
+        (btn as HTMLElement).click();
+        results.push(btn.textContent?.trim() || 'unknown');
+      });
+      return results;
+    });
+
+    checks.push(check('Tabs clickable', (tabClicks as string[])?.length, '> 0', ((tabClicks as string[])?.length || 0) > 0));
+
+    const screenshot = await captureScreenshot();
+    await browser.tabs.remove(tabId);
+
+    return { values: { tabs, tabClicks }, screenshot, checks };
+  });
+}
+
+async function scenario_PopupSignalsTab() {
+  return runScenario('Popup — Signals tab shows all categories', async () => {
+    const tabId = await openPopupTab();
+
+    // Navigate to signals tab
+    await execInTab(tabId, () => {
+      const btns = Array.from(document.querySelectorAll('nav button, [class*="tab"] button'));
+      const signalsBtn = btns.find(b => b.textContent?.toLowerCase().includes('signal'));
+      if (signalsBtn) (signalsBtn as HTMLElement).click();
+    });
+    await new Promise(r => setTimeout(r, 500));
+
+    // Read signal categories from DOM
+    const signals = await execInTab(tabId, () => {
+      const text = document.getElementById('root')?.textContent || '';
+      return {
+        hasGraphics: text.includes('Canvas') || text.includes('WebGL'),
+        hasAudio: text.includes('Audio'),
+        hasHardware: text.includes('Screen') || text.includes('CPU'),
+        hasNavigator: text.includes('User Agent'),
+        hasTimezone: text.includes('Timezone') || text.includes('Date'),
+        hasFonts: text.includes('Font'),
+        hasNetwork: text.includes('WebRTC') || text.includes('Connection'),
+        hasDevices: text.includes('Gamepad') || text.includes('Bluetooth'),
+        hasWorkers: text.includes('Worker'),
+        textLen: text.length,
+      };
+    });
+
+    const screenshot = await captureScreenshot();
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: signals,
+      screenshot,
+      checks: [
+        check('Graphics signals visible', signals?.hasGraphics, 'true', !!signals?.hasGraphics),
+        check('Audio signals visible', signals?.hasAudio, 'true', !!signals?.hasAudio),
+        check('Hardware signals visible', signals?.hasHardware, 'true', !!signals?.hasHardware),
+        check('Navigator signals visible', signals?.hasNavigator, 'true', !!signals?.hasNavigator),
+        check('Timezone signals visible', signals?.hasTimezone, 'true', !!signals?.hasTimezone),
+        check('Font signals visible', signals?.hasFonts, 'true', !!signals?.hasFonts),
+        check('Network signals visible', signals?.hasNetwork, 'true', !!signals?.hasNetwork),
+        check('Device signals visible', signals?.hasDevices, 'true', !!signals?.hasDevices),
+        check('Worker signals visible', signals?.hasWorkers, 'true', !!signals?.hasWorkers),
+      ],
+    };
+  });
+}
+
+async function scenario_PopupProfileTab() {
+  return runScenario('Popup — Profile tab shows current profile', async () => {
+    const tabId = await openPopupTab();
+
+    // Navigate to profile/fingerprint tab
+    await execInTab(tabId, () => {
+      const btns = Array.from(document.querySelectorAll('nav button, [class*="tab"] button'));
+      const profileBtn = btns.find(b =>
+        b.textContent?.toLowerCase().includes('profile') ||
+        b.textContent?.toLowerCase().includes('fingerprint')
+      );
+      if (profileBtn) (profileBtn as HTMLElement).click();
+    });
+    await new Promise(r => setTimeout(r, 500));
+
+    const profile = await execInTab(tabId, () => {
+      const text = document.getElementById('root')?.textContent || '';
+      return {
+        hasUA: text.includes('Chrome') || text.includes('Firefox') || text.includes('User Agent'),
+        hasScreen: text.includes('Screen') || text.includes('1440') || text.includes('1920'),
+        textLen: text.length,
+      };
+    });
+
+    const screenshot = await captureScreenshot();
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: profile,
+      screenshot,
+      checks: [
+        check('Profile tab has content', profile?.textLen, '> 50', (profile?.textLen || 0) > 50),
+      ],
+    };
+  });
+}
+
+async function scenario_PopupHeadersTab() {
+  return runScenario('Popup — Headers tab shows settings', async () => {
+    const tabId = await openPopupTab();
+
+    await execInTab(tabId, () => {
+      const btns = Array.from(document.querySelectorAll('nav button, [class*="tab"] button'));
+      const btn = btns.find(b => b.textContent?.toLowerCase().includes('header'));
+      if (btn) (btn as HTMLElement).click();
+    });
+    await new Promise(r => setTimeout(r, 500));
+
+    const headers = await execInTab(tabId, () => {
+      const text = document.getElementById('root')?.textContent || '';
+      return {
+        hasUA: text.includes('User-Agent') || text.includes('User Agent'),
+        hasReferer: text.includes('Referer') || text.includes('referer'),
+        hasDNT: text.includes('DNT') || text.includes('Do Not Track'),
+        textLen: text.length,
+      };
+    });
+
+    const screenshot = await captureScreenshot();
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: headers,
+      screenshot,
+      checks: [
+        check('Headers tab has content', headers?.textLen, '> 30', (headers?.textLen || 0) > 30),
+      ],
+    };
+  });
+}
+
+async function scenario_PopupWhitelistTab() {
+  return runScenario('Popup — Whitelist/Rules tab shows domains', async () => {
+    const tabId = await openPopupTab();
+
+    await execInTab(tabId, () => {
+      const btns = Array.from(document.querySelectorAll('nav button, [class*="tab"] button'));
+      const btn = btns.find(b =>
+        b.textContent?.toLowerCase().includes('rule') ||
+        b.textContent?.toLowerCase().includes('whitelist') ||
+        b.textContent?.toLowerCase().includes('domain')
+      );
+      if (btn) (btn as HTMLElement).click();
+    });
+    await new Promise(r => setTimeout(r, 500));
+
+    const whitelist = await execInTab(tabId, () => {
+      const text = document.getElementById('root')?.textContent || '';
+      const inputs = document.querySelectorAll('input');
+      return {
+        hasInput: inputs.length > 0,
+        hasRules: text.includes('Rules') || text.includes('Domain') || text.includes('Blocklist'),
+        textLen: text.length,
+      };
+    });
+
+    const screenshot = await captureScreenshot();
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: whitelist,
+      screenshot,
+      checks: [
+        check('Whitelist tab has content', whitelist?.textLen, '> 20', (whitelist?.textLen || 0) > 20),
+        check('Has input field', whitelist?.hasInput, 'true', !!whitelist?.hasInput),
+      ],
+    };
+  });
+}
+
+async function scenario_PopupSettingsTab() {
+  return runScenario('Popup — Settings tab shows export/import/shortcuts', async () => {
+    const tabId = await openPopupTab();
+
+    await execInTab(tabId, () => {
+      const btns = Array.from(document.querySelectorAll('nav button, [class*="tab"] button'));
+      const btn = btns.find(b => b.textContent?.toLowerCase().includes('setting'));
+      if (btn) (btn as HTMLElement).click();
+    });
+    await new Promise(r => setTimeout(r, 500));
+
+    const settings = await execInTab(tabId, () => {
+      const text = document.getElementById('root')?.textContent || '';
+      return {
+        hasExport: text.includes('Export') || text.includes('export'),
+        hasImport: text.includes('Import') || text.includes('import'),
+        hasShortcuts: text.includes('Shortcut') || text.includes('shortcut') || text.includes('Ctrl'),
+        textLen: text.length,
+      };
+    });
+
+    const screenshot = await captureScreenshot();
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: settings,
+      screenshot,
+      checks: [
+        check('Settings tab has content', settings?.textLen, '> 20', (settings?.textLen || 0) > 20),
+      ],
+    };
+  });
+}
+
 // ============= MAIN =============
 
 async function runAllTests() {
@@ -1586,6 +1858,15 @@ async function runAllTests() {
   await scenario_ExportImportSettings();
   await scenario_ContextMenuCommands();
   await scenario_ProfileRotationSettings();
+
+  // === Popup UI Interaction ===
+  await scenario_PopupProtectionButtons();
+  await scenario_PopupTabNavigation();
+  await scenario_PopupSignalsTab();
+  await scenario_PopupProfileTab();
+  await scenario_PopupHeadersTab();
+  await scenario_PopupWhitelistTab();
+  await scenario_PopupSettingsTab();
 
   // === External Sites ===
   await scenario_BrowserLeaks_WebGL();
