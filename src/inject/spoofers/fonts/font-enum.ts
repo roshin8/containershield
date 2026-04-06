@@ -150,6 +150,24 @@ export function initFontSpoofer(mode: ProtectionMode, prng: PRNG, assignedProfil
     });
   }
 
+  // Override FontFace constructor + load() to block non-platform fonts.
+  // CreepJS uses: new FontFace(font, 'local("font")').load() and checks if it resolves.
+  if (typeof FontFace !== 'undefined') {
+    const OrigFontFace = FontFace;
+    (window as any).FontFace = function(family: string, source: string, descriptors?: FontFaceDescriptors) {
+      const ff = new OrigFontFace(family, source, descriptors);
+      const origLoad = ff.load.bind(ff);
+
+      // If font not in our platform list, make load() reject
+      if (family && !availableFonts.has(family) && blockedSystemFonts.has(family) || (family && !availableFonts.has(family) && !family.startsWith('-'))) {
+        ff.load = () => Promise.reject(new DOMException('A network error occurred.', 'NetworkError'));
+      }
+
+      return ff;
+    };
+    (window as any).FontFace.prototype = OrigFontFace.prototype;
+  }
+
   const GENERIC_FONTS = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-sans-serif', 'ui-serif', 'ui-monospace']);
 
   // Override CSS font-family resolution via computed styles

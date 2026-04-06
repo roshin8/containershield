@@ -107,6 +107,27 @@ export function initCSSSpoofer(mode: ProtectionMode, prng: PRNG, assignedProfile
     return original.apply(thisArg, args);
   });
 
+  // Intercept getPropertyValue for CSS custom properties set by @media rules.
+  // CreepJS creates: @media(device-width:1680px){body{--device-width:1680;}}
+  // Then reads: getComputedStyle(body).getPropertyValue('--device-width')
+  if (spoofedWidth && spoofedHeight) {
+    const origGetPropValue = CSSStyleDeclaration.prototype.getPropertyValue;
+    CSSStyleDeclaration.prototype.getPropertyValue = function(prop: string): string {
+      const val = origGetPropValue.call(this, prop);
+
+      // Rewrite --device-width/height/screen/aspect-ratio
+      if (prop === '--device-width' && val.trim()) return String(spoofedWidth);
+      if (prop === '--device-height' && val.trim()) return String(spoofedHeight);
+      if (prop === '--device-screen' && val.trim()) return `${spoofedWidth} x ${spoofedHeight}`;
+      if (prop === '--device-aspect-ratio' && val.trim()) {
+        const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
+        const d = gcd(spoofedWidth, spoofedHeight);
+        return `${spoofedWidth / d}/${spoofedHeight / d}`;
+      }
+
+      return val;
+    };
+  }
 }
 
 function createFakeMediaQueryList(query: string, matches: boolean): MediaQueryList {
