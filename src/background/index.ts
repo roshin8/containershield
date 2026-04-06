@@ -57,10 +57,9 @@ async function init(): Promise<void> {
     keyboardShortcuts.init();
 
     await checkFirstRun();
+    await checkTestMode();
 
     await browser.storage.local.set({ [STORAGE_KEYS.VERSION]: EXTENSION_VERSION });
-
-    console.log('[Container Shield] Initialization complete');
   } catch (error) {
     console.error('[Container Shield] Initialization failed:', error);
   }
@@ -71,6 +70,17 @@ async function checkFirstRun(): Promise<void> {
   if (!onboardingComplete) {
     await browser.tabs.create({ url: browser.runtime.getURL('pages/onboarding.html') });
   }
+}
+
+/** Listen for test runner open requests */
+async function checkTestMode(): Promise<void> {
+  browser.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'OPEN_TEST_RUNNER') {
+      browser.storage.local.set({ onboardingComplete: true });
+      browser.tabs.create({ url: browser.runtime.getURL('pages/test-runner.html') });
+      return Promise.resolve({ opened: true });
+    }
+  });
 }
 
 init();

@@ -31,6 +31,13 @@ window.addEventListener('message', async (event) => {
     } catch {}
   }
 
+  // Open test runner when requested by test harness
+  if (type === 'CONTAINER_SHIELD_OPEN_TEST_RUNNER') {
+    try {
+      await browser.runtime.sendMessage({ type: 'OPEN_TEST_RUNNER' });
+    } catch {}
+  }
+
   // Forward the inject script's active profile to background
   if (type === 'CONTAINER_SHIELD_ACTIVE_PROFILE') {
     try {
@@ -52,6 +59,25 @@ browser.runtime.onMessage.addListener((message: { type: string; settings?: unkno
   if (message.type === MSG_GET_RECOMMENDATIONS) {
     window.postMessage({ type: PAGE_MSG_GET_RECOMMENDATIONS, settings: message.settings }, '*');
     return true;
+  }
+  // Test runner: read spoofed values from the page
+  if (message.type === 'EXEC_READ_VALUES') {
+    const r: Record<string, any> = {};
+    try { r.ua = navigator.userAgent; } catch {}
+    try { r.platform = navigator.platform; } catch {}
+    try { r.vendor = navigator.vendor; } catch {}
+    try { r.cores = navigator.hardwareConcurrency; } catch {}
+    try { r.tzo = new Date().getTimezoneOffset(); } catch {}
+    try { r.screenW = screen.width; } catch {}
+    try { r.screenH = screen.height; } catch {}
+    try {
+      const c = document.createElement('canvas');
+      const gl = c.getContext('webgl');
+      const ext = gl?.getExtension('WEBGL_debug_renderer_info');
+      r.glVendor = ext ? gl!.getParameter(ext.UNMASKED_VENDOR_WEBGL) : 'no ext';
+      r.glRenderer = ext ? gl!.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'no ext';
+    } catch {}
+    return Promise.resolve(r);
   }
   return false;
 });

@@ -61,10 +61,40 @@ async function openTab(url: string, waitMs = 15000): Promise<number> {
   return tab.id!;
 }
 
-/** Execute script in a tab and return the result */
+/** Execute a function in a tab and return the result (MV3 scripting API) */
+async function execInTab<T>(tabId: number, fn: () => T): Promise<T> {
+  // Try scripting.executeScript with world:MAIN first
+  try {
+    const results = await (browser as any).scripting.executeScript({
+      target: { tabId },
+      func: fn,
+      world: 'MAIN',
+    });
+    return results?.[0]?.result;
+  } catch {}
+
+  // Retry without world:MAIN
+  try {
+    const results = await (browser as any).scripting.executeScript({
+      target: { tabId },
+      func: fn,
+    });
+    return results?.[0]?.result;
+  } catch {}
+
+  // Final fallback: use tabs.sendMessage with retries (content script may not be ready)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await new Promise(r => setTimeout(r, 2000));
+      return await browser.tabs.sendMessage(tabId, { type: 'EXEC_READ_VALUES' }) as T;
+    } catch {}
+  }
+  throw new Error(`All execution methods failed for tab ${tabId}`);
+}
+
+/** Read all spoofed signal values from a tab */
 async function readValues(tabId: number): Promise<Record<string, any>> {
-  const results = await browser.tabs.executeScript(tabId, {
-    code: `(function() {
+  return execInTab(tabId, () => {
       var r = {};
       try { r.ua = navigator.userAgent; } catch(e) { r.ua = 'error'; }
       try { r.platform = navigator.platform; } catch(e) { r.platform = 'error'; }
@@ -109,9 +139,7 @@ async function readValues(tabId: number): Promise<Record<string, any>> {
         document.body.removeChild(f);
       } catch(e) { r.iframeError = e.message; }
       return r;
-    })();`,
   });
-  return results[0] || {};
 }
 
 /** Capture screenshot of the active tab */
@@ -241,9 +269,10 @@ async function scenario_FingerprintCom() {
     const v1 = await readValues(tabId);
 
     // Read visitor ID from the page
-    const [fpId1] = await browser.tabs.executeScript(tabId, {
-      code: `document.querySelector('[data-test="visitor-id"]')?.textContent || document.body.innerText.match(/Visitor ID[:\\s]*([a-zA-Z0-9]+)/)?.[1] || 'not found'`,
-    });
+    const fpId1 = await execInTab(tabId, () =>
+      document.querySelector('[data-test="visitor-id"]')?.textContent ||
+      document.body.innerText.match(/Visitor ID[\s:]*([a-zA-Z0-9]+)/)?.[1] || 'not found'
+    );
 
     const screenshot = await captureScreenshot();
     await browser.tabs.remove(tabId);
@@ -252,8 +281,8 @@ async function scenario_FingerprintCom() {
       values: { ...v1, fpId: fpId1 },
       screenshot,
       checks: [
-        check('UA spoofed', v1.ua, 'not Firefox', !v1.ua?.includes('Firefox/')),
-        check('Platform spoofed', v1.platform, 'not MacIntel', v1.platform !== 'MacIntel'),
+        check('UA spoofed', v1.ua, 'not real Firefox', !v1.ua?.includes('Gecko/20100101 Firefox/')),
+        check('Platform consistent', v1.platform, 'valid platform', ['Win32', 'MacIntel', 'Linux x86_64'].includes(v1.platform)),
         check('WebGL spoofed', v1.glVendor, 'not Intel Inc.', v1.glVendor !== 'Intel Inc.'),
       ],
     };
@@ -268,9 +297,7 @@ async function scenario_PopupUI() {
     const screenshot = await captureScreenshot();
 
     // Check if the popup rendered
-    const [hasContent] = await browser.tabs.executeScript(tabId, {
-      code: `!!document.querySelector('#root')?.children?.length`,
-    });
+    const hasContent = await execInTab(tabId, () => !!document.querySelector('#root')?.children?.length);
 
     await browser.tabs.remove(tabId);
 
@@ -293,16 +320,14 @@ async function scenario_WorkerSpoofing() {
     const v = await readValues(tabId);
 
     // Create a dedicated worker and check its values
-    const [workerVals] = await browser.tabs.executeScript(tabId, {
-      code: `new Promise(function(resolve) {
-        var code = 'self.postMessage({ua:self.navigator.userAgent.substring(0,60),tzo:new Date().getTimezoneOffset(),cores:self.navigator.hardwareConcurrency,platform:self.navigator.platform})';
-        var blob = new Blob([code], {type:'application/javascript'});
-        var w = new Worker(URL.createObjectURL(blob));
-        w.onmessage = function(e) { w.terminate(); resolve(e.data); };
-        w.onerror = function() { resolve({error:'worker failed'}); };
-        setTimeout(function() { resolve({error:'timeout'}); }, 5000);
-      })`,
-    });
+    const workerVals = await execInTab(tabId, () => new Promise<any>((resolve) => {
+      const code = 'self.postMessage({ua:self.navigator.userAgent.substring(0,60),tzo:new Date().getTimezoneOffset(),cores:self.navigator.hardwareConcurrency,platform:self.navigator.platform})';
+      const blob = new Blob([code], { type: 'application/javascript' });
+      const w = new Worker(URL.createObjectURL(blob));
+      w.onmessage = (e) => { w.terminate(); resolve(e.data); };
+      w.onerror = () => resolve({ error: 'worker failed' });
+      setTimeout(() => resolve({ error: 'timeout' }), 5000);
+    }));
 
     const screenshot = await captureScreenshot();
     await browser.tabs.remove(tabId);

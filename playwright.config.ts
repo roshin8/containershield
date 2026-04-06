@@ -24,5 +24,11 @@ export default defineConfig({
       testMatch: /creepjs.*\.spec\.ts$/,
       timeout: 120000,
     },
+    {
+      name: 'real-extension',
+      use: { browserName: 'firefox' },
+      testMatch: /real-extension-full\.spec\.ts$/,
+      timeout: 240000,
+    },
   ],
 });

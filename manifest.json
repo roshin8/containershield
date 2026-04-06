@@ -24,7 +24,9 @@
     "privacy",
     "notifications",
     "contextMenus",
-    "alarms"
+    "alarms",
+    "scripting",
+    "activeTab"
   ],
 
   "host_permissions": [
