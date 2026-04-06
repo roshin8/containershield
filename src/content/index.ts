@@ -38,13 +38,14 @@ window.addEventListener('message', async (event) => {
     } catch {}
   }
 
-  // Forward the inject script's active profile to background
+  // Forward the inject script's active profile + worker preamble to background
   if (type === 'CONTAINER_SHIELD_ACTIVE_PROFILE') {
     try {
       await browser.runtime.sendMessage({
         type: 'ACTIVE_PROFILE',
         profile: data.profile,
         domain: data.domain,
+        workerPreamble: data.workerPreamble,
       });
     } catch {}
   }

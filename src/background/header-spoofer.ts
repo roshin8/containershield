@@ -197,16 +197,16 @@ export class HeaderSpoofer {
 
       // Check if the inject script has posted an active profile for this tab
       // (the inject script generates its own profile from domain seed — HTTP headers must match)
-      let effectiveProfile = settings.profile;
+      let effectiveProfile: Record<string, any> = { ...settings.profile };
       try {
-        const stored = await browser.storage.local.get(`activeProfile:${details.tabId}`);
+        const stored = await browser.storage.local.get(`activeProfile:${details.tabId}`) as Record<string, any>;
         const active = stored[`activeProfile:${details.tabId}`];
         if (active?.profile?.userAgent) {
           effectiveProfile = {
-            ...settings.profile,
+            ...effectiveProfile,
             userAgent: active.profile.userAgent.userAgent,
             language: active.profile.userAgent.languages?.[0] ?
-              active.profile.userAgent.languages.join(',') : settings.profile.language,
+              active.profile.userAgent.languages.join(',') : effectiveProfile.language,
           };
         }
       } catch {}

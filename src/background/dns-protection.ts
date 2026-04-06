@@ -24,7 +24,7 @@ export class DNSProtection {
   private enabled = false;
 
   async init(): Promise<void> {
-    const stored = await browser.storage.local.get('dnsProtection');
+    const stored = await browser.storage.local.get('dnsProtection') as Record<string, any>;
     this.enabled = stored.dnsProtection?.enabled ?? false;
 
     if (this.enabled) {

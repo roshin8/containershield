@@ -1125,24 +1125,64 @@ containershield/
 # Install dependencies
 npm install
 
-# Development build (watch mode)
+# Development build
 npm run dev
 
 # Production build
 npm run build
 
 # Type checking
-npm run typecheck
+npm run type-check
 
-# Run unit tests
+# Run unit tests (vitest)
 npm run test
 
-# Run E2E tests
+# Run E2E tests (Playwright)
 npm run test:e2e
 
-# Lint code
-npm run lint
+# Run REAL extension E2E on fingerprinting sites (headed)
+npm run test:real
+
+# Run real E2E headless (for CI)
+npm run test:real:headless
+
+# Run extension in Firefox with web-ext
+npm run run:extension
+
+# Package for AMO submission
+npm run package
 ```
+
+### Architecture (MV3)
+
+```
+manifest.json (Manifest V3)
+├── content_scripts[0]: inject/index.js (world: "MAIN", document_start)
+│   └── Runs in page context BEFORE any page scripts
+│   └── Generates deterministic profile from domain seed
+│   └── Initializes 50+ spoofers
+│
+├── content_scripts[1]: content/index.js (ISOLATED world)
+│   └── Message bridge: page ↔ background
+│
+├── background.scripts: background/index.js (event page)
+│   └── Settings, containers, header spoofing, SW injection
+│
+└── action: popup/index.html (React UI)
+    └── 6 tabs: Dashboard, Signals, Profile, Headers, Rules, Settings
+```
+
+### Known Limitations
+
+| Signal | Can spoof? | Why not? |
+|--------|:----------:|----------|
+| TLS/JA3/JA4 fingerprint | No | TLS handshake is in the browser's C++ network stack |
+| HTTP/2 SETTINGS frames | No | Sent by browser engine before JS runs |
+| CPU cache timing | No | Hardware-level side-channel attack |
+| Font text measurement | Partial | `offsetWidth` differences can't be masked without breaking layout |
+| CSS @media real viewport | Partial | `getPropertyValue` intercepted but browser engine uses real values |
+
+For full TLS/H2/TCP spoofing, consider [Camoufox](https://camoufox.com) (modified Firefox fork).
 
 ### Testing Your Protection
 

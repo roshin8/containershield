@@ -15,6 +15,7 @@ import { getBadgeManager } from './badge-manager';
 import { ContextMenuManager } from './context-menu';
 import { KeyboardShortcuts } from './keyboard-shortcuts';
 import { EXTENSION_VERSION, STORAGE_KEYS } from '@/lib/constants';
+import { initSWInjector } from './sw-injector';
 
 async function init(): Promise<void> {
   console.log(`[Container Shield] Initializing v${EXTENSION_VERSION}`);
@@ -30,6 +31,9 @@ async function init(): Promise<void> {
 
     const headerSpoofer = new HeaderSpoofer(settingsStore, containerManager);
     await headerSpoofer.init();
+
+    // Initialize SW script injection via filterResponseData
+    initSWInjector();
 
     const ipIsolation = new IPIsolation(settingsStore, containerManager);
     await ipIsolation.init();

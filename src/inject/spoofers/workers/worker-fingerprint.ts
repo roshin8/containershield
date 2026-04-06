@@ -16,7 +16,7 @@ import { logAccess } from '../../monitor/fingerprint-monitor';
 import { getSelectedGPU } from '../graphics/webgl';
 import { getTimezoneOffsetDiffMs } from '../timezone/intl';
 
-function buildWorkerPreamble(assignedProfile?: AssignedProfileData): string {
+export function buildWorkerPreamble(assignedProfile?: AssignedProfileData): string {
   if (!assignedProfile?.userAgent) return '';
 
   const ua = assignedProfile.userAgent;
@@ -211,14 +211,14 @@ export function initWorkerSpoofer(
   }
 
   // Handle ServiceWorker:
-  // - Off: no interception
-  // - Spoof: try to inject preamble into SW script → if fails, reject to force
-  //   SharedWorker/DedicatedWorker fallback (which ARE fully spoofed)
+  // - Off: no interception, SW runs with real values
+  // - Spoof: let SW register normally — background's filterResponseData injects
+  //   preamble into the SW script HTTP response. If filterResponseData unavailable,
+  //   falls back to rejecting SW → SharedWorker/DedicatedWorker (also spoofed).
   // - Block: reject registration entirely
-  if ('serviceWorker' in navigator && workerPreamble && serviceWorkerMode !== 'off') {
+  if ('serviceWorker' in navigator && serviceWorkerMode !== 'off') {
     try {
       const origRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
-      const OrigBlob = window.Blob;
 
       navigator.serviceWorker.register = async function(
         scriptURL: string | URL, options?: RegistrationOptions
@@ -228,33 +228,11 @@ export function initWorkerSpoofer(
           throw new DOMException('The operation is insecure.', 'SecurityError');
         }
 
-        // Spoof mode: attempt to inject preamble into the SW script
-        const urlStr = new URL(String(scriptURL), location.href).href;
-        try {
-          // Fetch original SW script
-          const resp = urlStr.startsWith('blob:')
-            ? await fetch(urlStr)
-            : await fetch(urlStr, { credentials: 'same-origin' });
-          const text = await resp.text();
-
-          // Create modified script with preamble
-          const modified = new OrigBlob([workerPreamble + text], { type: 'application/javascript' });
-          const blobUrl = URL.createObjectURL(modified);
-
-          // Try registering the modified SW — Firefox may reject blob: URLs for SWs
-          const reg = await origRegister(blobUrl, {
-            ...options,
-            scope: options?.scope || new URL(urlStr, location.href).pathname.replace(/[^/]*$/, '') || '/',
-          });
-          logAccess('ServiceWorker.register', { spoofed: true, value: 'injected' });
-          return reg;
-        } catch {
-          // SW injection failed (blob URL rejected by Firefox)
-          // Reject registration → forces fallback to SharedWorker/DedicatedWorker
-          // which ARE fully spoofed with preamble injection
-          logAccess('ServiceWorker.register', { spoofed: true, value: 'fallback-to-shared-worker' });
-          throw new DOMException('The operation is insecure.', 'SecurityError');
-        }
+        // Spoof mode: let SW register normally.
+        // The background script's filterResponseData will inject the preamble
+        // into the SW script's HTTP response before Firefox processes it.
+        logAccess('ServiceWorker.register', { spoofed: true, value: 'filter-injected' });
+        return origRegister(scriptURL, options);
       };
     } catch {}
   }

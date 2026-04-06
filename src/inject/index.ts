@@ -14,6 +14,7 @@ import type { InjectConfig, SpooferSettings, AssignedProfileData } from '@/types
 import { initStealth } from '@/lib/stealth';
 import { initializeSpoofers } from './spoofers';
 import { initFingerprintMonitor } from './monitor/fingerprint-monitor';
+import { buildWorkerPreamble } from './spoofers/workers/worker-fingerprint';
 import { createDefaultSettings } from '@/types/settings';
 import { ALL_PROFILES } from '@/lib/profiles/user-agents';
 import { PRNG, base64ToUint8Array } from '@/lib/crypto';
@@ -169,9 +170,12 @@ if (allSpoofersDisabled(config.settings)) {
 // Post the generated profile to the content script (ISOLATED world)
 // so the popup can display the actual spoofed values
 try {
+  // Send profile + worker preamble to background (for popup display + SW injection)
+  const workerPreamble = buildWorkerPreamble(config.assignedProfile);
   window.postMessage({
     type: 'CONTAINER_SHIELD_ACTIVE_PROFILE',
     profile: config.assignedProfile,
     domain,
+    workerPreamble,
   }, '*');
 } catch {}
