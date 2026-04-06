@@ -83,6 +83,7 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
         <S name="OffscreenCanvas" cat="graphics" k="offscreenCanvas" opts={CANVAS_NOISE_OPTIONS} />
         <S name="WebGL Shaders" cat="graphics" k="webglShaders" />
         <S name="WebGPU" cat="graphics" k="webgpu" />
+        <S name="GPU" cat="hardware" k="gpu" />
       </G>
       <G label="Audio">
         <S name="AudioContext" cat="audio" k="audioContext" opts={AUDIO_NOISE_OPTIONS} />
@@ -133,6 +134,7 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
         <S name="Event Loop Jitter" cat="timing" k="eventLoop" />
         <S name="Timezone" cat="timezone" k="intl" val={vals['Intl.DateTimeFormat'] || vals['Date.getTimezoneOffset']} />
         <S name="Date" cat="timezone" k="date" val={vals['Date.getTimezoneOffset']} />
+        <S name="Intl APIs" cat="intl" k="apis" />
       </G>
       <G label="Fonts & Rendering">
         <S name="Font Enum" cat="fonts" k="enumeration" opts={FONT_LIST_OPTIONS} />
