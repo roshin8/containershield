@@ -151,9 +151,4 @@ export function initPerformanceSpoofer(mode: ProtectionMode, prng: PRNG): void {
     return wrapEntries(originalGetEntriesByName(name, type));
   };
 
-  console.log(
-    '[ContainerShield] Performance spoofer initialized:',
-    mode,
-    `(precision: ${precision}ms)`
-  );
 }

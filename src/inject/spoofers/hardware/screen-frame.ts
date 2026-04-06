@@ -106,5 +106,4 @@ export function initScreenFrameSpoofer(mode: ProtectionMode, prng: PRNG): void {
     // Can't override
   }
 
-  console.log('[ContainerShield] Screen frame spoofer initialized');
 }

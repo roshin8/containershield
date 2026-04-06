@@ -73,5 +73,4 @@ export function initClipboardSpoofer(mode: ProtectionMode, prng: PRNG): void {
     // Can't override
   }
 
-  console.log('[ContainerShield] Clipboard spoofer initialized');
 }

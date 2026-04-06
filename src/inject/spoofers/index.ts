@@ -114,6 +114,9 @@ import { initFeatureSpoofer } from './features/feature-detection';
 // Payment
 import { initApplePaySpoofer } from './payment/apple-pay';
 
+// Iframe
+import { initIframePatcher } from './iframe/iframe-patcher';
+
 // Monitor
 import { initFingerprintMonitor, reportToBackground, markSpoofersInitialized } from '../monitor/fingerprint-monitor';
 
@@ -261,175 +264,10 @@ export function initializeSpoofers(config: InjectConfig): void {
   // Payment
   if (settings.payment.applePay !== 'off') initApplePaySpoofer(settings.payment.applePay, pagePRNG);
 
-  // Intercept iframe creation to apply critical overrides to iframe contexts.
-  // Fingerprinting tools like CreepJS create iframes to get clean, unmodified
-  // prototypes and bypass main-frame overrides.
-  patchIframePrototypes(settings, assignedProfile, selectedGPURef);
+  // Intercept iframe creation to apply overrides to iframe contexts.
+  initIframePatcher({ settings, assignedProfile, selectedGPU: selectedGPURef });
 
   // Initialize monitor and send initial report
   initFingerprintMonitor();
   setTimeout(reportToBackground, 50);
-}
-
-/**
- * Patch prototypes in dynamically created iframes so fingerprinters
- * can't bypass our overrides by reading from iframe contexts.
- */
-function patchIframePrototypes(
-  settings: any,
-  assignedProfile: any,
-  selectedGPURef: { vendor: string; renderer: string } | null
-): void {
-  // Get spoofed values from assigned profile
-  const screen = assignedProfile?.screen;
-  const ua = assignedProfile?.userAgent;
-  const hc = assignedProfile?.hardwareConcurrency;
-  const dm = assignedProfile?.deviceMemory;
-  const langs = assignedProfile?.languages;
-  const tzOffset = assignedProfile?.timezoneOffset;
-
-  // Compute timezone
-  let targetTimezone: string | null = null;
-  if (tzOffset !== undefined) {
-    const TIMEZONE_NAMES: Record<number, string> = {
-      [-720]: 'Etc/GMT+12', [-600]: 'Pacific/Honolulu', [-540]: 'America/Anchorage',
-      [-480]: 'America/Los_Angeles', [-420]: 'America/Denver', [-360]: 'America/Chicago',
-      [-300]: 'America/New_York', [-240]: 'America/Halifax', [-180]: 'America/Sao_Paulo',
-      [0]: 'UTC', [60]: 'Europe/Paris', [120]: 'Europe/Helsinki', [180]: 'Europe/Moscow',
-      [240]: 'Asia/Dubai', [300]: 'Asia/Karachi', [330]: 'Asia/Kolkata',
-      [360]: 'Asia/Dhaka', [420]: 'Asia/Bangkok', [480]: 'Asia/Shanghai',
-      [540]: 'Asia/Tokyo', [600]: 'Australia/Sydney', [720]: 'Pacific/Auckland',
-    };
-    targetTimezone = TIMEZONE_NAMES[tzOffset] || null;
-  }
-
-  function patchIframeWindow(iframeWin: Window): void {
-    try {
-      // Patch WebGL in iframe
-      if (selectedGPURef && settings.graphics?.webgl !== 'off') {
-        const iframeWGL = (iframeWin as any).WebGLRenderingContext;
-        if (iframeWGL) {
-          const origGP = iframeWGL.prototype.getParameter;
-          iframeWGL.prototype.getParameter = function(pname: number) {
-            if (pname === 0x9245 || pname === 0x1F00) return selectedGPURef!.vendor;
-            if (pname === 0x9246 || pname === 0x1F01) return selectedGPURef!.renderer;
-            return origGP.call(this, pname);
-          };
-        }
-        const iframeWGL2 = (iframeWin as any).WebGL2RenderingContext;
-        if (iframeWGL2) {
-          const origGP2 = iframeWGL2.prototype.getParameter;
-          iframeWGL2.prototype.getParameter = function(pname: number) {
-            if (pname === 0x9245 || pname === 0x1F00) return selectedGPURef!.vendor;
-            if (pname === 0x9246 || pname === 0x1F01) return selectedGPURef!.renderer;
-            return origGP2.call(this, pname);
-          };
-        }
-      }
-
-      // Patch screen in iframe
-      if (screen && settings.hardware?.screen !== 'off') {
-        const scr = iframeWin.screen;
-        const screenProps: Record<string, number> = {
-          width: screen.width, height: screen.height,
-          availWidth: screen.availWidth, availHeight: screen.availHeight,
-          colorDepth: screen.colorDepth, pixelDepth: screen.pixelDepth,
-        };
-        for (const [prop, val] of Object.entries(screenProps)) {
-          try { Object.defineProperty(scr, prop, { get: () => val, configurable: true }); } catch {}
-        }
-        if (screen.devicePixelRatio) {
-          try { Object.defineProperty(iframeWin, 'devicePixelRatio', { get: () => screen.devicePixelRatio, configurable: true }); } catch {}
-        }
-      }
-
-      // Patch navigator in iframe
-      if (ua && settings.navigator?.userAgent !== 'off') {
-        const nav = (iframeWin as any).Navigator?.prototype || iframeWin.navigator;
-        const navProps: Record<string, any> = {
-          userAgent: ua.userAgent, platform: ua.platform,
-          vendor: ua.vendor || '', appVersion: ua.appVersion || '',
-        };
-        for (const [prop, val] of Object.entries(navProps)) {
-          try { Object.defineProperty(nav, prop, { get: () => val, configurable: true }); } catch {}
-        }
-        if (hc) try { Object.defineProperty(nav, 'hardwareConcurrency', { get: () => hc, configurable: true }); } catch {}
-        if (dm) try { Object.defineProperty(nav, 'deviceMemory', { get: () => dm, configurable: true }); } catch {}
-        if (langs) {
-          const frozen = Object.freeze([...langs]);
-          try { Object.defineProperty(nav, 'languages', { get: () => frozen, configurable: true }); } catch {}
-          try { Object.defineProperty(nav, 'language', { get: () => langs[0], configurable: true }); } catch {}
-        }
-      }
-
-      // Patch timezone in iframe
-      if (targetTimezone && settings.timezone?.date !== 'off') {
-        try {
-          const iframeDate = (iframeWin as any).Date;
-          if (iframeDate) {
-            const origFP = (iframeWin as any).Intl.DateTimeFormat;
-            iframeDate.prototype.getTimezoneOffset = function(this: Date) {
-              try {
-                const parts: Record<string, number> = {};
-                new origFP('en-US', {
-                  timeZone: targetTimezone!, year: 'numeric', month: 'numeric',
-                  day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
-                  hourCycle: 'h23',
-                }).formatToParts(this).forEach((p: any) => {
-                  if (p.type !== 'literal') parts[p.type] = parseInt(p.value, 10);
-                });
-                const tzAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
-                const utc = Date.UTC(this.getUTCFullYear(), this.getUTCMonth(), this.getUTCDate(),
-                  this.getUTCHours(), this.getUTCMinutes(), this.getUTCSeconds());
-                return (utc - tzAsUtc) / 60000;
-              } catch { return 0; }
-            };
-          }
-        } catch {}
-
-        // Patch Intl.DateTimeFormat in iframe
-        try {
-          const origDTF = (iframeWin as any).Intl.DateTimeFormat;
-          (iframeWin as any).Intl.DateTimeFormat = function(locales?: any, options?: any) {
-            return new origDTF(locales, { ...options, timeZone: options?.timeZone || targetTimezone });
-          };
-          (iframeWin as any).Intl.DateTimeFormat.supportedLocalesOf = origDTF.supportedLocalesOf;
-          (iframeWin as any).Intl.DateTimeFormat.prototype = origDTF.prototype;
-        } catch {}
-      }
-    } catch {}
-  }
-
-  // Intercept iframe contentWindow/contentDocument access
-  const origContentWindowDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow');
-  const origContentDocDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentDocument');
-  const patchedIframes = new WeakSet<HTMLIFrameElement>();
-
-  if (origContentWindowDesc?.get) {
-    Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
-      get() {
-        const win = origContentWindowDesc.get!.call(this);
-        if (win && !patchedIframes.has(this)) {
-          patchedIframes.add(this);
-          try { patchIframeWindow(win); } catch {}
-        }
-        return win;
-      },
-      configurable: true,
-    });
-  }
-
-  if (origContentDocDesc?.get) {
-    Object.defineProperty(HTMLIFrameElement.prototype, 'contentDocument', {
-      get() {
-        const doc = origContentDocDesc.get!.call(this);
-        if (doc && !patchedIframes.has(this)) {
-          patchedIframes.add(this);
-          try { patchIframeWindow(doc.defaultView!); } catch {}
-        }
-        return doc;
-      },
-      configurable: true,
-    });
-  }
 }

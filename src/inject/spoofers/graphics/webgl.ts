@@ -5,6 +5,7 @@
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { overrideMethod, registerNative } from '@/lib/stealth';
+import { GL } from '@/lib/constants';
 import { logAccess, markWebGLSpoofed } from '../../monitor/fingerprint-monitor';
 
 import type { AssignedProfileData } from '@/types';
@@ -83,11 +84,7 @@ export function initWebGLSpoofer(
   const selectedGPU = selectGPUForProfile(prng, assignedProfile);
   _selectedGPU = selectedGPU;
 
-  // WebGL parameter constants
-  const GL_VENDOR = 0x1F00;
-  const GL_RENDERER = 0x1F01;
-  const UNMASKED_VENDOR_WEBGL = 0x9245;
-  const UNMASKED_RENDERER_WEBGL = 0x9246;
+  const { VENDOR: GL_VENDOR, RENDERER: GL_RENDERER, UNMASKED_VENDOR: UNMASKED_VENDOR_WEBGL, UNMASKED_RENDERER: UNMASKED_RENDERER_WEBGL } = GL;
 
   // Helper to create a getParameter wrapper
   const wrapGetParameter = (mode: ProtectionMode, label: string) => {

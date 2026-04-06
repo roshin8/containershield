@@ -163,5 +163,4 @@ export function initIntlSpoofer(mode: ProtectionMode, prng: PRNG, assignedProfil
     (Intl as any).DisplayNames.supportedLocalesOf = OriginalDisplayNames.supportedLocalesOf;
   }
 
-  console.log('[ContainerShield] Intl APIs spoofer initialized');
 }

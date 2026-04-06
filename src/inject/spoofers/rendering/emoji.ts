@@ -73,5 +73,4 @@ export function initEmojiSpoofer(mode: ProtectionMode, prng: PRNG): void {
     return result;
   });
 
-  console.log('[ContainerShield] Emoji rendering spoofer initialized');
 }

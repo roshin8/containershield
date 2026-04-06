@@ -49,7 +49,6 @@ export function initWebRTCSpoofer(mode: WebRTCMode, _prng: PRNG): void {
       };
     }
 
-    console.log('[ContainerShield] WebRTC blocked');
     return;
   }
 
@@ -86,7 +85,6 @@ export function initWebRTCSpoofer(mode: WebRTCMode, _prng: PRNG): void {
 
             // Filter out local IP candidates
             if (isLocalIPCandidate(candidate)) {
-              console.log('[ContainerShield] Filtered local IP candidate');
               return;
             }
           }
@@ -117,7 +115,6 @@ export function initWebRTCSpoofer(mode: WebRTCMode, _prng: PRNG): void {
               const candidate = event.candidate.candidate;
 
               if (isLocalIPCandidate(candidate)) {
-                console.log('[ContainerShield] Filtered local IP candidate');
                 return;
               }
             }
@@ -136,7 +133,6 @@ export function initWebRTCSpoofer(mode: WebRTCMode, _prng: PRNG): void {
   // Copy static properties
   Object.setPrototypeOf(window.RTCPeerConnection, OriginalRTCPeerConnection);
 
-  console.log('[ContainerShield] WebRTC spoofer initialized: public_only');
 }
 
 /**

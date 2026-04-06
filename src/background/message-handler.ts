@@ -326,8 +326,8 @@ export class MessageHandler {
         const badgeText = activeCount > 0 ? String(activeCount) : '';
         const rate = total > 0 ? (activeCount / total) * 100 : 100;
         const color = rate >= 80 ? '#10B981' : rate >= 50 ? '#F59E0B' : '#EF4444';
-        browser.browserAction.setBadgeBackgroundColor({ color, tabId });
-        browser.browserAction.setBadgeText({ text: badgeText, tabId });
+        browser.action.setBadgeBackgroundColor({ color, tabId });
+        browser.action.setBadgeText({ text: badgeText, tabId });
       } catch {}
     }
 

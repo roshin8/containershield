@@ -50,10 +50,11 @@ const SCHEDULE_INTERVALS: Record<RotationSchedule, number> = {
 /**
  * Profile rotation manager
  */
+const ALARM_NAME = 'containershield-rotation-check';
+
 export class ProfileRotation {
   private settingsStore: SettingsStore;
   private settings: RotationSettings = DEFAULT_ROTATION_SETTINGS;
-  private checkInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(settingsStore: SettingsStore) {
     this.settingsStore = settingsStore;
@@ -65,16 +66,20 @@ export class ProfileRotation {
   async init(): Promise<void> {
     await this.loadSettings();
 
+    // Listen for alarm events (survives event page restarts)
+    browser.alarms.onAlarm.addListener((alarm) => {
+      if (alarm.name === ALARM_NAME) {
+        this.checkAndRotate();
+      }
+    });
+
     if (this.settings.enabled) {
-      // Check if session rotation is needed
       if (this.settings.schedule === 'session' || this.settings.rotateOnStartup) {
         await this.rotateAllContainers();
       } else {
-        // Check for scheduled rotations
         await this.checkAndRotate();
       }
 
-      // Start periodic check
       this.startPeriodicCheck();
     }
 
@@ -122,31 +127,27 @@ export class ProfileRotation {
   }
 
   /**
-   * Start periodic rotation check
+   * Start periodic rotation check using browser.alarms (survives event page restarts)
    */
   private startPeriodicCheck(): void {
     if (this.settings.schedule === 'off' || this.settings.schedule === 'session') {
       return;
     }
 
-    // Check every hour
-    const checkIntervalMs = Math.min(SCHEDULE_INTERVALS[this.settings.schedule], 60 * 60 * 1000);
+    const periodMinutes = Math.min(
+      SCHEDULE_INTERVALS[this.settings.schedule] / 60000,
+      60 // Check at least every hour
+    );
 
-    this.checkInterval = setInterval(() => {
-      this.checkAndRotate();
-    }, checkIntervalMs);
-
-    logger.debug('Started periodic rotation check', { interval: checkIntervalMs });
+    browser.alarms.create(ALARM_NAME, { periodInMinutes: periodMinutes });
+    logger.debug('Started periodic rotation alarm', { periodMinutes });
   }
 
   /**
    * Stop periodic rotation check
    */
   private stopPeriodicCheck(): void {
-    if (this.checkInterval) {
-      clearInterval(this.checkInterval);
-      this.checkInterval = null;
-    }
+    browser.alarms.clear(ALARM_NAME);
   }
 
   /**

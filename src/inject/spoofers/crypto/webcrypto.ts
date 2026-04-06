@@ -52,5 +52,4 @@ export function initCryptoSpoofer(mode: ProtectionMode, prng: PRNG): void {
     }
   }
 
-  console.log('[ContainerShield] WebCrypto spoofer initialized');
 }

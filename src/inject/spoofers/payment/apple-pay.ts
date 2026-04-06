@@ -70,7 +70,6 @@ export function initApplePaySpoofer(mode: ProtectionMode, prng: PRNG): void {
       };
     }
 
-    console.log('[ContainerShield] Apple Pay spoofer initialized');
   } else {
     // For non-Safari browsers, we might want to add a fake ApplePaySession
     // to normalize the fingerprint (all browsers look the same - no Apple Pay)

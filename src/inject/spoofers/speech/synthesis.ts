@@ -88,5 +88,4 @@ export function initSpeechSpoofer(mode: ProtectionMode, prng: PRNG): void {
     return originalAddEventListener.call(this, type, listener, options);
   };
 
-  console.log('[ContainerShield] SpeechSynthesis spoofer initialized');
 }

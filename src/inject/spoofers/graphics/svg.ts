@@ -178,5 +178,4 @@ export function initSVGSpoofer(mode: ProtectionMode, prng: PRNG): void {
     });
   }
 
-  console.log('[ContainerShield] SVG spoofer initialized:', mode);
 }

@@ -34,7 +34,6 @@ export function initMediaDevicesSpoofer(mode: ProtectionMode, prng: PRNG): void 
       return [];
     };
 
-    console.log('[ContainerShield] MediaDevices blocked');
     return;
   }
 
@@ -90,7 +89,6 @@ export function initMediaDevicesSpoofer(mode: ProtectionMode, prng: PRNG): void 
     return fakeDevices;
   };
 
-  console.log('[ContainerShield] MediaDevices spoofer initialized');
 }
 
 /**

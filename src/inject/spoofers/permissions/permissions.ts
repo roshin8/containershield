@@ -65,7 +65,6 @@ export function initPermissionsSpoofer(mode: ProtectionMode, prng: PRNG): void {
     return createFakePermissionStatus(state, name);
   };
 
-  console.log('[ContainerShield] Permissions spoofer initialized');
 }
 
 /**

@@ -120,19 +120,19 @@ test.describe('Build Verification', () => {
 
   test('manifest is valid', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(distPath, 'manifest.json'), 'utf-8'));
-    expect(manifest.manifest_version).toBe(2);
+    expect(manifest.manifest_version).toBe(3);
     expect(manifest.name).toBe('Container Shield');
     expect(manifest.permissions).toContain('webRequest');
+    expect(manifest.content_scripts[0].world).toBe('MAIN');
     expect(manifest.content_scripts[0].run_at).toBe('document_start');
-    expect(manifest.web_accessible_resources).toContain('inject/index.js');
-    expect(manifest.web_accessible_resources).not.toContain('debug.html');
+    expect(manifest.host_permissions).toContain('<all_urls>');
   });
 
   test('inject script contains essential functions', () => {
     const content = getInjectScript();
     expect(content).toContain('markSpoofersInitialized');
     expect(content).toContain('initializeSpoofers');
-    expect(content).toContain('__containerShieldConfig');
+    expect(content).toContain('initStealth');
     expect(content).toContain('reportToBackground');
     expect(content).not.toContain('localhost:9999');
   });

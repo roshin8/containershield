@@ -66,5 +66,4 @@ export function initBluetoothSpoofer(mode: ProtectionMode, prng: PRNG): void {
     }
   }
 
-  console.log('[ContainerShield] Bluetooth spoofer initialized');
 }

@@ -292,5 +292,4 @@ export function initSensorSpoofer(mode: ProtectionMode, prng: PRNG): void {
     };
   }
 
-  console.log('[ContainerShield] Sensor APIs spoofer initialized');
 }

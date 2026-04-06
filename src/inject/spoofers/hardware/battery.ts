@@ -29,7 +29,6 @@ export function initBatterySpoofer(mode: ProtectionMode, prng: PRNG): void {
       writable: true,
     });
 
-    console.log('[ContainerShield] Battery API blocked');
     return;
   }
 
@@ -79,5 +78,4 @@ export function initBatterySpoofer(mode: ProtectionMode, prng: PRNG): void {
     writable: true,
   });
 
-  console.log('[ContainerShield] Battery API spoofed:', fakeBattery.level * 100 + '%');
 }

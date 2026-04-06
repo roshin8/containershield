@@ -367,5 +367,4 @@ export function initWebGPUSpoofer(mode: ProtectionMode, prng: PRNG): void {
     };
   }
 
-  console.log('[ContainerShield] WebGPU spoofer initialized:', selectedGPU.device);
 }

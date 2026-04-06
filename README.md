@@ -18,7 +18,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/APIs%20Protected-50+-blue" alt="APIs Protected">
-  <img src="https://img.shields.io/badge/Firefox-91+-orange" alt="Firefox 91+">
+  <img src="https://img.shields.io/badge/Firefox-128+-orange" alt="Firefox 128+">
   <img src="https://img.shields.io/badge/License-GPL--3.0-green" alt="License">
   <img src="https://img.shields.io/badge/TypeScript-5.0-blue" alt="TypeScript">
 </p>
@@ -400,7 +400,8 @@ To submit to Firefox Add-ons (AMO):
 ├─────────────────────────────────────────────────────────────────┤
 │                         TAB LEVEL                               │
 ├─────────────────────────────────────────────────────────────────┤
-│  Content Script ──inject──► Page Context (MAIN World)          │
+│  Inject Script (world: "MAIN") ► Page Context                  │
+│  Content Script (ISOLATED) ► Message Bridge                    │
 │                              ┌─────────────────────────┐        │
 │                              │ 50+ API Spoofers        │        │
 │                              │ • Graphics (Canvas,WebGL)│        │
@@ -1116,7 +1117,7 @@ containershield/
 
 - Node.js 18+
 - npm 9+
-- Firefox 91+
+- Firefox 128+ (Manifest V3 with `world: "MAIN"` support)
 
 ### Commands
 

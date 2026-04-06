@@ -68,5 +68,4 @@ export function initStorageSpoofer(mode: ProtectionMode, prng: PRNG): void {
     };
   }
 
-  console.log('[ContainerShield] Storage estimate spoofer initialized');
 }

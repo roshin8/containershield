@@ -75,7 +75,6 @@ export function initErrorSpoofer(mode: ProtectionMode, prng: PRNG): void {
     configurable: true,
   });
 
-  console.log('[ContainerShield] Error stack trace spoofer initialized');
 }
 
 /**

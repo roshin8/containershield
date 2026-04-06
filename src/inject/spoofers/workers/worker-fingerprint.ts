@@ -11,21 +11,9 @@
 
 import type { ProtectionMode, AssignedProfileData } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { TIMEZONE_IANA } from '@/lib/constants';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 import { getSelectedGPU } from '../graphics/webgl';
-
-// Timezone offset-to-IANA mapping (must match timezone/intl.ts)
-const TIMEZONE_NAMES: Record<number, string> = {
-  [-720]: 'Etc/GMT+12', [-660]: 'Pacific/Midway', [-600]: 'Pacific/Honolulu',
-  [-540]: 'America/Anchorage', [-480]: 'America/Los_Angeles', [-420]: 'America/Denver',
-  [-360]: 'America/Chicago', [-300]: 'America/New_York', [-240]: 'America/Halifax',
-  [-180]: 'America/Sao_Paulo', [-120]: 'Atlantic/South_Georgia', [-60]: 'Atlantic/Azores',
-  [0]: 'UTC', [60]: 'Europe/Paris', [120]: 'Europe/Helsinki', [180]: 'Europe/Moscow',
-  [240]: 'Asia/Dubai', [300]: 'Asia/Karachi', [330]: 'Asia/Kolkata',
-  [360]: 'Asia/Dhaka', [420]: 'Asia/Bangkok', [480]: 'Asia/Shanghai',
-  [540]: 'Asia/Tokyo', [600]: 'Australia/Sydney', [660]: 'Pacific/Guadalcanal',
-  [720]: 'Pacific/Auckland',
-};
 
 function buildWorkerPreamble(assignedProfile?: AssignedProfileData): string {
   if (!assignedProfile?.userAgent) return '';
@@ -35,7 +23,7 @@ function buildWorkerPreamble(assignedProfile?: AssignedProfileData): string {
   const dm = assignedProfile.deviceMemory || 8;
   const langs = assignedProfile.languages || ['en-US'];
   const tzOffset = assignedProfile.timezoneOffset;
-  const tzName = tzOffset !== undefined ? (TIMEZONE_NAMES[tzOffset] || 'UTC') : null;
+  const tzName = tzOffset !== undefined ? (TIMEZONE_IANA[tzOffset] || 'UTC') : null;
   // appVersion must match main thread: profile value or derived from userAgent
   const appVersion = ua.appVersion || (ua.userAgent ? ua.userAgent.replace(/^Mozilla\//, '') : '');
 

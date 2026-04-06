@@ -52,5 +52,4 @@ export function initKeyboardSpoofer(mode: ProtectionMode, prng: PRNG): void {
     return new Map(Object.entries(US_QWERTY_LAYOUT));
   };
 
-  console.log('[ContainerShield] Keyboard layout spoofer initialized');
 }

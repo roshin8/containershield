@@ -74,5 +74,4 @@ export function initOfflineAudioSpoofer(mode: ProtectionMode, prng: PRNG): void 
   // Copy static properties
   (window.OfflineAudioContext as any).prototype = OriginalOfflineAudioContext.prototype;
 
-  console.log('[ContainerShield] OfflineAudioContext spoofer initialized');
 }

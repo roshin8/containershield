@@ -48,5 +48,4 @@ export function initOffscreenCanvasSpoofer(mode: ProtectionMode, prng: PRNG): vo
     return original.call(thisArg, ...args);
   });
 
-  console.log('[ContainerShield] OffscreenCanvas spoofer initialized');
 }

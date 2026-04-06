@@ -70,5 +70,4 @@ export function initScreenOrientationSpoofer(mode: ProtectionMode, prng: PRNG): 
     // Can't override
   }
 
-  console.log('[ContainerShield] Screen orientation spoofer initialized');
 }

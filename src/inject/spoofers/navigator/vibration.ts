@@ -48,5 +48,4 @@ export function initVibrationSpoofer(mode: ProtectionMode, prng: PRNG): void {
     // Can't override
   }
 
-  console.log('[ContainerShield] Vibration spoofer initialized');
 }

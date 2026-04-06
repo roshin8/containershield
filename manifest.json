@@ -1,7 +1,7 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "Container Shield",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Per-container fingerprint spoofing and privacy protection for Firefox Multi-Account Containers. Protects 50+ fingerprinting APIs.",
 
   "author": "Container Shield Contributors",
@@ -24,15 +24,25 @@
     "privacy",
     "notifications",
     "contextMenus",
+    "alarms"
+  ],
+
+  "host_permissions": [
     "<all_urls>"
   ],
 
   "background": {
-    "scripts": ["background/index.js"],
-    "persistent": true
+    "scripts": ["background/index.js"]
   },
 
   "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["inject/index.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
     {
       "matches": ["<all_urls>"],
       "js": ["content/index.js"],
@@ -42,13 +52,17 @@
   ],
 
   "web_accessible_resources": [
-    "inject/index.js",
-    "pages/ip-warning.html",
-    "icons/*.svg",
-    "chunks/*.js"
+    {
+      "resources": [
+        "pages/ip-warning.html",
+        "icons/*.svg",
+        "chunks/*.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
   ],
 
-  "browser_action": {
+  "action": {
     "default_icon": {
       "48": "icons/icon-48.svg",
       "96": "icons/icon-96.svg"
@@ -84,7 +98,7 @@
       },
       "description": "Toggle protection exception for current site"
     },
-    "_execute_browser_action": {
+    "_execute_action": {
       "suggested_key": {
         "default": "Alt+Shift+C",
         "mac": "MacCtrl+Shift+C"
@@ -96,7 +110,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "{b8f9c842-c4d0-4f61-bf3d-9e2a3a9d8f7e}",
-      "strict_min_version": "91.0"
+      "strict_min_version": "128.0"
     }
   }
 }

@@ -89,5 +89,4 @@ export function initCSSFontSpoofer(mode: ProtectionMode, prng: PRNG): void {
     (window.FontFace as any).prototype = OriginalFontFace.prototype;
   }
 
-  console.log('[ContainerShield] CSS font detection spoofer initialized');
 }

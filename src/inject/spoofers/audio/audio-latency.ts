@@ -91,5 +91,4 @@ export function initAudioLatencySpoofer(mode: ProtectionMode, prng: PRNG): void 
     // Can't replace
   }
 
-  console.log('[ContainerShield] Audio latency spoofer initialized');
 }

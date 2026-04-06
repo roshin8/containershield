@@ -149,5 +149,4 @@ export function initFeatureSpoofer(mode: ProtectionMode, prng: PRNG): void {
     };
   }
 
-  console.log('[ContainerShield] Feature detection spoofer initialized');
 }

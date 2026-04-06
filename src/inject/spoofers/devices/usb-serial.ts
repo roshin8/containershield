@@ -51,7 +51,6 @@ export function initUSBSpoofer(mode: ProtectionMode, prng: PRNG): void {
     }
   }
 
-  console.log('[ContainerShield] USB spoofer initialized');
 }
 
 /**
@@ -97,7 +96,6 @@ export function initSerialSpoofer(mode: ProtectionMode, prng: PRNG): void {
     }
   }
 
-  console.log('[ContainerShield] Serial spoofer initialized');
 }
 
 /**
@@ -143,5 +141,4 @@ export function initHIDSpoofer(mode: ProtectionMode, prng: PRNG): void {
     }
   }
 
-  console.log('[ContainerShield] HID spoofer initialized');
 }

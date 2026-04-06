@@ -7,45 +7,8 @@ import type { TimezoneSpoofers, AssignedProfileData } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { farbleTimezoneOffset } from '@/lib/farbling';
 import { overrideMethod, registerNative } from '@/lib/stealth';
+import { TIMEZONE_IANA } from '@/lib/constants';
 import { logAccess } from '../../monitor/fingerprint-monitor';
-
-// Timezone IANA names for all common offsets (minutes from UTC)
-const TIMEZONE_NAMES: Record<number, string> = {
-  [-720]: 'Etc/GMT+12',
-  [-660]: 'Pacific/Midway',
-  [-600]: 'Pacific/Honolulu',
-  [-570]: 'Pacific/Marquesas',
-  [-540]: 'America/Anchorage',
-  [-480]: 'America/Los_Angeles',
-  [-420]: 'America/Denver',
-  [-360]: 'America/Chicago',
-  [-300]: 'America/New_York',
-  [-240]: 'America/Halifax',
-  [-210]: 'America/St_Johns',
-  [-180]: 'America/Sao_Paulo',
-  [-120]: 'Atlantic/South_Georgia',
-  [-60]: 'Atlantic/Azores',
-  [0]: 'UTC',
-  [60]: 'Europe/Paris',
-  [120]: 'Europe/Helsinki',
-  [180]: 'Europe/Moscow',
-  [210]: 'Asia/Tehran',
-  [240]: 'Asia/Dubai',
-  [270]: 'Asia/Kabul',
-  [300]: 'Asia/Karachi',
-  [330]: 'Asia/Kolkata',
-  [345]: 'Asia/Kathmandu',
-  [360]: 'Asia/Dhaka',
-  [390]: 'Asia/Yangon',
-  [420]: 'Asia/Bangkok',
-  [480]: 'Asia/Shanghai',
-  [540]: 'Asia/Tokyo',
-  [570]: 'Australia/Adelaide',
-  [600]: 'Australia/Sydney',
-  [660]: 'Pacific/Guadalcanal',
-  [720]: 'Pacific/Auckland',
-  [780]: 'Pacific/Apia',
-};
 
 // Map language codes to likely timezone offsets
 const LANGUAGE_TIMEZONE: Record<string, { offset: number; tz: string }> = {
@@ -127,7 +90,7 @@ export function initTimezoneSpoofer(
   let targetTimezone: string;
 
   if (assignedProfile?.timezoneOffset !== undefined) {
-    targetTimezone = TIMEZONE_NAMES[assignedProfile.timezoneOffset] || 'UTC';
+    targetTimezone = TIMEZONE_IANA[assignedProfile.timezoneOffset] || 'UTC';
 
     // If timezone name doesn't match, try to get a better one from language
     if (targetTimezone === 'UTC' && assignedProfile?.languages?.length) {
@@ -144,11 +107,11 @@ export function initTimezoneSpoofer(
       targetTimezone = langTZ.tz;
     } else {
       const offset = farbleTimezoneOffset(prng);
-      targetTimezone = TIMEZONE_NAMES[offset] || 'UTC';
+      targetTimezone = TIMEZONE_IANA[offset] || 'UTC';
     }
   } else {
     const offset = farbleTimezoneOffset(prng);
-    targetTimezone = TIMEZONE_NAMES[offset] || 'UTC';
+    targetTimezone = TIMEZONE_IANA[offset] || 'UTC';
   }
 
   // Compute actual offset dynamically (handles DST correctly)

@@ -64,7 +64,6 @@ export function initTextMetricsSpoofer(mode: ProtectionMode, prng: PRNG): void {
     });
   }
 
-  console.log('[ContainerShield] TextMetrics spoofer initialized:', mode);
 }
 
 /**

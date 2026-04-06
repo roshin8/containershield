@@ -47,5 +47,4 @@ export function initGamepadSpoofer(mode: ProtectionMode, prng: PRNG): void {
     };
   }
 
-  console.log('[ContainerShield] Gamepad spoofer initialized');
 }

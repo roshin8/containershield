@@ -44,7 +44,7 @@ export class KeyboardShortcuts {
         await this.toggleSiteException(tab);
         break;
       case 'open-popup':
-        await browser.browserAction.openPopup();
+        await browser.action.openPopup();
         break;
       default:
         console.log('[ContainerShield] Unknown command:', command);

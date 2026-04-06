@@ -52,5 +52,4 @@ export function initIndexedDBSpoofer(mode: ProtectionMode, prng: PRNG): void {
     return originalDeleteDatabase(name);
   };
 
-  console.log('[ContainerShield] IndexedDB spoofer initialized');
 }

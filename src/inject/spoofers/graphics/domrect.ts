@@ -121,5 +121,4 @@ export function initDOMRectSpoofer(mode: ProtectionMode, prng: PRNG): void {
     return result as unknown as DOMRectList;
   });
 
-  console.log('[ContainerShield] DOMRect spoofer initialized:', mode);
 }

@@ -79,5 +79,4 @@ export function initWebGLShaderSpoofer(mode: ProtectionMode, prng: PRNG): void {
     }
   }
 
-  console.log('[ContainerShield] WebGL shader spoofer initialized');
 }

@@ -89,5 +89,4 @@ export function initNetworkSpoofer(mode: ProtectionMode, prng: PRNG): void {
     // Can't override
   }
 
-  console.log('[ContainerShield] Network Information spoofer initialized');
 }

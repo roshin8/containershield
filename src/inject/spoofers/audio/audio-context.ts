@@ -96,5 +96,4 @@ export function initAudioSpoofer(mode: ProtectionMode, prng: PRNG): void {
     });
   }
 
-  console.log('[ContainerShield] Audio spoofer initialized:', mode);
 }

@@ -41,7 +41,6 @@ export function initDeviceSpoofer(
       enumerable: true,
     });
 
-    console.log('[ContainerShield] Device memory spoofed:', spoofedMemory);
   }
 
   // Spoof hardwareConcurrency - use assigned profile for guaranteed uniqueness
@@ -63,7 +62,6 @@ export function initDeviceSpoofer(
       enumerable: true,
     });
 
-    console.log('[ContainerShield] Hardware concurrency spoofed:', spoofedConcurrency);
   }
 
   // maxTouchPoints is handled by the touch spoofer (hardware/touch.ts)

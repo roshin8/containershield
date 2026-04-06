@@ -55,7 +55,6 @@ export function initWebSQLSpoofer(mode: ProtectionMode, prng: PRNG): void {
       }
     }
 
-    console.log('[ContainerShield] WebSQL spoofer initialized');
   } else {
     // openDatabase doesn't exist - no action needed for blocking
     // For noise mode, we could add a fake one, but it's deprecated so probably not worth it

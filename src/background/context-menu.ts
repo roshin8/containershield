@@ -216,7 +216,7 @@ export class ContextMenuManager {
    * Open fingerprint monitor popup
    */
   private async openMonitor(): Promise<void> {
-    await browser.browserAction.openPopup();
+    await browser.action.openPopup();
   }
 
   /**

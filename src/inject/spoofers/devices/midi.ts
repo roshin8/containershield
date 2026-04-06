@@ -46,5 +46,4 @@ export function initMIDISpoofer(mode: ProtectionMode, prng: PRNG): void {
     };
   }
 
-  console.log('[ContainerShield] MIDI spoofer initialized');
 }

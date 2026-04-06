@@ -24,7 +24,7 @@ export class BadgeManager {
    */
   async init(): Promise<void> {
     // Set default badge colors
-    await browser.browserAction.setBadgeBackgroundColor({ color: '#10B981' }); // Green
+    await browser.action.setBadgeBackgroundColor({ color: '#10B981' }); // Green
 
     // Listen for tab changes
     browser.tabs.onActivated.addListener(async (activeInfo) => {
@@ -72,14 +72,14 @@ export class BadgeManager {
    */
   async updateBadgeForTab(tabId: number): Promise<void> {
     if (!this.enabled) {
-      await browser.browserAction.setBadgeText({ text: '', tabId });
+      await browser.action.setBadgeText({ text: '', tabId });
       return;
     }
 
     const stats = tabStats.get(tabId);
 
     if (!stats || stats.total === 0) {
-      await browser.browserAction.setBadgeText({ text: '', tabId });
+      await browser.action.setBadgeText({ text: '', tabId });
       return;
     }
 
@@ -103,8 +103,8 @@ export class BadgeManager {
       badgeColor = '#F59E0B'; // Yellow - moderate protection
     }
 
-    await browser.browserAction.setBadgeBackgroundColor({ color: badgeColor, tabId });
-    await browser.browserAction.setBadgeText({ text: badgeText, tabId });
+    await browser.action.setBadgeBackgroundColor({ color: badgeColor, tabId });
+    await browser.action.setBadgeText({ text: badgeText, tabId });
   }
 
   /**
@@ -125,7 +125,7 @@ export class BadgeManager {
       const tabs = await browser.tabs.query({});
       for (const tab of tabs) {
         if (tab.id) {
-          await browser.browserAction.setBadgeText({ text: '', tabId: tab.id });
+          await browser.action.setBadgeText({ text: '', tabId: tab.id });
         }
       }
     }
@@ -135,8 +135,8 @@ export class BadgeManager {
    * Set badge to show protection is disabled
    */
   async setDisabled(tabId: number): Promise<void> {
-    await browser.browserAction.setBadgeBackgroundColor({ color: '#6B7280', tabId }); // Gray
-    await browser.browserAction.setBadgeText({ text: 'OFF', tabId });
+    await browser.action.setBadgeBackgroundColor({ color: '#6B7280', tabId }); // Gray
+    await browser.action.setBadgeText({ text: 'OFF', tabId });
   }
 
   /**

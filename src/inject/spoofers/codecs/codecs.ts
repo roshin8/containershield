@@ -113,5 +113,4 @@ export function initCodecSpoofer(mode: ProtectionMode, prng: PRNG): void {
     });
   }
 
-  console.log('[ContainerShield] Codec spoofer initialized');
 }

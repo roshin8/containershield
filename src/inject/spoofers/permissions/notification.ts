@@ -64,5 +64,4 @@ export function initNotificationSpoofer(mode: ProtectionMode, prng: PRNG): void 
     // Can't override
   }
 
-  console.log('[ContainerShield] Notification spoofer initialized');
 }
