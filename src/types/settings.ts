@@ -120,6 +120,7 @@ export interface NavigatorSpoofers {
   fontPreferences: ProtectionMode;
   windowName: ProtectionMode;
   tabHistory: ProtectionMode;
+  mediaCapabilities: ProtectionMode;
 }
 
 /**
@@ -154,6 +155,7 @@ export interface NetworkSpoofers {
 export interface TimingSpoofers {
   performance: ProtectionMode;
   memory: ProtectionMode;
+  eventLoop: ProtectionMode;
 }
 
 /**
@@ -185,6 +187,7 @@ export interface StorageSpoofers {
   estimate: ProtectionMode;
   indexedDB: ProtectionMode;
   webSQL: ProtectionMode;
+  privateModeProtection: ProtectionMode;
 }
 
 /**
@@ -427,6 +430,7 @@ export function createDefaultSettings(): ContainerSettings {
         fontPreferences: 'noise',
         windowName: 'noise',
         tabHistory: 'noise',
+        mediaCapabilities: 'noise',
       },
       timezone: {
         intl: 'noise',
@@ -445,6 +449,7 @@ export function createDefaultSettings(): ContainerSettings {
       timing: {
         performance: 'noise',
         memory: 'noise',
+        eventLoop: 'noise',
       },
       css: {
         mediaQueries: 'noise',
@@ -460,6 +465,7 @@ export function createDefaultSettings(): ContainerSettings {
         estimate: 'noise',
         indexedDB: 'noise',
         webSQL: 'noise',
+        privateModeProtection: 'noise',
       },
       math: {
         functions: 'noise',

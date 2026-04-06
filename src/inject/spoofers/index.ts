@@ -62,6 +62,7 @@ import { initKeyboardCadenceSpoofer } from './keyboard/cadence';
 // Timing
 import { initPerformanceSpoofer } from './timing/performance';
 import { initMemorySpoofer } from './timing/memory';
+import { initEventLoopJitter } from './timing/event-loop';
 
 // CSS
 import { initCSSSpoofer } from './css/media-queries';
@@ -77,6 +78,7 @@ import { initNotificationSpoofer } from './permissions/notification';
 import { initStorageSpoofer } from './storage/storage-estimate';
 import { initIndexedDBSpoofer } from './storage/indexeddb';
 import { initWebSQLSpoofer } from './storage/websql';
+import { initPrivateModeProtection } from './storage/private-mode';
 
 // Codecs
 import { initCodecSpoofer } from './codecs/codecs';
@@ -199,7 +201,7 @@ export function initializeSpoofers(config: InjectConfig): void {
   safe('fontPrefs', () => { if (settings.navigator.fontPreferences !== 'off') initFontPreferencesSpoofer(settings.navigator.fontPreferences, pagePRNG); });
   safe('windowName', () => { if (settings.navigator.windowName !== 'off') initWindowNameSpoofer(settings.navigator.windowName, pagePRNG); });
   safe('tabHistory', () => { if (settings.navigator.tabHistory !== 'off') initTabHistorySpoofer(settings.navigator.tabHistory, pagePRNG); });
-  safe('mediaCapabilities', () => { initMediaCapabilitiesSpoofer('noise', pagePRNG); });
+  safe('mediaCapabilities', () => { if (settings.navigator.mediaCapabilities !== 'off') initMediaCapabilitiesSpoofer(settings.navigator.mediaCapabilities, pagePRNG); });
 
   safe('timezone', () => {
     if (settings.timezone.intl !== 'off' || settings.timezone.date !== 'off') {
@@ -217,6 +219,7 @@ export function initializeSpoofers(config: InjectConfig): void {
 
   safe('performance', () => { if (settings.timing.performance !== 'off') initPerformanceSpoofer(settings.timing.performance, pagePRNG); });
   safe('memory', () => { if (settings.timing.memory !== 'off') initMemorySpoofer(settings.timing.memory, pagePRNG); });
+  safe('eventLoop', () => { if (settings.timing.eventLoop !== 'off') initEventLoopJitter(settings.timing.eventLoop, pagePRNG); });
 
   safe('css', () => { if (settings.css.mediaQueries !== 'off') initCSSSpoofer(settings.css.mediaQueries, pagePRNG, assignedProfile); });
   safe('speech', () => { if (settings.speech.synthesis !== 'off') initSpeechSpoofer(settings.speech.synthesis, pagePRNG); });
@@ -225,6 +228,7 @@ export function initializeSpoofers(config: InjectConfig): void {
   safe('storage', () => { if (settings.storage.estimate !== 'off') initStorageSpoofer(settings.storage.estimate, pagePRNG); });
   safe('indexedDB', () => { if (settings.storage.indexedDB !== 'off') initIndexedDBSpoofer(settings.storage.indexedDB, pagePRNG); });
   safe('webSQL', () => { if (settings.storage.webSQL !== 'off') initWebSQLSpoofer(settings.storage.webSQL, pagePRNG); });
+  safe('privateMode', () => { if (settings.storage.privateModeProtection !== 'off') initPrivateModeProtection(settings.storage.privateModeProtection, pagePRNG); });
   safe('math', () => { if (settings.math.functions !== 'off') initMathSpoofer(settings.math.functions, pagePRNG); });
   safe('keyboard', () => { if (settings.keyboard.layout !== 'off') initKeyboardSpoofer(settings.keyboard.layout, pagePRNG); });
   safe('cadence', () => { if (settings.keyboard.cadence !== 'off') initKeyboardCadenceSpoofer(settings.keyboard.cadence, pagePRNG); });

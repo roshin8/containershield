@@ -121,6 +121,7 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
       <G label="Timing & Timezone">
         <S name="Performance" cat="timing" k="performance" opts={TIMING_PRECISION_OPTIONS} val={vals['performance.now']} />
         <S name="Memory" cat="timing" k="memory" />
+        <S name="Event Loop Jitter" cat="timing" k="eventLoop" />
         <S name="Timezone" cat="timezone" k="intl" val={vals['Intl.DateTimeFormat'] || vals['Date.getTimezoneOffset']} />
         <S name="Date" cat="timezone" k="date" val={vals['Date.getTimezoneOffset']} />
       </G>
@@ -136,7 +137,9 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
         <S name="Key Cadence" cat="keyboard" k="cadence" />
         <S name="Speech" cat="speech" k="synthesis" />
         <S name="Permissions" cat="permissions" k="query" />
+        <S name="Media Capabilities" cat="navigator" k="mediaCapabilities" />
         <S name="Storage" cat="storage" k="estimate" />
+        <S name="Private Mode" cat="storage" k="privateModeProtection" />
         <S name="Features" cat="features" k="detection" />
         <S name="Crypto" cat="crypto" k="webCrypto" />
         <S name="Errors" cat="errors" k="stackTrace" />

@@ -1,11 +1,22 @@
 /**
- * Header Spoofer - Modifies HTTP headers via webRequest API
+ * Header Spoofer - Modifies HTTP headers and blocks tracking domains via webRequest API
  */
 
 import browser from 'webextension-polyfill';
 import type { SettingsStore } from './settings-store';
 import type { ContainerManager } from './container-manager';
 import type { HeaderConfig } from '@/types';
+
+/** Default tracking domains — user can add/remove via UI */
+export const DEFAULT_TRACKING_DOMAINS = [
+  'device-metrics-us.amazon.com',
+  'device-metrics-us-2.amazon.com',
+  'unagi.amazon.com',
+  'unagi-na.amazon.com',
+  'fls-na.amazon.com',
+  'fls-eu.amazon.com',
+  'csm-e.amazon.com',
+];
 
 /**
  * Private IPv4 ranges that must be excluded from random generation.
@@ -97,15 +108,48 @@ export class HeaderSpoofer {
   /**
    * Initialize header spoofing
    */
+  private blockedDomains: Set<string> = new Set(DEFAULT_TRACKING_DOMAINS);
+
   async init(): Promise<void> {
-    // Listen for outgoing requests
+    // Load user-configured blocked domains
+    try {
+      const stored = await browser.storage.local.get('blockedTrackingDomains');
+      if (stored.blockedTrackingDomains) {
+        this.blockedDomains = new Set(stored.blockedTrackingDomains);
+      }
+    } catch {}
+
+    // Block tracking domain requests
+    browser.webRequest.onBeforeRequest.addListener(
+      (details) => {
+        try {
+          const url = new URL(details.url);
+          if (this.blockedDomains.has(url.hostname)) {
+            return { cancel: true };
+          }
+        } catch {}
+        return {};
+      },
+      { urls: ['<all_urls>'] },
+      ['blocking']
+    );
+
+    // Listen for outgoing requests — modify headers
     browser.webRequest.onBeforeSendHeaders.addListener(
       (details) => this.handleBeforeSendHeaders(details),
       { urls: ['<all_urls>'] },
       ['blocking', 'requestHeaders']
     );
+  }
 
-    console.log('[HeaderSpoofer] Initialized');
+  /** Update blocked domains list (called from message handler) */
+  async updateBlockedDomains(domains: string[]): Promise<void> {
+    this.blockedDomains = new Set(domains);
+    await browser.storage.local.set({ blockedTrackingDomains: domains });
+  }
+
+  getBlockedDomains(): string[] {
+    return [...this.blockedDomains];
   }
 
   /**
@@ -139,11 +183,67 @@ export class HeaderSpoofer {
         settings.profile
       );
 
-      return { requestHeaders: headers };
-    } catch (error) {
-      console.error('[HeaderSpoofer] Error:', error);
+      // Reorder headers to match spoofed browser's typical order
+      const reordered = this.reorderHeaders(headers, settings.profile);
+      return { requestHeaders: reordered };
+    } catch {
       return {};
     }
+  }
+
+  /**
+   * Reorder HTTP headers to match the spoofed browser's typical order.
+   * Chrome and Firefox send headers in different orders — a mismatch
+   * reveals the real browser even if UA is spoofed.
+   */
+  private reorderHeaders(
+    headers: browser.WebRequest.HttpHeaders,
+    profile: import('@/types').ProfileConfig
+  ): browser.WebRequest.HttpHeaders {
+    const ua = profile.userAgent || '';
+    const isChrome = ua.includes('Chrome/') && !ua.includes('Firefox/');
+
+    // Chrome typical order: Host, Connection, sec-ch-ua, sec-ch-ua-mobile,
+    // sec-ch-ua-platform, Upgrade-Insecure-Requests, User-Agent, Accept,
+    // Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-User, Sec-Fetch-Dest,
+    // Accept-Encoding, Accept-Language
+    const chromeOrder = [
+      'host', 'connection', 'cache-control', 'sec-ch-ua', 'sec-ch-ua-mobile',
+      'sec-ch-ua-platform', 'upgrade-insecure-requests', 'user-agent',
+      'accept', 'sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-user',
+      'sec-fetch-dest', 'accept-encoding', 'accept-language', 'cookie',
+    ];
+
+    // Firefox typical order: Host, User-Agent, Accept, Accept-Language,
+    // Accept-Encoding, Connection, Cookie, Upgrade-Insecure-Requests
+    const firefoxOrder = [
+      'host', 'user-agent', 'accept', 'accept-language', 'accept-encoding',
+      'connection', 'cookie', 'upgrade-insecure-requests',
+      'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'sec-fetch-user',
+    ];
+
+    const order = isChrome ? chromeOrder : firefoxOrder;
+    const headerMap = new Map<string, browser.WebRequest.HttpHeaders[0]>();
+    const remaining: browser.WebRequest.HttpHeaders = [];
+
+    for (const h of headers) {
+      headerMap.set(h.name.toLowerCase(), h);
+    }
+
+    const sorted: browser.WebRequest.HttpHeaders = [];
+    for (const name of order) {
+      const h = headerMap.get(name);
+      if (h) {
+        sorted.push(h);
+        headerMap.delete(name);
+      }
+    }
+    // Append remaining headers not in the known order
+    for (const h of headerMap.values()) {
+      sorted.push(h);
+    }
+
+    return sorted;
   }
 
   /**
