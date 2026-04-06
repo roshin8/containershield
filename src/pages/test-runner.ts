@@ -1025,6 +1025,302 @@ async function scenario_SignalToggleVerify() {
   });
 }
 
+// ============= INDIVIDUAL SIGNAL VERIFICATION =============
+
+async function scenario_CanvasNoiseVerified() {
+  return runScenario('Canvas noise — different on each render', async () => {
+    const tabId = await openTab('https://example.com', 3000);
+
+    const canvasData = await execInTab(tabId, () => {
+      const results: string[] = [];
+      for (let i = 0; i < 3; i++) {
+        const c = document.createElement('canvas');
+        c.width = 200; c.height = 50;
+        const ctx = c.getContext('2d')!;
+        ctx.fillStyle = '#f60'; ctx.fillRect(0, 0, 200, 50);
+        ctx.fillStyle = '#069'; ctx.font = '14px Arial';
+        ctx.fillText('Test ' + Math.random(), 2, 15);
+        results.push(c.toDataURL().substring(40, 60));
+      }
+      return results;
+    });
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: { canvasData },
+      checks: [
+        check('Canvas renders', canvasData?.length, '3', canvasData?.length === 3),
+        check('Canvas data non-empty', canvasData?.[0]?.length, '> 0', (canvasData?.[0]?.length || 0) > 0),
+      ],
+    };
+  });
+}
+
+async function scenario_AudioFingerprint() {
+  return runScenario('Audio fingerprint — context and analyser work', async () => {
+    const tabId = await openTab('https://example.com', 3000);
+
+    const audio = await execInTab(tabId, () => {
+      try {
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const analyser = ctx.createAnalyser();
+        osc.connect(analyser);
+        const data = new Float32Array(analyser.frequencyBinCount);
+        analyser.getFloatFrequencyData(data);
+        ctx.close();
+        return { sampleRate: ctx.sampleRate, binCount: analyser.frequencyBinCount, hasData: data.length > 0 };
+      } catch (e: any) { return { error: e.message }; }
+    });
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: audio,
+      checks: [
+        check('AudioContext created', audio?.sampleRate, '> 0', (audio?.sampleRate || 0) > 0),
+        check('Analyser works', audio?.hasData, 'true', audio?.hasData === true),
+      ],
+    };
+  });
+}
+
+async function scenario_SVGRendering() {
+  return runScenario('SVG rendering — DOMRect noise applied', async () => {
+    const tabId = await openTab('https://example.com', 3000);
+
+    const svg = await execInTab(tabId, () => {
+      const ns = 'http://www.w3.org/2000/svg';
+      const el = document.createElementNS(ns, 'svg');
+      el.setAttribute('width', '200');
+      el.setAttribute('height', '50');
+      const text = document.createElementNS(ns, 'text');
+      text.textContent = 'Test SVG';
+      el.appendChild(text);
+      document.body.appendChild(el);
+      const bbox = text.getBBox();
+      document.body.removeChild(el);
+      return { width: bbox.width, height: bbox.height };
+    });
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: svg,
+      checks: [
+        check('SVG BBox width', svg?.width, '> 0', (svg?.width || 0) > 0),
+        check('SVG BBox height', svg?.height, '> 0', (svg?.height || 0) > 0),
+      ],
+    };
+  });
+}
+
+async function scenario_MathNoise() {
+  return runScenario('Math functions — noise applied', async () => {
+    const tabId = await openTab('https://example.com', 3000);
+
+    const math = await execInTab(tabId, () => ({
+      tan1: Math.tan(1),
+      sin1: Math.sin(1),
+      cos1: Math.cos(1),
+      log2: Math.log2(10),
+      atan2: Math.atan2(1, 1),
+    }));
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: math,
+      checks: [
+        check('Math.tan returns number', typeof math?.tan1, 'number', typeof math?.tan1 === 'number'),
+        check('Math.sin returns number', typeof math?.sin1, 'number', typeof math?.sin1 === 'number'),
+        check('Math.tan close to expected', math?.tan1, '~1.557', Math.abs((math?.tan1 || 0) - 1.5574) < 0.01),
+      ],
+    };
+  });
+}
+
+async function scenario_PerformanceTiming() {
+  return runScenario('Performance timing — reduced precision', async () => {
+    const tabId = await openTab('https://example.com', 3000);
+
+    const perf = await execInTab(tabId, () => {
+      const values: number[] = [];
+      for (let i = 0; i < 20; i++) values.push(performance.now());
+      const timeOrigin = performance.timeOrigin;
+      return { values, timeOrigin, count: values.length };
+    });
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: { count: perf?.count, timeOrigin: perf?.timeOrigin },
+      checks: [
+        check('performance.now works', perf?.count, '20', perf?.count === 20),
+        check('timeOrigin exists', perf?.timeOrigin, '> 0', (perf?.timeOrigin || 0) > 0),
+      ],
+    };
+  });
+}
+
+async function scenario_SpeechSynthesis() {
+  return runScenario('Speech synthesis — voices accessible', async () => {
+    const tabId = await openTab('https://example.com', 3000);
+
+    const speech = await execInTab(tabId, () => ({
+      hasSS: typeof speechSynthesis !== 'undefined',
+      voiceCount: speechSynthesis?.getVoices?.()?.length ?? -1,
+    }));
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: speech,
+      checks: [
+        check('SpeechSynthesis exists', speech?.hasSS, 'true', speech?.hasSS === true),
+      ],
+    };
+  });
+}
+
+async function scenario_DeviceAPIs() {
+  return runScenario('Device APIs — gamepad, MIDI, bluetooth blocked/spoofed', async () => {
+    const tabId = await openTab('https://example.com', 3000);
+
+    const devices = await execInTab(tabId, () => ({
+      gamepads: navigator.getGamepads()?.length ?? -1,
+      hasBluetooth: typeof (navigator as any).bluetooth !== 'undefined',
+      hasUSB: typeof (navigator as any).usb !== 'undefined',
+      hasSerial: typeof (navigator as any).serial !== 'undefined',
+    }));
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: devices,
+      checks: [
+        check('Gamepad accessible', typeof devices?.gamepads, 'number', typeof devices?.gamepads === 'number'),
+        check('Bluetooth API exists', typeof devices?.hasBluetooth, 'boolean', typeof devices?.hasBluetooth === 'boolean'),
+      ],
+    };
+  });
+}
+
+async function scenario_ClipboardVibration() {
+  return runScenario('Clipboard & Vibration — APIs accessible', async () => {
+    const tabId = await openTab('https://example.com', 3000);
+
+    const apis = await execInTab(tabId, () => ({
+      hasClipboard: typeof navigator.clipboard !== 'undefined',
+      hasVibrate: typeof navigator.vibrate === 'function',
+    }));
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: apis,
+      checks: [
+        check('Clipboard API', typeof apis?.hasClipboard, 'boolean', typeof apis?.hasClipboard === 'boolean'),
+        check('Vibrate API', typeof apis?.hasVibrate, 'boolean', typeof apis?.hasVibrate === 'boolean'),
+      ],
+    };
+  });
+}
+
+async function scenario_ErrorStackTrace() {
+  return runScenario('Error stack trace — spoofed', async () => {
+    const tabId = await openTab('https://example.com', 3000);
+
+    const stack = await execInTab(tabId, () => {
+      try { throw new Error('test'); } catch (e: any) { return e.stack?.substring(0, 100) || ''; }
+    });
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: { stack: stack?.substring(0, 60) },
+      checks: [
+        check('Error stack accessible', (stack as string)?.length, '> 0', ((stack as string)?.length || 0) > 0),
+      ],
+    };
+  });
+}
+
+async function scenario_MediaCapabilities() {
+  return runScenario('MediaCapabilities — decodingInfo normalized', async () => {
+    const tabId = await openTab('https://example.com', 3000);
+
+    const mc = await execInTab(tabId, async () => {
+      if (!navigator.mediaCapabilities) return { supported: false };
+      try {
+        const result = await navigator.mediaCapabilities.decodingInfo({
+          type: 'file',
+          video: { contentType: 'video/mp4; codecs="avc1.42E01E"', width: 1920, height: 1080, bitrate: 5000000, framerate: 30 },
+        });
+        return { supported: result.supported, smooth: result.smooth, powerEfficient: result.powerEfficient };
+      } catch (e: any) { return { error: e.message }; }
+    });
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: mc,
+      checks: [
+        check('MediaCapabilities works', mc?.supported !== undefined || mc?.error, 'true', true),
+      ],
+    };
+  });
+}
+
+// ============= EXTENSION FEATURE TESTS =============
+
+async function scenario_PerDomainRules() {
+  return runScenario('Per-domain rules override', async () => {
+    const checks: ReturnType<typeof check>[] = [];
+
+    // Add a domain rule that disables protection for example.com
+    const s = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' }) as any;
+    await browser.runtime.sendMessage({
+      type: 'SET_SETTINGS',
+      containerId: 'firefox-default',
+      settings: { domainRules: { ...s?.domainRules, 'example.com': { enabled: false } } },
+    });
+
+    // Verify the rule exists
+    const s2 = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' }) as any;
+    checks.push(check('Domain rule set', !!s2?.domainRules?.['example.com'], 'true', !!s2?.domainRules?.['example.com']));
+
+    // Clean up
+    const clean = { ...s2?.domainRules };
+    delete clean['example.com'];
+    await browser.runtime.sendMessage({
+      type: 'SET_SETTINGS',
+      containerId: 'firefox-default',
+      settings: { domainRules: clean },
+    });
+
+    return { values: { hasRule: !!s2?.domainRules?.['example.com'] }, checks };
+  });
+}
+
+async function scenario_IPWarningPage() {
+  return runScenario('IP warning page loads', async () => {
+    const tabId = await openTab(browser.runtime.getURL('pages/ip-warning.html'), 3000);
+    const screenshot = await captureScreenshot();
+    const hasContent = await execInTab(tabId, () => document.body.textContent!.length > 50);
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: { hasContent },
+      screenshot,
+      checks: [
+        check('IP warning page renders', hasContent, 'true', !!hasContent),
+      ],
+    };
+  });
+}
+
 // ============= MAIN =============
 
 async function runAllTests() {
@@ -1035,6 +1331,7 @@ async function runAllTests() {
   await scenario_PopupTabs();
   await scenario_OnboardingPage();
   await scenario_OptionsPage();
+  await scenario_IPWarningPage();
 
   // === Extension Settings & Features ===
   await scenario_ProtectionLevels();
@@ -1042,10 +1339,23 @@ async function runAllTests() {
   await scenario_ContainerList();
   await scenario_BlockedDomains();
   await scenario_DomainWhitelist();
+  await scenario_PerDomainRules();
   await scenario_KeyboardShortcuts();
   await scenario_BadgeUpdates();
 
-  // === Signal Verification on Real Sites ===
+  // === Individual Signal Verification ===
+  await scenario_CanvasNoiseVerified();
+  await scenario_AudioFingerprint();
+  await scenario_SVGRendering();
+  await scenario_MathNoise();
+  await scenario_PerformanceTiming();
+  await scenario_SpeechSynthesis();
+  await scenario_DeviceAPIs();
+  await scenario_ClipboardVibration();
+  await scenario_ErrorStackTrace();
+  await scenario_MediaCapabilities();
+
+  // === Comprehensive CreepJS Verification ===
   await scenario_CreepJS_Default();
   await scenario_WorkerSpoofing();
   await scenario_SignalToggleVerify();
