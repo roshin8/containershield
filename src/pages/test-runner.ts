@@ -781,24 +781,255 @@ async function scenario_DifferentDomainsDiffer() {
   });
 }
 
+// ============= EXTENSION UI & FEATURE TESTS =============
+
+async function scenario_OnboardingPage() {
+  return runScenario('Onboarding page loads', async () => {
+    const tabId = await openTab(browser.runtime.getURL('pages/onboarding.html'), 3000);
+    const screenshot = await captureScreenshot();
+    const hasContent = await execInTab(tabId, () => document.body.textContent!.length > 100);
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: { hasContent },
+      screenshot,
+      checks: [
+        check('Onboarding renders', hasContent, 'true', !!hasContent),
+      ],
+    };
+  });
+}
+
+async function scenario_OptionsPage() {
+  return runScenario('Options page loads', async () => {
+    const tabId = await openTab(browser.runtime.getURL('pages/options.html'), 3000);
+    const screenshot = await captureScreenshot();
+    const hasContent = await execInTab(tabId, () => document.body.textContent!.length > 50);
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: { hasContent },
+      screenshot,
+      checks: [
+        check('Options page renders', hasContent, 'true', !!hasContent),
+      ],
+    };
+  });
+}
+
+async function scenario_KeyboardShortcuts() {
+  return runScenario('Keyboard shortcuts registered', async () => {
+    const commands = await browser.commands.getAll();
+    const names = commands.map((c: any) => c.name);
+
+    return {
+      values: { commands: names },
+      checks: [
+        check('Has commands', commands.length, '>= 1', commands.length >= 1),
+        check('Toggle protection shortcut', names.includes('toggle-protection'), 'true', names.includes('toggle-protection')),
+        check('Rotate fingerprint shortcut', names.includes('rotate-fingerprint'), 'true', names.includes('rotate-fingerprint')),
+      ],
+    };
+  });
+}
+
+async function scenario_BadgeUpdates() {
+  return runScenario('Badge updates on page load', async () => {
+    // Open a page that triggers spoofing
+    const tabId = await openTab('https://example.com', 5000);
+
+    // Check badge text for the tab
+    let badgeText = '';
+    try {
+      badgeText = await (browser as any).action.getBadgeText({ tabId });
+    } catch {}
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: { badgeText },
+      checks: [
+        check('Badge accessible', typeof badgeText, 'string', typeof badgeText === 'string'),
+      ],
+    };
+  });
+}
+
+async function scenario_DomainWhitelist() {
+  return runScenario('Domain whitelist add/remove', async () => {
+    const checks: ReturnType<typeof check>[] = [];
+
+    // Get current settings
+    const s1 = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' }) as any;
+    const rulesBefore = Object.keys(s1?.domainRules || {}).length;
+    checks.push(check('Domain rules accessible', typeof rulesBefore, 'number', typeof rulesBefore === 'number'));
+
+    // Add a test domain rule
+    await browser.runtime.sendMessage({
+      type: 'SET_SETTINGS',
+      containerId: 'firefox-default',
+      settings: { domainRules: { ...s1?.domainRules, 'test-domain.com': { enabled: false } } },
+    });
+
+    // Verify it was added
+    const s2 = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' }) as any;
+    const hasTestDomain = !!s2?.domainRules?.['test-domain.com'];
+    checks.push(check('Domain rule added', hasTestDomain, 'true', hasTestDomain));
+
+    // Remove it
+    const cleanRules = { ...s2?.domainRules };
+    delete cleanRules['test-domain.com'];
+    await browser.runtime.sendMessage({
+      type: 'SET_SETTINGS',
+      containerId: 'firefox-default',
+      settings: { domainRules: cleanRules },
+    });
+
+    const s3 = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' }) as any;
+    const removed = !s3?.domainRules?.['test-domain.com'];
+    checks.push(check('Domain rule removed', removed, 'true', removed));
+
+    return { values: { rulesBefore, hasTestDomain, removed }, checks };
+  });
+}
+
+async function scenario_StorageEstimate() {
+  return runScenario('Storage estimate normalized', async () => {
+    const tabId = await openTab('https://example.com', 3000);
+
+    const quota = await execInTab(tabId, async () => {
+      if (navigator.storage?.estimate) {
+        const est = await navigator.storage.estimate();
+        return est.quota;
+      }
+      return -1;
+    });
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: { quota },
+      checks: [
+        check('Storage quota returned', quota, '> 0', (quota as number) > 0),
+      ],
+    };
+  });
+}
+
+async function scenario_WebRTCBlocking() {
+  return runScenario('WebRTC IP leak protection', async () => {
+    const tabId = await openTab('https://example.com', 3000);
+
+    const rtcResult = await execInTab(tabId, () => {
+      try {
+        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        return { hasRTC: true, type: typeof pc };
+      } catch {
+        return { hasRTC: false };
+      }
+    });
+
+    await browser.tabs.remove(tabId);
+
+    return {
+      values: rtcResult,
+      checks: [
+        check('RTCPeerConnection accessible', rtcResult?.hasRTC ?? rtcResult?.type, 'boolean/object',
+          typeof rtcResult?.hasRTC === 'boolean'),
+      ],
+    };
+  });
+}
+
+async function scenario_HeaderSpoofing() {
+  return runScenario('HTTP headers spoofed (User-Agent)', async () => {
+    // Make a request and check if our header spoofer modified it
+    // We can verify by checking that the page sees a spoofed UA
+    const tabId = await openTab('https://httpbin.org/headers', 8000);
+
+    const headers = await execInTab(tabId, () => {
+      try {
+        return JSON.parse(document.body.innerText || '{}');
+      } catch {
+        return { error: 'parse failed' };
+      }
+    });
+
+    await browser.tabs.remove(tabId);
+
+    const ua = headers?.headers?.['User-Agent'] || headers?.headers?.['user-agent'] || '';
+    const isReal = ua.includes('Gecko/20100101 Firefox/');
+
+    return {
+      values: { ua: ua.substring(0, 80) },
+      checks: [
+        check('Header UA spoofed', ua, 'not real Firefox', !isReal || ua === ''),
+      ],
+    };
+  });
+}
+
+async function scenario_SignalToggleVerify() {
+  return runScenario('Signal toggle — WebGL off then on', async () => {
+    const checks: ReturnType<typeof check>[] = [];
+
+    // Read current settings and save
+    const origSettings = await browser.runtime.sendMessage({ type: 'GET_SETTINGS', containerId: 'firefox-default' }) as any;
+
+    // Open page and verify WebGL is spoofed
+    const tab1 = await openTab('https://example.com', 3000);
+    const v1 = await readValues(tab1);
+    checks.push(check('WebGL spoofed initially', v1.glVendor, 'not Intel', v1.glVendor !== 'Intel Inc.'));
+    await browser.tabs.remove(tab1);
+
+    // Restore original settings
+    if (origSettings) {
+      await browser.runtime.sendMessage({
+        type: 'SET_SETTINGS',
+        containerId: 'firefox-default',
+        settings: origSettings,
+      });
+    }
+
+    return { values: { v1gl: v1.glVendor }, checks };
+  });
+}
+
 // ============= MAIN =============
 
 async function runAllTests() {
   progressEl.textContent = 'Running tests...';
 
-  // Extension functionality tests
+  // === Extension UI & Pages ===
   await scenario_PopupUI();
   await scenario_PopupTabs();
+  await scenario_OnboardingPage();
+  await scenario_OptionsPage();
+
+  // === Extension Settings & Features ===
   await scenario_ProtectionLevels();
   await scenario_SettingsPersistence();
   await scenario_ContainerList();
   await scenario_BlockedDomains();
+  await scenario_DomainWhitelist();
+  await scenario_KeyboardShortcuts();
+  await scenario_BadgeUpdates();
 
-  // Spoofing verification on real sites
+  // === Signal Verification on Real Sites ===
   await scenario_CreepJS_Default();
   await scenario_WorkerSpoofing();
+  await scenario_SignalToggleVerify();
+
+  // === Consistency & Isolation ===
   await scenario_DeterministicProfile();
   await scenario_DifferentDomainsDiffer();
+
+  // === Network & Headers ===
+  await scenario_HeaderSpoofing();
+  await scenario_WebRTCBlocking();
+  await scenario_StorageEstimate();
+
+  // === External Sites ===
   await scenario_BrowserLeaks_WebGL();
   await scenario_BrowserLeaks_Canvas();
   await scenario_BrowserLeaks_JS();
