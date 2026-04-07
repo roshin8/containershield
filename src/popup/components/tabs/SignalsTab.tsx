@@ -57,15 +57,26 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
     let cancelled = false;
     (async () => {
       try {
+        // Try active tab first
         const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-        if (!tab?.id) return;
-        const resp = await browser.runtime.sendMessage({ type: 'GET_RECOMMENDATIONS', tabId: tab.id }) as Record<string, unknown> | null;
-        if (!cancelled && resp && Array.isArray(resp.accessedAPIs)) {
-          setAccessedAPIs(resp.accessedAPIs as FingerprintAccess[]);
+        if (tab?.id) {
+          const resp = await browser.runtime.sendMessage({ type: 'GET_RECOMMENDATIONS', tabId: tab.id }) as Record<string, unknown> | null;
+          if (!cancelled && resp && Array.isArray(resp.accessedAPIs) && (resp.accessedAPIs as any[]).length > 0) {
+            setAccessedAPIs(resp.accessedAPIs as FingerprintAccess[]);
+            return;
+          }
         }
-      } catch {
-        // Background script not available
-      }
+        // Fallback: try all tabs in current window to find one with data
+        const allTabs = await browser.tabs.query({ currentWindow: true });
+        for (const t of allTabs) {
+          if (!t.id || t.id === tab?.id) continue;
+          const resp = await browser.runtime.sendMessage({ type: 'GET_RECOMMENDATIONS', tabId: t.id }) as Record<string, unknown> | null;
+          if (!cancelled && resp && Array.isArray(resp.accessedAPIs) && (resp.accessedAPIs as any[]).length > 0) {
+            setAccessedAPIs(resp.accessedAPIs as FingerprintAccess[]);
+            return;
+          }
+        }
+      } catch {}
     })();
     return () => { cancelled = true; };
   }, []);

@@ -1748,9 +1748,9 @@ async function scenario_PopupTabNavigation() {
 
 async function scenario_PopupSignalsTab() {
   return runScenario('Popup — Signals tab shows categories + values after site visit', async () => {
-    // First visit a real site to trigger spoofers and generate values
-    const siteTab = await openTab('https://example.com', 5000);
-    await browser.tabs.remove(siteTab);
+    // Visit CreepJS to trigger ALL spoofer APIs and generate values
+    // KEEP the tab open so popup can read its fingerprint data
+    const siteTab = await openTab('https://abrahamjuliot.github.io/creepjs/', 18000);
 
     // Now open popup and check signals tab
     const tabId = await openPopupTab();
@@ -1766,10 +1766,22 @@ async function scenario_PopupSignalsTab() {
     // Read signal categories and check for values
     const signals = await execInTab(tabId, () => {
       const text = document.getElementById('root')?.textContent || '';
-      // Check if any hash-like values appear (8-char hex from our quickHash)
+      // Look for actual signal value text rendered by SignalRow component
+      // Values appear as small accent-colored text below signal names
+      // Check for specific patterns that only appear if values are rendered
+      const signalValueElements = document.querySelectorAll('.truncate');
+      let valueCount = 0;
+      const foundValues: string[] = [];
+      signalValueElements.forEach(el => {
+        const t = (el as HTMLElement).textContent?.trim() || '';
+        // Values are short strings like "1440", "en-US", "a7f3b2c1", "spoofed"
+        if (t.length > 0 && t.length < 50 && !['Off', 'Spoof', 'Block', 'Dashboard', 'Signals', 'Profile', 'Headers', 'Rules', 'Settings'].includes(t)) {
+          valueCount++;
+          if (foundValues.length < 5) foundValues.push(t);
+        }
+      });
       const hasHashValues = /[a-f0-9]{8}/.test(text);
-      // Check for readable values like "1440", "en-US", "Win32"
-      const hasReadableValues = /\d{3,4}/.test(text) || text.includes('en-US') || text.includes('Win');
+      const hasReadableValues = foundValues.length > 0;
       return {
         hasGraphics: text.includes('Canvas') || text.includes('WebGL'),
         hasAudio: text.includes('Audio'),
@@ -1782,17 +1794,25 @@ async function scenario_PopupSignalsTab() {
         hasWorkers: text.includes('Worker'),
         hasHashValues,
         hasReadableValues,
+        valueCount,
+        foundValues,
         textLen: text.length,
       };
     });
 
+    // Check storage directly from the test runner (extension page)
+    const allStorage = await browser.storage.local.get(null) as Record<string, any>;
+    const fpKeys = Object.keys(allStorage).filter(k => k.startsWith('fpData:') || k.startsWith('activeProfile:'));
+
     const screenshot = await captureScreenshot();
     await browser.tabs.remove(tabId);
+    await browser.tabs.remove(siteTab);
 
     return {
-      values: signals,
+      values: { ...signals, fpKeys },
       screenshot,
       checks: [
+        check('fpData in storage', fpKeys.join(', ') || 'none', '> 0', fpKeys.length > 0),
         check('Graphics signals visible', signals?.hasGraphics, 'true', !!signals?.hasGraphics),
         check('Audio signals visible', signals?.hasAudio, 'true', !!signals?.hasAudio),
         check('Hardware signals visible', signals?.hasHardware, 'true', !!signals?.hasHardware),
@@ -1802,8 +1822,9 @@ async function scenario_PopupSignalsTab() {
         check('Network signals visible', signals?.hasNetwork, 'true', !!signals?.hasNetwork),
         check('Device signals visible', signals?.hasDevices, 'true', !!signals?.hasDevices),
         check('Worker signals visible', signals?.hasWorkers, 'true', !!signals?.hasWorkers),
-        check('Signal values present', signals?.hasHashValues || signals?.hasReadableValues, 'true',
-          !!(signals?.hasHashValues || signals?.hasReadableValues)),
+        check('fpData keys in storage', signals?.fpKeys?.join(', '), '> 0', (signals?.fpKeys?.length || 0) > 0),
+        check('Signal value elements found', signals?.valueCount, '> 5', (signals?.valueCount || 0) > 5),
+        check('Example values', signals?.foundValues?.join(', '), 'non-empty', (signals?.foundValues?.length || 0) > 0),
       ],
     };
   });
