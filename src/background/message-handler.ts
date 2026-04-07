@@ -47,6 +47,9 @@ import {
   MSG_CHECK_COLLISIONS,
 } from '@/constants';
 import { CATEGORY_TO_SETTING } from '@/constants/categories';
+import { PRNG } from '@/lib/crypto';
+import { selectGPUForProfile } from '@/lib/gpu-profiles';
+import { TIMEZONE_IANA } from '@/lib/constants';
 
 export class MessageHandler {
   private settingsStore: SettingsStore;
@@ -165,6 +168,9 @@ export class MessageHandler {
 
       case MSG_CHECK_COLLISIONS:
         return this.handleCheckCollisions();
+
+      case 'GET_SIGNAL_VALUES':
+        return this.handleGetSignalValues(message as any);
 
       default:
         return null;
@@ -403,8 +409,7 @@ export class MessageHandler {
     const categorySet = new Set<string>();
     const seenCategories = new Set<string>();
 
-    // Container/settings lookup may fail for tabs the popup can't access —
-    // still return accessedAPIs regardless so signal values render.
+    // Container lookup may fail for tabs in other windows
     let settings: any = null;
     try {
       const containerId = await this.containerManager.getContainerForTab(tabId);
@@ -510,5 +515,281 @@ export class MessageHandler {
   private async handleCheckCollisions() {
     const detector = new CollisionDetector(this.settingsStore, this.containerManager);
     return detector.checkAllContainers();
+  }
+
+  /**
+   * Compute signal values from the assigned profile + entropy.
+   * No need to wait for site access — values are known at spoof time.
+   */
+  private async handleGetSignalValues(
+    message: { containerId: string }
+  ): Promise<Record<string, string>> {
+    const { containerId } = message;
+    const vals: Record<string, string> = {};
+
+    const settings = this.settingsStore.getContainerSettings(containerId);
+    const entropy = this.settingsStore.getEntropy(containerId);
+    if (!entropy) return vals;
+
+    let profile = getAssignedProfile(containerId);
+    if (!profile) {
+      profile = await ensureUniqueProfile(entropy);
+    }
+    if (!profile) return vals;
+
+    const prng = PRNG.fromBase64(entropy.seed);
+    const sp = settings.spoofers;
+
+    // Navigator / UA
+    if (sp.navigator.userAgent !== 'off') {
+      vals['navigator.userAgent'] = profile.userAgent.name || profile.userAgent.userAgent.substring(0, 40);
+      vals['navigator.languages'] = (profile.languages || ['en-US']).join(', ');
+      if (profile.userAgent.brands) {
+        vals['navigator.userAgentData'] = profile.userAgent.platformName || 'Windows';
+      }
+      vals['navigator.plugins'] = '5 standard';
+    }
+
+    // Screen
+    if (sp.hardware.screen !== 'off') {
+      vals['screen.width'] = `${profile.screen.width}x${profile.screen.height}`;
+    }
+    if (sp.hardware.screenFrame !== 'off') {
+      vals['window.outerWidth'] = `${profile.screen.width}x${profile.screen.height}`;
+    }
+    if (sp.hardware.deviceMemory !== 'off' && profile.deviceMemory) {
+      vals['navigator.deviceMemory'] = `${profile.deviceMemory}GB`;
+    }
+    if (sp.hardware.hardwareConcurrency !== 'off') {
+      vals['navigator.hardwareConcurrency'] = `${profile.hardwareConcurrency} cores`;
+    }
+
+    // Timezone
+    if (sp.timezone.intl !== 'off') {
+      const tzName = TIMEZONE_IANA[profile.timezoneOffset] || 'UTC';
+      vals['Date.getTimezoneOffset'] = tzName;
+      vals['Intl.DateTimeFormat'] = tzName;
+    }
+
+    // WebGL GPU
+    if (sp.graphics.webgl !== 'off') {
+      const gpu = selectGPUForProfile((arr) => prng.pick(arr), profile);
+      vals['WebGLRenderingContext.getParameter'] = gpu.renderer.substring(0, 40);
+      vals['WebGL2RenderingContext.getParameter'] = gpu.renderer.substring(0, 40);
+    }
+
+    // Graphics — noise-based
+    const blockOrNoise = (mode: string) => mode === 'block' ? 'blocked' : '±noise per seed';
+    if (sp.graphics.canvas !== 'off') {
+      vals['HTMLCanvasElement.toDataURL'] = blockOrNoise(sp.graphics.canvas);
+    }
+    if (sp.graphics.offscreenCanvas !== 'off') {
+      vals['OffscreenCanvas.convertToBlob'] = blockOrNoise(sp.graphics.offscreenCanvas);
+    }
+    if (sp.graphics.domRect !== 'off') {
+      vals['Element.getBoundingClientRect'] = sp.graphics.domRect === 'block' ? 'blocked' : '±0.5px noise';
+    }
+    if (sp.graphics.textMetrics !== 'off') {
+      vals['CanvasRenderingContext2D.measureText'] = '±noise';
+      vals['CanvasRenderingContext2D.measureText(emoji)'] = '±noise';
+    }
+    if (sp.graphics.svg !== 'off') {
+      vals['SVGGraphicsElement.getBBox'] = '±0.5px noise';
+    }
+    if (sp.graphics.webglShaders !== 'off') {
+      vals['WebGLRenderingContext.getShaderPrecisionFormat'] = 'precision spoofed';
+    }
+    if (sp.graphics.webgpu !== 'off') {
+      vals['navigator.gpu.requestAdapter'] = sp.graphics.webgpu === 'block' ? 'blocked' : 'spoofed';
+    }
+
+    // Audio
+    if (sp.audio.audioContext !== 'off') {
+      vals['AnalyserNode.getFloatFrequencyData'] = sp.audio.audioContext === 'block' ? 'silent' : '±0.0001 noise';
+    }
+    if (sp.audio.offlineAudio !== 'off') {
+      vals['OfflineAudioContext.startRendering'] = sp.audio.offlineAudio === 'block' ? 'silent' : '±0.0001 noise';
+    }
+    if (sp.audio.latency !== 'off') {
+      vals['AudioContext.baseLatency'] = 'spoofed sample rate';
+    }
+    if (sp.audio.codecs !== 'off') {
+      vals['HTMLMediaElement.canPlayType'] = 'standardized responses';
+    }
+
+    // Hardware
+    if (sp.hardware.screenExtended !== 'off') {
+      vals['screen.isExtended'] = 'false (single)';
+    }
+    if (sp.hardware.orientation !== 'off') {
+      vals['screen.orientation.type'] = 'landscape-primary';
+    }
+    if (sp.hardware.visualViewport !== 'off') {
+      vals['visualViewport.scale'] = '1.0 (no zoom)';
+    }
+    if (sp.hardware.architecture !== 'off') {
+      vals['Math.fround'] = 'x86_64';
+    }
+    if (sp.hardware.mediaDevices !== 'off') {
+      vals['navigator.mediaDevices.enumerateDevices'] = sp.hardware.mediaDevices === 'block' ? 'empty' : 'spoofed';
+    }
+    if (sp.hardware.battery !== 'off') {
+      vals['navigator.getBattery'] = sp.hardware.battery === 'block' ? 'blocked' : 'spoofed level';
+    }
+    if (sp.hardware.touch !== 'off') {
+      vals['navigator.maxTouchPoints'] = sp.hardware.touch === 'block' ? '0' : 'spoofed';
+    }
+    if (sp.hardware.sensors !== 'off') {
+      vals['DeviceMotionEvent'] = sp.hardware.sensors === 'block' ? 'blocked' : 'spoofed';
+    }
+
+    // Navigator extras
+    if (sp.navigator.clipboard !== 'off') {
+      vals['navigator.clipboard'] = sp.navigator.clipboard === 'block' ? 'blocked' : 'intercepted';
+    }
+    if (sp.navigator.vibration !== 'off') {
+      vals['navigator.vibrate'] = 'spoofed';
+    }
+    if (sp.navigator.vendorFlavors !== 'off') {
+      vals['window.vendorFlavors'] = 'globals hidden';
+    }
+    if (sp.navigator.fontPreferences !== 'off') {
+      vals['getComputedStyle.fontPrefs'] = '16px standard';
+    }
+    if (sp.navigator.windowName !== 'off') {
+      vals['window.name'] = 'cleared';
+    }
+    if (sp.navigator.tabHistory !== 'off') {
+      vals['history.length'] = 'spoofed';
+    }
+    if (sp.navigator.mediaCapabilities !== 'off') {
+      vals['navigator.mediaCapabilities.decodingInfo'] = 'standardized';
+    }
+
+    // Network
+    if (sp.network.connection !== 'off') {
+      vals['navigator.connection'] = 'spoofed profile';
+    }
+    if (sp.network.webrtc !== 'off') {
+      vals['RTCPeerConnection'] = sp.network.webrtc === 'block' ? 'blocked' : 'public only';
+    }
+    if (sp.network.websocket !== 'off') {
+      vals['WebSocket'] = sp.network.websocket === 'block' ? 'all blocked' : '3rd party blocked';
+    }
+    if (sp.network.geolocation !== 'off') {
+      vals['navigator.geolocation.getCurrentPosition'] = sp.network.geolocation === 'block' ? 'blocked' : 'city-level';
+    }
+
+    // Timing
+    if (sp.timing.performance !== 'off') {
+      const precision = sp.timing.performance === 'block' ? 100 : prng.pick([1, 2, 5, 10]);
+      vals['performance.now'] = `${precision}ms precision`;
+    }
+    if (sp.timing.memory !== 'off') {
+      vals['performance.memory'] = 'randomized heap';
+    }
+    if (sp.timing.eventLoop !== 'off') {
+      const jitter = sp.timing.eventLoop === 'block' ? 5 : 2;
+      vals['setTimeout'] = `±${jitter}ms jitter`;
+    }
+
+    // Fonts
+    if (sp.fonts.enumeration !== 'off') {
+      vals['document.fonts.check'] = sp.fonts.enumeration === 'block' ? 'system-only' : 'filtered';
+    }
+    if (sp.fonts.cssDetection !== 'off') {
+      vals['getComputedStyle(fontFamily)'] = 'standardized widths';
+    }
+
+    // Rendering
+    if ((sp.rendering as any)?.mathml !== 'off') {
+      vals['MathML.getBoundingClientRect'] = '±noise';
+    }
+
+    // CSS
+    if (sp.css?.mediaQueries !== 'off') {
+      vals['matchMedia'] = 'spoofed queries';
+    }
+
+    // Storage
+    if (sp.storage?.estimate !== 'off') {
+      vals['navigator.storage.estimate'] = 'randomized';
+    }
+    if (sp.storage?.indexedDB !== 'off') {
+      vals['indexedDB.open'] = 'spoofed';
+    }
+    if (sp.storage?.webSQL !== 'off') {
+      vals['openDatabase'] = 'blocked';
+    }
+    if (sp.storage?.privateModeProtection !== 'off') {
+      vals['navigator.storage.persisted'] = 'randomized';
+    }
+
+    // Permissions
+    if (sp.permissions?.query !== 'off') {
+      vals['navigator.permissions.query'] = 'spoofed';
+    }
+    if (sp.permissions?.notification !== 'off') {
+      vals['Notification.permission'] = 'default';
+    }
+
+    // Devices
+    if (sp.devices?.gamepad !== 'off') {
+      vals['navigator.getGamepads'] = sp.devices.gamepad === 'block' ? 'blocked' : 'empty array';
+    }
+    if (sp.devices?.midi !== 'off') {
+      vals['navigator.requestMIDIAccess'] = sp.devices.midi === 'block' ? 'blocked' : 'empty';
+    }
+    if (sp.devices?.bluetooth !== 'off') {
+      vals['navigator.bluetooth.requestDevice'] = sp.devices.bluetooth === 'block' ? 'blocked' : 'empty';
+    }
+    if (sp.devices?.usb !== 'off') {
+      vals['navigator.usb.getDevices'] = sp.devices.usb === 'block' ? 'blocked' : 'empty';
+    }
+    if (sp.devices?.serial !== 'off') {
+      vals['navigator.serial.getPorts'] = sp.devices.serial === 'block' ? 'blocked' : 'empty';
+    }
+    if (sp.devices?.hid !== 'off') {
+      vals['navigator.hid.getDevices'] = sp.devices.hid === 'block' ? 'blocked' : 'empty';
+    }
+
+    // Other
+    if (sp.math?.functions !== 'off') {
+      vals['Math.cos'] = '±1e-12 noise';
+    }
+    if (sp.keyboard?.layout !== 'off') {
+      vals['navigator.keyboard.getLayoutMap'] = 'spoofed';
+    }
+    if (sp.keyboard?.cadence !== 'off') {
+      vals['KeyboardEvent.timing'] = '±15ms jitter';
+    }
+    if (sp.speech?.synthesis !== 'off') {
+      vals['speechSynthesis.getVoices'] = sp.speech.synthesis === 'block' ? '0 voices' : '3-5 voices';
+    }
+    if (sp.features?.detection !== 'off') {
+      vals['navigator.webdriver'] = 'false';
+    }
+    if (sp.crypto?.webCrypto !== 'off') {
+      vals['crypto.getRandomValues'] = 'seeded PRNG';
+    }
+    if (sp.errors?.stackTrace !== 'off') {
+      vals['Error.captureStackTrace'] = 'normalized';
+    }
+    if (sp.payment?.applePay !== 'off') {
+      vals['ApplePaySession.canMakePayments'] = 'false';
+    }
+    if (sp.intl?.apis !== 'off') {
+      vals['Intl.NumberFormat'] = 'spoofed locale';
+    }
+
+    // Workers
+    if (sp.workers?.fingerprint !== 'off') {
+      vals['Worker.constructor'] = 'preamble injected';
+    }
+    if (sp.workers?.serviceWorker !== 'off') {
+      vals['ServiceWorker.register'] = sp.workers.serviceWorker === 'block' ? 'blocked' : 'rejected → SW fallback';
+    }
+
+    return vals;
   }
 }

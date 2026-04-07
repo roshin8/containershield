@@ -3,9 +3,9 @@
  * Each signal has Off/Spoof/Block mode and optional value dropdown.
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import browser from 'webextension-polyfill';
-import type { ContainerSettings, FingerprintAccess } from '@/types';
+import type { ContainerSettings } from '@/types';
 import {
   CANVAS_NOISE_OPTIONS, AUDIO_NOISE_OPTIONS, TIMING_PRECISION_OPTIONS,
   BATTERY_OPTIONS, DOMRECT_NOISE_OPTIONS, FONT_LIST_OPTIONS,
@@ -17,96 +17,25 @@ interface SignalsTabProps {
   settings: ContainerSettings;
   onSaveSettings: (updates: Partial<ContainerSettings>) => void;
   highlightedSignal?: { category: string; signal: string };
+  containerId: string;
 }
 
-/**
- * Build a map of API name -> value from the fingerprint access log.
- * For APIs that appear multiple times, the most recent value wins.
- */
-/** Quick hash for display — 8-char hex, like CreepJS */
-function quickHash(str: string): string {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(16).padStart(8, '0');
-}
-
-/** Format a value for display — show hash for long/binary data, truncate for text */
-function formatValue(val: string): string {
-  if (!val) return '';
-  // Data URLs → hash
-  if (val.startsWith('data:')) return quickHash(val);
-  // Long values → hash
-  if (val.length > 30) return quickHash(val);
-  return val;
-}
-
-function buildValueMap(apis: FingerprintAccess[]): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const a of apis) {
-    if (a.value) {
-      map[a.api] = formatValue(a.value);
-    } else if (a.blocked) {
-      map[a.api] = 'blocked';
-    } else if (a.spoofed) {
-      map[a.api] = 'spoofed';
-    }
-  }
-  return map;
-}
-
-export default function SignalsTab({ settings, onSaveSettings, highlightedSignal }: SignalsTabProps) {
-  const [accessedAPIs, setAccessedAPIs] = useState<FingerprintAccess[]>([]);
+export default function SignalsTab({ settings, onSaveSettings, highlightedSignal, containerId }: SignalsTabProps) {
+  const [vals, setVals] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    if (!containerId) return;
     let cancelled = false;
     (async () => {
-      let activeTabAPIs: FingerprintAccess[] = [];
-
-      // Method 1: try active tab (the page the user is currently viewing)
       try {
-        const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-        if (tab?.id) {
-          const resp = await browser.runtime.sendMessage({ type: 'GET_RECOMMENDATIONS', tabId: tab.id }) as any;
-          if (resp?.accessedAPIs?.length > 0) {
-            activeTabAPIs = resp.accessedAPIs;
-          }
-        }
+        const result = await browser.runtime.sendMessage({
+          type: 'GET_SIGNAL_VALUES', containerId,
+        }) as Record<string, string> | null;
+        if (!cancelled && result) setVals(result);
       } catch {}
-
-      // Method 2: check storage for a tab with more data (e.g. fingerprinting site)
-      let bestStorageAPIs: FingerprintAccess[] = [];
-      try {
-        const all = await browser.storage.local.get(null) as Record<string, any>;
-        let bestTabId = -1;
-        let bestLen = 0;
-        for (const [key, val] of Object.entries(all)) {
-          if (key.startsWith('fpData:') && val?.detail?.length > bestLen) {
-            bestLen = val.detail.length;
-            bestTabId = parseInt(key.split(':')[1], 10);
-          }
-        }
-        if (bestTabId > 0 && bestLen > activeTabAPIs.length) {
-          const resp = await browser.runtime.sendMessage({ type: 'GET_RECOMMENDATIONS', tabId: bestTabId }) as any;
-          if (resp?.accessedAPIs?.length > 0) {
-            bestStorageAPIs = resp.accessedAPIs;
-          } else if (bestLen > 0) {
-            // Fallback: load directly from storage
-            const stored = all[`fpData:${bestTabId}`];
-            if (stored?.detail) bestStorageAPIs = stored.detail;
-          }
-        }
-      } catch {}
-
-      // Use whichever source has more data
-      if (!cancelled) {
-        const best = bestStorageAPIs.length > activeTabAPIs.length ? bestStorageAPIs : activeTabAPIs;
-        if (best.length > 0) setAccessedAPIs(best);
-      }
     })();
     return () => { cancelled = true; };
-  }, []);
-
-  const vals = useMemo(() => buildValueMap(accessedAPIs), [accessedAPIs]);
+  }, [containerId, settings]);
 
   const get = (cat: string, key: string): string => (settings.spoofers as any)[cat]?.[key] || 'off';
 
@@ -125,7 +54,7 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
   );
 
   return (
-    <div className="space-y-2" data-api-count={accessedAPIs.length}>
+    <div className="space-y-2">
       <G label="Graphics">
         <S name="Canvas" cat="graphics" k="canvas" opts={CANVAS_NOISE_OPTIONS} val={vals['HTMLCanvasElement.toDataURL']} />
         <S name="WebGL" cat="graphics" k="webgl" opts={WEBGL_NOISE_OPTIONS} val={vals['WebGLRenderingContext.getParameter']} />
@@ -174,12 +103,14 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
       <G label="Network">
         <SignalRow name="WebRTC" mode={get('network', 'webrtc')}
           onModeChange={(m) => set('network', 'webrtc', m)}
-          customModes={[{id:'off',name:'Off'},{id:'public_only',name:'Public Only'},{id:'block',name:'Block'}]} />
+          customModes={[{id:'off',name:'Off'},{id:'public_only',name:'Public Only'},{id:'block',name:'Block'}]}
+          currentValue={vals['RTCPeerConnection']} />
         <S name="Connection" cat="network" k="connection" val={vals['navigator.connection']} />
         <S name="Geolocation" cat="network" k="geolocation" val={vals['navigator.geolocation.getCurrentPosition']} />
         <SignalRow name="WebSocket" mode={get('network', 'websocket')}
           onModeChange={(m) => set('network', 'websocket', m)}
-          customModes={[{id:'off',name:'Off'},{id:'noise',name:'3rd Party Only'},{id:'block',name:'Block All'}]} />
+          customModes={[{id:'off',name:'Off'},{id:'noise',name:'3rd Party Only'},{id:'block',name:'Block All'}]}
+          currentValue={vals['WebSocket']} />
       </G>
       <G label="Timing & Timezone">
         <S name="Performance" cat="timing" k="performance" opts={TIMING_PRECISION_OPTIONS} val={vals['performance.now']} />

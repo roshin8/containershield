@@ -1766,8 +1766,6 @@ async function scenario_PopupSignalsTab() {
 
     // Read signal categories and check for values
     const signals = await execInTab(tabId, () => {
-      const apiCountEl = document.querySelector('[data-api-count]');
-      const loadedAPIs = apiCountEl ? parseInt(apiCountEl.getAttribute('data-api-count') || '0', 10) : -1;
       const text = document.getElementById('root')?.textContent || '';
       // Signal values are rendered as small 9px accent-colored text under signal names
       // Look for elements with that specific style
@@ -1805,7 +1803,6 @@ async function scenario_PopupSignalsTab() {
         hasReadableValues,
         valueCount,
         foundValues,
-        loadedAPIs,
         textLen: text.length,
       };
     });
@@ -1842,7 +1839,6 @@ async function scenario_PopupSignalsTab() {
         check('Network signals visible', signals?.hasNetwork, 'true', !!signals?.hasNetwork),
         check('Device signals visible', signals?.hasDevices, 'true', !!signals?.hasDevices),
         check('Worker signals visible', signals?.hasWorkers, 'true', !!signals?.hasWorkers),
-        check('Popup loaded APIs', String(signals?.loadedAPIs || 0), '> 100', (signals?.loadedAPIs || 0) > 100),
         check('Signal value elements found', signals?.valueCount, '> 10', (signals?.valueCount || 0) > 10),
         check('Example values', signals?.foundValues?.join(', '), 'non-empty', (signals?.foundValues?.length || 0) > 0),
         check('Background has full data (672 APIs)', String(apiCount), '> 100', apiCount > 100),

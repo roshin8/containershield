@@ -221,7 +221,7 @@ export default function App() {
             )}
             {activeTab === 'signals' && (
               <SignalsTab settings={settings} onSaveSettings={saveSettings}
-                highlightedSignal={highlightedSignal} />
+                highlightedSignal={highlightedSignal} containerId={selectedContainer || ''} />
             )}
             {activeTab === 'headers' && (
               <HeadersTab settings={settings} onSaveSettings={saveSettings} />

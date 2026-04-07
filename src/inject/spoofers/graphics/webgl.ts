@@ -9,63 +9,20 @@ import { GL } from '@/lib/constants';
 import { logAccess, markWebGLSpoofed } from '../../monitor/fingerprint-monitor';
 
 import type { AssignedProfileData } from '@/types';
-
-// GPU combinations by platform — no Intel (too similar to real hardware on Macs)
-const WINDOWS_GPUS = [
-  { vendor: 'Google Inc. (NVIDIA)', renderer: 'ANGLE (NVIDIA GeForce GTX 1660 SUPER Direct3D11 vs_5_0 ps_5_0)' },
-  { vendor: 'Google Inc. (NVIDIA)', renderer: 'ANGLE (NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0)' },
-  { vendor: 'Google Inc. (NVIDIA)', renderer: 'ANGLE (NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0)' },
-  { vendor: 'Google Inc. (NVIDIA)', renderer: 'ANGLE (NVIDIA GeForce RTX 4070 Ti Direct3D11 vs_5_0 ps_5_0)' },
-  { vendor: 'Google Inc. (NVIDIA)', renderer: 'ANGLE (NVIDIA GeForce RTX 4060 Direct3D11 vs_5_0 ps_5_0)' },
-  { vendor: 'Google Inc. (AMD)', renderer: 'ANGLE (AMD Radeon RX 6700 XT Direct3D11 vs_5_0 ps_5_0)' },
-  { vendor: 'Google Inc. (AMD)', renderer: 'ANGLE (AMD Radeon RX 7800 XT Direct3D11 vs_5_0 ps_5_0)' },
-  { vendor: 'Google Inc. (AMD)', renderer: 'ANGLE (AMD Radeon RX 580 Direct3D11 vs_5_0 ps_5_0)' },
-];
-
-const MAC_GPUS = [
-  { vendor: 'Apple Inc.', renderer: 'Apple M1' },
-  { vendor: 'Apple Inc.', renderer: 'Apple M1 Pro' },
-  { vendor: 'Apple Inc.', renderer: 'Apple M2' },
-  { vendor: 'Apple Inc.', renderer: 'Apple M2 Pro' },
-  { vendor: 'Apple Inc.', renderer: 'Apple M3' },
-  { vendor: 'Apple Inc.', renderer: 'Apple M3 Pro' },
-  { vendor: 'Apple Inc.', renderer: 'Apple M4' },
-];
-
-const MOBILE_GPUS = [
-  { vendor: 'Apple GPU', renderer: 'Apple A16 GPU' },
-  { vendor: 'Apple GPU', renderer: 'Apple A17 Pro GPU' },
-  { vendor: 'Qualcomm', renderer: 'Adreno (TM) 740' },
-  { vendor: 'Qualcomm', renderer: 'Adreno (TM) 730' },
-  { vendor: 'ARM', renderer: 'Mali-G710 MC10' },
-];
-
-const LINUX_GPUS = [
-  { vendor: 'X.Org', renderer: 'AMD Radeon RX 580 (polaris10, DRM 3.49.0)' },
-  { vendor: 'X.Org', renderer: 'AMD Radeon RX 6700 XT (navi22, DRM 3.49.0)' },
-  { vendor: 'X.Org', renderer: 'AMD Radeon RX 7800 XT (navi32, DRM 3.54.0)' },
-  { vendor: 'nouveau', renderer: 'NV136' },
-  { vendor: 'nouveau', renderer: 'NV167' },
-];
+import { selectGPUForProfile as _selectGPU, type GPUProfile } from '@/lib/gpu-profiles';
 
 // Module-level selected GPU so Worker spoofer can access it
-let _selectedGPU: { vendor: string; renderer: string } | null = null;
+let _selectedGPU: GPUProfile | null = null;
 
-export function getSelectedGPU(): { vendor: string; renderer: string } | null {
+export function getSelectedGPU(): GPUProfile | null {
   return _selectedGPU;
 }
 
 /**
  * Select GPU matching the profile's platform (shared by WebGL and Worker spoofers)
  */
-export function selectGPUForProfile(prng: PRNG, assignedProfile?: AssignedProfileData): { vendor: string; renderer: string } {
-  const platform = assignedProfile?.userAgent?.platformName?.toLowerCase() || '';
-  const isMobile = assignedProfile?.userAgent?.mobile ?? false;
-  let gpuList = WINDOWS_GPUS;
-  if (isMobile) gpuList = MOBILE_GPUS;
-  else if (platform.includes('mac') || platform.includes('ios')) gpuList = MAC_GPUS;
-  else if (platform.includes('linux')) gpuList = LINUX_GPUS;
-  return prng.pick(gpuList);
+export function selectGPUForProfile(prng: PRNG, assignedProfile?: AssignedProfileData): GPUProfile {
+  return _selectGPU((arr) => prng.pick(arr), assignedProfile);
 }
 
 /**
