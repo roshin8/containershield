@@ -1747,7 +1747,12 @@ async function scenario_PopupTabNavigation() {
 }
 
 async function scenario_PopupSignalsTab() {
-  return runScenario('Popup — Signals tab shows all categories', async () => {
+  return runScenario('Popup — Signals tab shows categories + values after site visit', async () => {
+    // First visit a real site to trigger spoofers and generate values
+    const siteTab = await openTab('https://example.com', 5000);
+    await browser.tabs.remove(siteTab);
+
+    // Now open popup and check signals tab
     const tabId = await openPopupTab();
 
     // Navigate to signals tab
@@ -1756,11 +1761,15 @@ async function scenario_PopupSignalsTab() {
       const signalsBtn = btns.find(b => b.textContent?.toLowerCase().includes('signal'));
       if (signalsBtn) (signalsBtn as HTMLElement).click();
     });
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 1000));
 
-    // Read signal categories from DOM
+    // Read signal categories and check for values
     const signals = await execInTab(tabId, () => {
       const text = document.getElementById('root')?.textContent || '';
+      // Check if any hash-like values appear (8-char hex from our quickHash)
+      const hasHashValues = /[a-f0-9]{8}/.test(text);
+      // Check for readable values like "1440", "en-US", "Win32"
+      const hasReadableValues = /\d{3,4}/.test(text) || text.includes('en-US') || text.includes('Win');
       return {
         hasGraphics: text.includes('Canvas') || text.includes('WebGL'),
         hasAudio: text.includes('Audio'),
@@ -1771,6 +1780,8 @@ async function scenario_PopupSignalsTab() {
         hasNetwork: text.includes('WebRTC') || text.includes('Connection'),
         hasDevices: text.includes('Gamepad') || text.includes('Bluetooth'),
         hasWorkers: text.includes('Worker'),
+        hasHashValues,
+        hasReadableValues,
         textLen: text.length,
       };
     });
@@ -1791,6 +1802,8 @@ async function scenario_PopupSignalsTab() {
         check('Network signals visible', signals?.hasNetwork, 'true', !!signals?.hasNetwork),
         check('Device signals visible', signals?.hasDevices, 'true', !!signals?.hasDevices),
         check('Worker signals visible', signals?.hasWorkers, 'true', !!signals?.hasWorkers),
+        check('Signal values present', signals?.hasHashValues || signals?.hasReadableValues, 'true',
+          !!(signals?.hasHashValues || signals?.hasReadableValues)),
       ],
     };
   });
