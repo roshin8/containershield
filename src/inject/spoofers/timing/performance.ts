@@ -156,7 +156,7 @@ export function initPerformanceSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (typeof WebAssembly !== 'undefined') {
     const origCompile = WebAssembly.compile;
     WebAssembly.compile = async function(bytes: BufferSource): Promise<WebAssembly.Module> {
-      logAccess('WebAssembly.compile', { spoofed: true });
+      logAccess('WebAssembly.compile', { spoofed: true, value: `+${jitterMs.toFixed(1)}ms jitter` });
       const jitterMs = prng.nextFloat() * 5;
       await new Promise(r => setTimeout(r, jitterMs));
       return origCompile(bytes);
@@ -167,7 +167,7 @@ export function initPerformanceSpoofer(mode: ProtectionMode, prng: PRNG): void {
       source: BufferSource | WebAssembly.Module,
       imports?: WebAssembly.Imports
     ): Promise<any> {
-      logAccess('WebAssembly.instantiate', { spoofed: true });
+      logAccess('WebAssembly.instantiate', { spoofed: true, value: `+${jitterMs.toFixed(1)}ms jitter` });
       const jitterMs = prng.nextFloat() * 5;
       await new Promise(r => setTimeout(r, jitterMs));
       return origInstantiate(source as any, imports);

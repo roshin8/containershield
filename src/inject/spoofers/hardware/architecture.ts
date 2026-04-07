@@ -10,11 +10,13 @@
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { overrideMethod } from '@/lib/stealth';
+import { logAccess } from '../../monitor/fingerprint-monitor';
 
 export function initArchitectureSpoofer(mode: ProtectionMode, _prng: PRNG): void {
   if (mode === 'off') return;
 
-  // Ensure Math.fround always behaves like 64-bit
+  logAccess('Math.fround', { spoofed: true, value: 'x86_64' });
+
   const originalFround = Math.fround;
   overrideMethod(Math as any, 'fround', (original, _thisArg, args) => {
     return original.apply(Math, args);

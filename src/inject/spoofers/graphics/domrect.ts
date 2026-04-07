@@ -34,7 +34,7 @@ export function initDOMRectSpoofer(mode: ProtectionMode, prng: PRNG): void {
 
   // Wrap Element.prototype.getClientRects
   overrideMethod(Element.prototype, 'getClientRects', (original, thisArg, _args) => {
-    logAccess('Element.getClientRects', { spoofed: true, value: `\u00b1${maxNoise} noise` });
+    logAccess('Element.getClientRects', { spoofed: true, value: `±${maxNoise}px noise` });
     const rects = original.call(thisArg) as DOMRectList;
 
     if (mode === 'block') {
@@ -72,7 +72,7 @@ export function initDOMRectSpoofer(mode: ProtectionMode, prng: PRNG): void {
 
   // Wrap Range.prototype.getBoundingClientRect
   overrideMethod(Range.prototype, 'getBoundingClientRect', (original, thisArg, _args) => {
-    logAccess('Range.getBoundingClientRect', { spoofed: true, value: `\u00b1${maxNoise} noise` });
+    logAccess('Range.getBoundingClientRect', { spoofed: true, value: `±${maxNoise}px noise` });
     const rect = original.call(thisArg) as DOMRect;
 
     if (mode === 'block') {
@@ -85,7 +85,7 @@ export function initDOMRectSpoofer(mode: ProtectionMode, prng: PRNG): void {
 
   // Wrap Range.prototype.getClientRects
   overrideMethod(Range.prototype, 'getClientRects', (original, thisArg, _args) => {
-    logAccess('Range.getClientRects', { spoofed: true, value: `\u00b1${maxNoise} noise` });
+    logAccess('Range.getClientRects', { spoofed: true, value: `±${maxNoise}px noise` });
     const rects = original.call(thisArg) as DOMRectList;
 
     if (mode === 'block') {

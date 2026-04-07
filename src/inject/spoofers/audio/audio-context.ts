@@ -17,7 +17,7 @@ export function initAudioSpoofer(mode: ProtectionMode, prng: PRNG): void {
   // Wrap AnalyserNode.getFloatFrequencyData
   overrideMethod(AnalyserNode.prototype, 'getFloatFrequencyData', (original, thisArg, args) => {
     const array = args[0] as Float32Array;
-    logAccess('AnalyserNode.getFloatFrequencyData', { blocked: mode === 'block', spoofed: mode === 'noise' });
+    logAccess('AnalyserNode.getFloatFrequencyData', { blocked: mode === 'block', spoofed: mode === 'noise', value: mode === 'block' ? 'silent' : '±0.0001 noise' });
 
     if (mode === 'block') {
       array.fill(-Infinity);
@@ -77,7 +77,7 @@ export function initAudioSpoofer(mode: ProtectionMode, prng: PRNG): void {
   // Wrap OfflineAudioContext.startRendering
   if (typeof OfflineAudioContext !== 'undefined') {
     overrideMethod(OfflineAudioContext.prototype, 'startRendering', async (original, thisArg, _args) => {
-      logAccess('OfflineAudioContext.startRendering', { blocked: mode === 'block', spoofed: mode === 'noise' });
+      logAccess('OfflineAudioContext.startRendering', { blocked: mode === 'block', spoofed: mode === 'noise', value: mode === 'block' ? 'silent' : '±0.0001 noise' });
 
       const buffer = await original.call(thisArg) as AudioBuffer;
 
@@ -100,7 +100,7 @@ export function initAudioSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (typeof AudioContext !== 'undefined' && AudioContext.prototype.getOutputTimestamp) {
     overrideMethod(AudioContext.prototype, 'getOutputTimestamp', (original, thisArg, _args) => {
       const ts = original.call(thisArg);
-      logAccess('AudioContext.getOutputTimestamp', { spoofed: true });
+      logAccess('AudioContext.getOutputTimestamp', { spoofed: true, value: '±0.01ms jitter' });
       if (mode === 'block') return { contextTime: 0, performanceTime: 0 };
       return {
         contextTime: ts.contextTime + prng.nextFloat() * 0.0001,

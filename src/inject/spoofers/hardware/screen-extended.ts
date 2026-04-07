@@ -8,12 +8,15 @@
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { overrideGetterWithValue } from '@/lib/stealth';
+import { logAccess } from '../../monitor/fingerprint-monitor';
 
 export function initScreenExtendedSpoofer(mode: ProtectionMode, _prng: PRNG): void {
   if (mode === 'off') return;
 
-  // Always report single monitor to reduce fingerprint surface
   if ('isExtended' in Screen.prototype) {
-    overrideGetterWithValue(Screen.prototype, 'isExtended', () => false);
+    overrideGetterWithValue(Screen.prototype, 'isExtended', () => {
+      logAccess('screen.isExtended', { spoofed: true, value: 'false (single)' });
+      return false;
+    });
   }
 }

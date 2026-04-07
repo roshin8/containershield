@@ -77,7 +77,7 @@ export function initFeatureSpoofer(mode: ProtectionMode, prng: PRNG): void {
   }
 
   // Spoof navigator.webdriver (bot detection) — prototype + instance
-  const webdriverGetter = () => { logAccess('navigator.webdriver', { spoofed: true }); return false; };
+  const webdriverGetter = () => { logAccess('navigator.webdriver', { spoofed: true, value: 'false' }); return false; };
   try { Object.defineProperty(Navigator.prototype, 'webdriver', { get: webdriverGetter, configurable: true }); } catch {}
   try { Object.defineProperty(navigator, 'webdriver', { get: webdriverGetter, configurable: true }); } catch {}
   // Also delete it entirely (Chrome doesn't have it unless automated)

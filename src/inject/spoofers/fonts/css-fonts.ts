@@ -23,7 +23,7 @@ export function initCSSFontSpoofer(mode: ProtectionMode, prng: PRNG): void {
     const originalCheck = originalFonts.check.bind(originalFonts);
 
     originalFonts.check = function (font: string, text?: string): boolean {
-      logAccess('document.fonts.check', { spoofed: true });
+      logAccess('document.fonts.check', { spoofed: true, value: mode === 'block' ? 'system-only' : 'filtered' });
 
       if (mode === 'block') {
         // Only report system fonts as available
@@ -39,7 +39,7 @@ export function initCSSFontSpoofer(mode: ProtectionMode, prng: PRNG): void {
     const originalLoad = originalFonts.load.bind(originalFonts);
 
     originalFonts.load = async function (font: string, text?: string): Promise<FontFace[]> {
-      logAccess('document.fonts.load', { spoofed: true });
+      logAccess('document.fonts.load', { spoofed: true, value: mode === 'block' ? 'blocked' : 'allowed' });
 
       if (mode === 'block') {
         return [];

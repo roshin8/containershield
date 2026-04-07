@@ -8,9 +8,11 @@
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { overrideMethod } from '@/lib/stealth';
+import { logAccess } from '../../monitor/fingerprint-monitor';
 
 export function initFontPreferencesSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (mode === 'off') return;
+  logAccess('getComputedStyle.fontPrefs', { spoofed: true, value: '16px standard' });
 
   // Standard default font sizes to report (Windows-like baseline)
   const standardSizes: Record<string, number> = {

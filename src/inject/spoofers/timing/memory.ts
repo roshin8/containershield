@@ -8,6 +8,7 @@
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { overrideMethod, overrideGetterWithValue } from '@/lib/stealth';
+import { logAccess } from '../../monitor/fingerprint-monitor';
 
 export function initMemorySpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (mode === 'off') return;
@@ -16,6 +17,7 @@ export function initMemorySpoofer(mode: ProtectionMode, prng: PRNG): void {
   if ('measureUserAgentSpecificMemory' in performance) {
     overrideMethod(performance as any, 'measureUserAgentSpecificMemory', () => {
       const fakeBytes = prng.nextInt(50, 200) * 1024 * 1024;
+      logAccess('performance.memory', { spoofed: true, value: `${Math.round(fakeBytes / 1024 / 1024)}MB` });
       return Promise.resolve({
         bytes: fakeBytes,
         breakdown: [{
@@ -35,6 +37,7 @@ export function initMemorySpoofer(mode: ProtectionMode, prng: PRNG): void {
       usedJSHeapSize: prng.nextInt(5, 30) * 1024 * 1024,
     };
 
+    logAccess('performance.memory', { spoofed: true, value: `${Math.round(fakeMemory.usedJSHeapSize / 1024 / 1024)}MB heap` });
     try {
       Object.defineProperty(performance, 'memory', {
         get: () => fakeMemory,

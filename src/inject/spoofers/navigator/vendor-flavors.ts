@@ -7,6 +7,7 @@
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
+import { logAccess } from '../../monitor/fingerprint-monitor';
 
 export function initVendorFlavorSpoofer(mode: ProtectionMode, _prng: PRNG): void {
   if (mode === 'off') return;
@@ -27,6 +28,7 @@ export function initVendorFlavorSpoofer(mode: ProtectionMode, _prng: PRNG): void
     ? [...chromiumGlobals, ...safariGlobals]
     : [...chromiumGlobals, ...safariGlobals]; // For Firefox, hide Chrome/Safari globals
 
+  const hidden: string[] = [];
   for (const prop of globalsToHide) {
     if (prop in window) {
       try {
@@ -34,9 +36,11 @@ export function initVendorFlavorSpoofer(mode: ProtectionMode, _prng: PRNG): void
           get: () => undefined,
           configurable: true,
         });
-      } catch {
-        // Some properties may not be configurable
-      }
+        hidden.push(prop);
+      } catch {}
     }
+  }
+  if (hidden.length > 0) {
+    logAccess('window.vendorFlavors', { spoofed: true, value: `${hidden.length} globals hidden` });
   }
 }

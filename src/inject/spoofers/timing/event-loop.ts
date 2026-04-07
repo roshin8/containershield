@@ -26,7 +26,7 @@ export function initEventLoopJitter(mode: ProtectionMode, prng: PRNG): void {
 
   // Add jitter to setTimeout
   window.setTimeout = function(handler: TimerHandler, timeout?: number, ...args: any[]): number {
-    if (!logged) { logAccess('setTimeout', { spoofed: true }); logged = true; }
+    if (!logged) { logAccess('setTimeout', { spoofed: true, value: `±${maxJitter}ms jitter` }); logged = true; }
     const jitter = Math.floor(prng.nextFloat() * maxJitter);
     return origSetTimeout(handler, (timeout || 0) + jitter, ...args);
   } as typeof setTimeout;

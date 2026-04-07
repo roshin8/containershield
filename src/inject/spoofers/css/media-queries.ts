@@ -55,8 +55,8 @@ export function initCSSSpoofer(mode: ProtectionMode, prng: PRNG, assignedProfile
   // This is a numeric query so handled separately
 
   overrideMethod(window as any, 'matchMedia', (original, thisArg, args) => {
-    logAccess('matchMedia', { spoofed: true });
     const query = args[0] as string;
+    logAccess('matchMedia', { spoofed: true, value: query?.substring(0, 30) || 'query' });
 
     // Handle monochrome query
     if (/\(\s*monochrome\s*\)/.test(query)) {

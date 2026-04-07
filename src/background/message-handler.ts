@@ -399,22 +399,28 @@ export class MessageHandler {
     }
     if (!data) return empty;
 
-    const containerId = await this.containerManager.getContainerForTab(tabId);
-    const settings = this.settingsStore.getContainerSettings(containerId);
-
     const recommendations: SpooferRecommendation[] = [];
     const categorySet = new Set<string>();
     const seenCategories = new Set<string>();
+
+    // Container/settings lookup may fail for tabs the popup can't access —
+    // still return accessedAPIs regardless so signal values render.
+    let settings: any = null;
+    try {
+      const containerId = await this.containerManager.getContainerForTab(tabId);
+      settings = this.settingsStore.getContainerSettings(containerId);
+    } catch {}
 
     for (const access of data.detail) {
       if (access.category) categorySet.add(access.category);
       if (seenCategories.has(access.category)) continue;
 
+      if (!settings) continue;
       const settingInfo = CATEGORY_TO_SETTING[access.category];
       if (!settingInfo) continue;
 
       const { category, setting } = settingInfo;
-      const spooferSettings = (settings.spoofers as any)[category];
+      const spooferSettings = (settings.spoofers as any)?.[category];
 
       if (spooferSettings && spooferSettings[setting] === 'off') {
         recommendations.push({

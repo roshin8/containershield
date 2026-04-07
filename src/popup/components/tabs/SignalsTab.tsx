@@ -43,8 +43,12 @@ function formatValue(val: string): string {
 function buildValueMap(apis: FingerprintAccess[]): Record<string, string> {
   const map: Record<string, string> = {};
   for (const a of apis) {
-    if (a.value && a.spoofed) {
+    if (a.value) {
       map[a.api] = formatValue(a.value);
+    } else if (a.blocked) {
+      map[a.api] = 'blocked';
+    } else if (a.spoofed) {
+      map[a.api] = 'spoofed';
     }
   }
   return map;
@@ -56,27 +60,48 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      let activeTabAPIs: FingerprintAccess[] = [];
+
+      // Method 1: try active tab (the page the user is currently viewing)
       try {
-        // Try active tab first
         const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
         if (tab?.id) {
-          const resp = await browser.runtime.sendMessage({ type: 'GET_RECOMMENDATIONS', tabId: tab.id }) as Record<string, unknown> | null;
-          if (!cancelled && resp && Array.isArray(resp.accessedAPIs) && (resp.accessedAPIs as any[]).length > 0) {
-            setAccessedAPIs(resp.accessedAPIs as FingerprintAccess[]);
-            return;
-          }
-        }
-        // Fallback: try all tabs in current window to find one with data
-        const allTabs = await browser.tabs.query({ currentWindow: true });
-        for (const t of allTabs) {
-          if (!t.id || t.id === tab?.id) continue;
-          const resp = await browser.runtime.sendMessage({ type: 'GET_RECOMMENDATIONS', tabId: t.id }) as Record<string, unknown> | null;
-          if (!cancelled && resp && Array.isArray(resp.accessedAPIs) && (resp.accessedAPIs as any[]).length > 0) {
-            setAccessedAPIs(resp.accessedAPIs as FingerprintAccess[]);
-            return;
+          const resp = await browser.runtime.sendMessage({ type: 'GET_RECOMMENDATIONS', tabId: tab.id }) as any;
+          if (resp?.accessedAPIs?.length > 0) {
+            activeTabAPIs = resp.accessedAPIs;
           }
         }
       } catch {}
+
+      // Method 2: check storage for a tab with more data (e.g. fingerprinting site)
+      let bestStorageAPIs: FingerprintAccess[] = [];
+      try {
+        const all = await browser.storage.local.get(null) as Record<string, any>;
+        let bestTabId = -1;
+        let bestLen = 0;
+        for (const [key, val] of Object.entries(all)) {
+          if (key.startsWith('fpData:') && val?.detail?.length > bestLen) {
+            bestLen = val.detail.length;
+            bestTabId = parseInt(key.split(':')[1], 10);
+          }
+        }
+        if (bestTabId > 0 && bestLen > activeTabAPIs.length) {
+          const resp = await browser.runtime.sendMessage({ type: 'GET_RECOMMENDATIONS', tabId: bestTabId }) as any;
+          if (resp?.accessedAPIs?.length > 0) {
+            bestStorageAPIs = resp.accessedAPIs;
+          } else if (bestLen > 0) {
+            // Fallback: load directly from storage
+            const stored = all[`fpData:${bestTabId}`];
+            if (stored?.detail) bestStorageAPIs = stored.detail;
+          }
+        }
+      } catch {}
+
+      // Use whichever source has more data
+      if (!cancelled) {
+        const best = bestStorageAPIs.length > activeTabAPIs.length ? bestStorageAPIs : activeTabAPIs;
+        if (best.length > 0) setAccessedAPIs(best);
+      }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -100,7 +125,7 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
   );
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-api-count={accessedAPIs.length}>
       <G label="Graphics">
         <S name="Canvas" cat="graphics" k="canvas" opts={CANVAS_NOISE_OPTIONS} val={vals['HTMLCanvasElement.toDataURL']} />
         <S name="WebGL" cat="graphics" k="webgl" opts={WEBGL_NOISE_OPTIONS} val={vals['WebGLRenderingContext.getParameter']} />
@@ -109,9 +134,9 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
         <S name="Text Metrics" cat="graphics" k="textMetrics" opts={DOMRECT_NOISE_OPTIONS} val={vals['CanvasRenderingContext2D.measureText']} />
         <S name="SVG" cat="graphics" k="svg" opts={SVG_NOISE_OPTIONS} val={vals['SVGGraphicsElement.getBBox']} />
         <S name="OffscreenCanvas" cat="graphics" k="offscreenCanvas" opts={CANVAS_NOISE_OPTIONS} val={vals['OffscreenCanvas.convertToBlob']} />
-        <S name="WebGL Shaders" cat="graphics" k="webglShaders" />
+        <S name="WebGL Shaders" cat="graphics" k="webglShaders" val={vals['WebGLRenderingContext.getShaderPrecisionFormat']} />
         <S name="WebGPU" cat="graphics" k="webgpu" val={vals['navigator.gpu.requestAdapter']} />
-        <S name="GPU" cat="hardware" k="gpu" />
+        <S name="GPU" cat="hardware" k="gpu" val={vals['WebGLRenderingContext.getParameter']} />
       </G>
       <G label="Audio">
         <S name="AudioContext" cat="audio" k="audioContext" opts={AUDIO_NOISE_OPTIONS} val={vals['AnalyserNode.getFloatFrequencyData']} />
@@ -122,12 +147,12 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
       <G label="Hardware">
         <S name="Screen" cat="hardware" k="screen" val={vals['screen.width']} />
         <S name="Screen Frame" cat="hardware" k="screenFrame" val={vals['window.outerWidth']} />
-        <S name="Screen Extended" cat="hardware" k="screenExtended" />
+        <S name="Screen Extended" cat="hardware" k="screenExtended" val={vals['screen.isExtended']} />
         <S name="Orientation" cat="hardware" k="orientation" val={vals['screen.orientation.type']} />
-        <S name="Visual Viewport" cat="hardware" k="visualViewport" />
+        <S name="Visual Viewport" cat="hardware" k="visualViewport" val={vals['visualViewport.scale']} />
         <S name="Device Memory" cat="hardware" k="deviceMemory" val={vals['navigator.deviceMemory']} />
         <S name="CPU Cores" cat="hardware" k="hardwareConcurrency" val={vals['navigator.hardwareConcurrency']} />
-        <S name="Architecture" cat="hardware" k="architecture" />
+        <S name="Architecture" cat="hardware" k="architecture" val={vals['Math.fround']} />
         <S name="Media Devices" cat="hardware" k="mediaDevices" opts={MEDIA_DEVICE_OPTIONS} val={vals['navigator.mediaDevices.enumerateDevices']} />
         <S name="Battery" cat="hardware" k="battery" opts={BATTERY_OPTIONS} val={vals['navigator.getBattery']} />
         <S name="Touch" cat="hardware" k="touch" opts={TOUCH_OPTIONS} val={vals['navigator.maxTouchPoints']} />
@@ -136,12 +161,12 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
       <G label="Navigator">
         <S name="User Agent" cat="navigator" k="userAgent" val={vals['navigator.userAgent']} />
         <S name="Languages" cat="navigator" k="languages" val={vals['navigator.languages']} />
-        <S name="Plugins" cat="navigator" k="plugins" opts={PLUGINS_OPTIONS} />
+        <S name="Plugins" cat="navigator" k="plugins" opts={PLUGINS_OPTIONS} val={vals['navigator.plugins']} />
         <S name="Client Hints" cat="navigator" k="clientHints" val={vals['navigator.userAgentData']} />
         <S name="Clipboard" cat="navigator" k="clipboard" val={vals['navigator.clipboard']} />
         <S name="Vibration" cat="navigator" k="vibration" val={vals['navigator.vibrate']} />
-        <S name="Vendor Flavors" cat="navigator" k="vendorFlavors" />
-        <S name="Font Preferences" cat="navigator" k="fontPreferences" />
+        <S name="Vendor Flavors" cat="navigator" k="vendorFlavors" val={vals['window.vendorFlavors']} />
+        <S name="Font Preferences" cat="navigator" k="fontPreferences" val={vals['getComputedStyle.fontPrefs']} />
         <S name="Window.name" cat="navigator" k="windowName" val={vals['window.name']} />
         <S name="Tab History" cat="navigator" k="tabHistory" opts={HISTORY_OPTIONS} val={vals['history.length']} />
         <S name="Media Capabilities" cat="navigator" k="mediaCapabilities" val={vals['navigator.mediaCapabilities.decodingInfo']} />
@@ -158,7 +183,7 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
       </G>
       <G label="Timing & Timezone">
         <S name="Performance" cat="timing" k="performance" opts={TIMING_PRECISION_OPTIONS} val={vals['performance.now']} />
-        <S name="Memory" cat="timing" k="memory" />
+        <S name="Memory" cat="timing" k="memory" val={vals['performance.memory']} />
         <S name="Event Loop Jitter" cat="timing" k="eventLoop" val={vals['setTimeout']} />
         <S name="Timezone" cat="timezone" k="intl" val={vals['Intl.DateTimeFormat'] || vals['Date.getTimezoneOffset']} />
         <S name="Date" cat="timezone" k="date" val={vals['Date.getTimezoneOffset']} />
@@ -167,7 +192,7 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
       <G label="Fonts & Rendering">
         <S name="Font Enum" cat="fonts" k="enumeration" opts={FONT_LIST_OPTIONS} val={vals['document.fonts.check']} />
         <S name="CSS Fonts" cat="fonts" k="cssDetection" val={vals['getComputedStyle(fontFamily)']} />
-        <S name="Emoji" cat="rendering" k="emoji" />
+        <S name="Emoji" cat="rendering" k="emoji" val={vals['CanvasRenderingContext2D.measureText(emoji)']} />
         <S name="MathML" cat="rendering" k="mathml" val={vals['MathML.getBoundingClientRect']} />
       </G>
       <G label="CSS">
@@ -192,7 +217,7 @@ export default function SignalsTab({ settings, onSaveSettings, highlightedSignal
         <S name="HID" cat="devices" k="hid" val={vals['navigator.hid.getDevices']} />
       </G>
       <G label="Other">
-        <S name="Math" cat="math" k="functions" opts={MATH_NOISE_OPTIONS} />
+        <S name="Math" cat="math" k="functions" opts={MATH_NOISE_OPTIONS} val={vals['Math.cos'] || vals['Math.tan'] || vals['Math.log']} />
         <S name="Keyboard" cat="keyboard" k="layout" val={vals['navigator.keyboard.getLayoutMap']} />
         <S name="Key Cadence" cat="keyboard" k="cadence" val={vals['KeyboardEvent.timing']} />
         <S name="Speech" cat="speech" k="synthesis" val={vals['speechSynthesis.getVoices']} />

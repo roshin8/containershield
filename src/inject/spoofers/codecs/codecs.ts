@@ -60,7 +60,7 @@ export function initCodecSpoofer(mode: ProtectionMode, prng: PRNG): void {
   // Spoof HTMLMediaElement.canPlayType
   overrideMethod(HTMLMediaElement.prototype, 'canPlayType', (original, thisArg, args) => {
     const type = args[0] as string;
-    logAccess('HTMLMediaElement.canPlayType', { spoofed: true, value: 'normalized' });
+    logAccess('HTMLMediaElement.canPlayType', { spoofed: true, value: type?.substring(0, 25) || 'codec' });
 
     if (mode === 'block') {
       return '';
@@ -84,7 +84,7 @@ export function initCodecSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported) {
     overrideMethod(MediaSource as any, 'isTypeSupported', (original, _thisArg, args) => {
       const type = args[0] as string;
-      logAccess('MediaSource.isTypeSupported', { spoofed: true, value: 'normalized' });
+      logAccess('MediaSource.isTypeSupported', { spoofed: true, value: type?.substring(0, 25) || 'codec' });
 
       if (mode === 'block') {
         return false;
@@ -103,7 +103,7 @@ export function initCodecSpoofer(mode: ProtectionMode, prng: PRNG): void {
   // Spoof RTCRtpSender.getCapabilities (WebRTC codecs)
   if (typeof RTCRtpSender !== 'undefined' && RTCRtpSender.getCapabilities) {
     overrideMethod(RTCRtpSender as any, 'getCapabilities', (original, _thisArg, args) => {
-      logAccess('RTCRtpSender.getCapabilities', { spoofed: true, value: 'normalized' });
+      logAccess('RTCRtpSender.getCapabilities', { spoofed: true, value: `${args[0] || 'codecs'}` });
 
       if (mode === 'block') {
         return null;

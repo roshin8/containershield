@@ -1761,15 +1761,24 @@ async function scenario_PopupSignalsTab() {
       const signalsBtn = btns.find(b => b.textContent?.toLowerCase().includes('signal'));
       if (signalsBtn) (signalsBtn as HTMLElement).click();
     });
-    await new Promise(r => setTimeout(r, 1000));
+    // Wait for React to load data from storage and re-render (2s retry + render cycle)
+    await new Promise(r => setTimeout(r, 4000));
 
     // Read signal categories and check for values
     const signals = await execInTab(tabId, () => {
+      const apiCountEl = document.querySelector('[data-api-count]');
+      const loadedAPIs = apiCountEl ? parseInt(apiCountEl.getAttribute('data-api-count') || '0', 10) : -1;
       const text = document.getElementById('root')?.textContent || '';
-      // Look for actual signal value text rendered by SignalRow component
-      // Values appear as small accent-colored text below signal names
-      // Check for specific patterns that only appear if values are rendered
-      const signalValueElements = document.querySelectorAll('.truncate');
+      // Signal values are rendered as small 9px accent-colored text under signal names
+      // Look for elements with that specific style
+      const allElements = document.querySelectorAll('div');
+      const signalValueElements: Element[] = [];
+      allElements.forEach(el => {
+        const style = window.getComputedStyle(el);
+        if (style.fontSize === '9px' && el.textContent && el.textContent.trim().length > 0) {
+          signalValueElements.push(el);
+        }
+      });
       let valueCount = 0;
       const foundValues: string[] = [];
       signalValueElements.forEach(el => {
@@ -1796,23 +1805,34 @@ async function scenario_PopupSignalsTab() {
         hasReadableValues,
         valueCount,
         foundValues,
+        loadedAPIs,
         textLen: text.length,
       };
     });
 
-    // Check storage directly from the test runner (extension page)
+    // Check storage and directly call GET_RECOMMENDATIONS for the site tab
     const allStorage = await browser.storage.local.get(null) as Record<string, any>;
     const fpKeys = Object.keys(allStorage).filter(k => k.startsWith('fpData:') || k.startsWith('activeProfile:'));
+
+    // Try calling GET_RECOMMENDATIONS directly for the site tab
+    let recommendationsData: any = null;
+    try {
+      recommendationsData = await browser.runtime.sendMessage({ type: 'GET_RECOMMENDATIONS', tabId: siteTab });
+    } catch {}
+    const apiCount = recommendationsData?.accessedAPIs?.length || 0;
+    const sampleAPIs = (recommendationsData?.accessedAPIs || []).slice(0, 3).map((a: any) => `${a.api}=${a.value?.substring(0, 15)}`).join(', ');
 
     const screenshot = await captureScreenshot();
     await browser.tabs.remove(tabId);
     await browser.tabs.remove(siteTab);
 
     return {
-      values: { ...signals, fpKeys },
+      values: { ...signals, fpKeys, apiCount, sampleAPIs },
       screenshot,
       checks: [
         check('fpData in storage', fpKeys.join(', ') || 'none', '> 0', fpKeys.length > 0),
+        check('GET_RECOMMENDATIONS returns APIs', String(apiCount), '> 0', apiCount > 0),
+        check('Sample API values', sampleAPIs || 'none', 'non-empty', !!sampleAPIs),
         check('Graphics signals visible', signals?.hasGraphics, 'true', !!signals?.hasGraphics),
         check('Audio signals visible', signals?.hasAudio, 'true', !!signals?.hasAudio),
         check('Hardware signals visible', signals?.hasHardware, 'true', !!signals?.hasHardware),
@@ -1822,9 +1842,10 @@ async function scenario_PopupSignalsTab() {
         check('Network signals visible', signals?.hasNetwork, 'true', !!signals?.hasNetwork),
         check('Device signals visible', signals?.hasDevices, 'true', !!signals?.hasDevices),
         check('Worker signals visible', signals?.hasWorkers, 'true', !!signals?.hasWorkers),
-        check('fpData keys in storage', signals?.fpKeys?.join(', '), '> 0', (signals?.fpKeys?.length || 0) > 0),
-        check('Signal value elements found', signals?.valueCount, '> 5', (signals?.valueCount || 0) > 5),
+        check('Popup loaded APIs', String(signals?.loadedAPIs || 0), '> 100', (signals?.loadedAPIs || 0) > 100),
+        check('Signal value elements found', signals?.valueCount, '> 10', (signals?.valueCount || 0) > 10),
         check('Example values', signals?.foundValues?.join(', '), 'non-empty', (signals?.foundValues?.length || 0) > 0),
+        check('Background has full data (672 APIs)', String(apiCount), '> 100', apiCount > 100),
       ],
     };
   });

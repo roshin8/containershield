@@ -27,7 +27,7 @@ export function initKeyboardCadenceSpoofer(mode: ProtectionMode, prng: PRNG): vo
     const options = args[2];
 
     if (keyEvents.has(type) && typeof listener === 'function') {
-      logAccess('KeyboardEvent.timing', { spoofed: true, value: 'normalized' });
+      logAccess('KeyboardEvent.timing', { spoofed: true, value: `±${maxJitter}ms jitter` });
       const originalListener = listener;
       listener = function(this: any, event: Event) {
         const now = performance.now();

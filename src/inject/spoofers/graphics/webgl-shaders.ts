@@ -28,7 +28,7 @@ export function initWebGLShaderSpoofer(mode: ProtectionMode, prng: PRNG): void {
     // Spoof getShaderPrecisionFormat
     if (proto.getShaderPrecisionFormat) {
       overrideMethod(proto, 'getShaderPrecisionFormat', (original, thisArg, args) => {
-        logAccess(`${ctxName}.getShaderPrecisionFormat`, { spoofed: true });
+        logAccess(`${ctxName}.getShaderPrecisionFormat`, { spoofed: true, value: 'precision spoofed' });
 
         if (mode === 'block') {
           return {

@@ -162,7 +162,10 @@ export function initNavigatorSpoofer(
 
     const emptyPluginArray = fakePluginArray;
 
-    overrideGetter(Navigator.prototype, 'plugins', () => emptyPluginArray);
+    overrideGetter(Navigator.prototype, 'plugins', () => {
+      logAccess('navigator.plugins', { spoofed: true, value: `${STANDARD_PLUGINS.length} standard` });
+      return emptyPluginArray;
+    });
 
     const emptyMimeTypeArray = Object.create(MimeTypeArray.prototype);
     Object.defineProperty(emptyMimeTypeArray, 'length', { value: 0 });
@@ -187,7 +190,7 @@ export function initNavigatorSpoofer(
       mobile,
       platform: platformName,
       getHighEntropyValues: async () => {
-        logAccess('navigator.userAgentData.getHighEntropyValues', { spoofed: true });
+        logAccess('navigator.userAgentData.getHighEntropyValues', { spoofed: true, value: platformName });
         return {
           brands, mobile, platform: platformName,
           architecture: 'x86', bitness: '64', model: '',
@@ -201,7 +204,7 @@ export function initNavigatorSpoofer(
     // Try prototype-level override first (works if property already exists)
     try {
       overrideGetter(Navigator.prototype, 'userAgentData', () => {
-        logAccess('navigator.userAgentData', { spoofed: true });
+        logAccess('navigator.userAgentData', { spoofed: true, value: platformName });
         return spoofedUserAgentData;
       });
     } catch {}
@@ -211,7 +214,7 @@ export function initNavigatorSpoofer(
       try {
         Object.defineProperty(Navigator.prototype, 'userAgentData', {
           get() {
-            logAccess('navigator.userAgentData', { spoofed: true });
+            logAccess('navigator.userAgentData', { spoofed: true, value: platformName });
             return spoofedUserAgentData;
           },
           configurable: true,

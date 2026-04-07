@@ -90,10 +90,18 @@ export function initWebGLSpoofer(
   // 1. Prototype-level via defineProperty
   // 2. Prototype-level via direct assignment
   // 3. Instance-level via getContext interception
+  let webglLogged = false;
+  const logWebGL = () => {
+    if (!webglLogged) {
+      logAccess('WebGLRenderingContext.getParameter', { spoofed: true, value: selectedGPU.renderer.substring(0, 40) });
+      webglLogged = true;
+    }
+  };
+
   const spoofedGetParam = function getParameter(this: any, pname: GLenum) {
     if (webglMode === 'block') return null;
-    if (pname === UNMASKED_VENDOR_WEBGL || pname === GL_VENDOR) return selectedGPU.vendor;
-    if (pname === UNMASKED_RENDERER_WEBGL || pname === GL_RENDERER) return selectedGPU.renderer;
+    if (pname === UNMASKED_VENDOR_WEBGL || pname === GL_VENDOR) { logWebGL(); return selectedGPU.vendor; }
+    if (pname === UNMASKED_RENDERER_WEBGL || pname === GL_RENDERER) { logWebGL(); return selectedGPU.renderer; }
     return _origWGL1GetParam.call(this, pname);
   };
 
@@ -114,10 +122,17 @@ export function initWebGLSpoofer(
 
   if (webgl2Mode !== 'off' && typeof WebGL2RenderingContext !== 'undefined') {
     _origWGL2GetParam = WebGL2RenderingContext.prototype.getParameter;
+    let webgl2Logged = false;
+    const logWebGL2 = () => {
+      if (!webgl2Logged) {
+        logAccess('WebGL2RenderingContext.getParameter', { spoofed: true, value: selectedGPU.renderer.substring(0, 40) });
+        webgl2Logged = true;
+      }
+    };
     const spoofedGetParam2 = function getParameter(this: any, pname: GLenum) {
       if (webgl2Mode === 'block') return null;
-      if (pname === UNMASKED_VENDOR_WEBGL || pname === GL_VENDOR) return selectedGPU.vendor;
-      if (pname === UNMASKED_RENDERER_WEBGL || pname === GL_RENDERER) return selectedGPU.renderer;
+      if (pname === UNMASKED_VENDOR_WEBGL || pname === GL_VENDOR) { logWebGL2(); return selectedGPU.vendor; }
+      if (pname === UNMASKED_RENDERER_WEBGL || pname === GL_RENDERER) { logWebGL2(); return selectedGPU.renderer; }
       return _origWGL2GetParam!.call(this, pname);
     };
     registerNative(spoofedGetParam2, 'getParameter');
