@@ -295,12 +295,18 @@ export class MessageHandler {
     const tabId = sender.tab?.id;
     if (!tabId) return null;
 
-    this.fingerprintData.set(tabId, {
+    const fpData = {
       summary: message.summary,
       detail: message.detail,
       url: message.url,
       lastUpdated: Date.now(),
-    });
+    };
+    this.fingerprintData.set(tabId, fpData);
+
+    // Also persist to storage (event page may suspend and lose in-memory data)
+    try {
+      await browser.storage.local.set({ [`fpData:${tabId}`]: fpData });
+    } catch {}
 
     // Feed stats store
     try {
@@ -382,7 +388,15 @@ export class MessageHandler {
     const tabId = message.tabId ?? sender.tab?.id;
     if (!tabId) return empty;
 
-    const data = this.fingerprintData.get(tabId);
+    let data = this.fingerprintData.get(tabId);
+    // Fallback: check storage (event page may have restarted)
+    if (!data) {
+      try {
+        const stored = await browser.storage.local.get(`fpData:${tabId}`) as Record<string, any>;
+        data = stored[`fpData:${tabId}`];
+        if (data) this.fingerprintData.set(tabId, data);
+      } catch {}
+    }
     if (!data) return empty;
 
     const containerId = await this.containerManager.getContainerForTab(tabId);
