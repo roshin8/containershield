@@ -135,17 +135,28 @@ async function main() {
 
   const browser = await firefox.launch({ headless: true });
 
+  // Match the real Firefox popup dimensions
   const pages = [
-    { name: 'dashboard', url: 'http://localhost:19876/popup/index.html?tab=dashboard', w: 420, h: 700 },
-    { name: 'signals', url: 'http://localhost:19876/popup/index.html?tab=signals', w: 420, h: 700 },
-    { name: 'profile', url: 'http://localhost:19876/popup/index.html?tab=profile', w: 420, h: 700 },
-    { name: 'onboarding', url: 'http://localhost:19876/pages/onboarding.html', w: 1000, h: 900 },
+    { name: 'dashboard', url: 'http://localhost:19876/popup/index.html?tab=dashboard', w: 380, h: 580 },
+    { name: 'signals', url: 'http://localhost:19876/popup/index.html?tab=signals', w: 380, h: 580 },
+    { name: 'profile', url: 'http://localhost:19876/popup/index.html?tab=profile', w: 380, h: 580 },
+    { name: 'ip-warning', url: 'http://localhost:19876/pages/ip-warning.html?ip=192.168.1.100&container=Work&originalContainer=Personal', w: 500, h: 400 },
   ];
 
   for (const p of pages) {
     console.log(`Capturing ${p.name}...`);
-    const context = await browser.newContext({ viewport: { width: p.w, height: p.h }, colorScheme: 'dark' });
+    const context = await browser.newContext({
+      viewport: { width: p.w, height: p.h },
+      colorScheme: 'dark',
+      reducedMotion: 'reduce',
+    });
     const page = await context.newPage();
+
+    // Force dark mode
+    await page.addInitScript(() => {
+      localStorage.setItem('cs-theme', 'dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
+    });
 
     // Replace webextension-polyfill with mock, matching rolldown's factory pattern
     await page.route('**/browser-polyfill*.js', async (route) => {
