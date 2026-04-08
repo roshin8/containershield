@@ -137,10 +137,10 @@ async function main() {
 
   // Match the real Firefox popup dimensions
   const pages = [
-    { name: 'dashboard', url: 'http://localhost:19876/popup/index.html?tab=dashboard', w: 380, h: 580 },
-    { name: 'signals', url: 'http://localhost:19876/popup/index.html?tab=signals', w: 380, h: 580 },
-    { name: 'profile', url: 'http://localhost:19876/popup/index.html?tab=profile', w: 380, h: 580 },
-    { name: 'ip-warning', url: 'http://localhost:19876/pages/ip-warning.html?ip=192.168.1.100&container=Work&originalContainer=Personal', w: 500, h: 400 },
+    { name: 'dashboard', url: 'http://localhost:19876/popup/index.html?tab=dashboard', w: 440, h: 600 },
+    { name: 'signals', url: 'http://localhost:19876/popup/index.html?tab=signals', w: 440, h: 600 },
+    { name: 'profile', url: 'http://localhost:19876/popup/index.html?tab=profile', w: 440, h: 600 },
+    { name: 'ip-warning', url: 'http://localhost:19876/pages/ip-warning.html?ip=192.168.1.100&container=Work&originalContainer=Personal', w: 520, h: 420 },
   ];
 
   for (const p of pages) {
