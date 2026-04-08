@@ -5,11 +5,8 @@
 <h1 align="center">Container Shield</h1>
 
 <p align="center">
-  <strong>Per-container fingerprint protection for Firefox Multi-Account Containers</strong>
-</p>
-
-<p align="center">
-  Every container gets a unique browser identity. Sites can't link you across containers.
+  <strong>Per-container fingerprint protection for Firefox Multi-Account Containers</strong><br>
+  <sub>Every container gets a unique browser identity. Sites can't link you across containers.</sub>
 </p>
 
 <p align="center">
@@ -20,186 +17,200 @@
 </p>
 
 <p align="center">
-  <a href="#the-problem">Problem</a> &nbsp;·&nbsp;
-  <a href="#how-it-works">Solution</a> &nbsp;·&nbsp;
-  <a href="#screenshots">Screenshots</a> &nbsp;·&nbsp;
-  <a href="#signals-protected">Signals</a> &nbsp;·&nbsp;
-  <a href="#installation">Install</a> &nbsp;·&nbsp;
+  <a href="#how-it-works">How It Works</a> &nbsp;&middot;&nbsp;
+  <a href="#screenshots">Screenshots</a> &nbsp;&middot;&nbsp;
+  <a href="#signals-protected">Signals</a> &nbsp;&middot;&nbsp;
+  <a href="#installation">Install</a> &nbsp;&middot;&nbsp;
   <a href="#limitations">Limitations</a>
 </p>
 
 ---
 
-## The Problem
-
-Websites fingerprint your browser using 70+ subtle signals — canvas rendering, WebGL GPU info, audio processing, screen dimensions, installed fonts, timezone, and more. This creates a **unique identifier that persists even when you clear cookies**.
-
-```
-You ──── Container "Personal"  ──► amazon.com sees Fingerprint X
-   └──── Container "Work"      ──► amazon.com sees Fingerprint X  ← SAME! Linked.
-   └──── Container "Shopping"  ──► amazon.com sees Fingerprint X  ← SAME! Linked.
-```
-
-Firefox Multi-Account Containers isolate cookies and storage, but **fingerprints are identical** across all containers because they come from your real hardware.
-
-## How It Works
-
-Container Shield intercepts fingerprinting APIs at the JavaScript level and returns **spoofed values unique to each container**.
-
-```
-You ──── Container "Personal"  ──► amazon.com sees Fingerprint A  (Chrome/Win/RTX 3060)
-   └──── Container "Work"      ──► amazon.com sees Fingerprint B  (Safari/Mac/Apple M2)
-   └──── Container "Shopping"  ──► amazon.com sees Fingerprint C  (Firefox/Linux/RX 6700)
-```
-
-Each fingerprint is:
-- **Deterministic** — same container + same domain = same fingerprint every time
-- **Consistent** — all signals match (a Windows UA gets a Windows screen size, Windows GPU, etc.)
-- **Unique** — no two containers share the same fingerprint
-- **Realistic** — values come from real browser profiles, not random noise
-
-### Architecture
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  Background Script                                               │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
-│  │Container │ │ Profile  │ │ Header   │ │   IP     │            │
-│  │ Manager  │ │ Manager  │ │ Spoofer  │ │Isolation │            │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │
-├──────────────────────────────────────────────────────────────────┤
-│  Inject Script (world: "MAIN" — runs before page scripts)       │
-│  ┌──────────────────────────────────────────────────────┐        │
-│  │ 70+ API Spoofers: Canvas, WebGL, Audio, Screen,     │        │
-│  │ Navigator, Timezone, Fonts, Workers, iFrames, ...    │        │
-│  └──────────────────────────────────────────────────────┘        │
-├──────────────────────────────────────────────────────────────────┤
-│  Popup UI (React + Tailwind)                                     │
-│  Dashboard │ Signals │ Profile │ Headers │ Rules │ Settings      │
-└──────────────────────────────────────────────────────────────────┘
-```
-
----
+<br>
 
 ## Screenshots
 
 <table>
 <tr>
-<td width="33%">
-
-**Dashboard** — Protection status, spoofed profile, fingerprint monitor
-
-![Dashboard](docs/screenshots/dashboard.png)
-
+<td align="center" width="33%">
+<img src="docs/screenshots/dashboard.png" alt="Dashboard" width="300"><br>
+<sub><b>Dashboard</b> &mdash; Protection status, spoofed profile, fingerprint monitor</sub>
 </td>
-<td width="33%">
-
-**Signals** — Per-signal Off/Spoof/Block with live values
-
-![Signals](docs/screenshots/signals.png)
-
+<td align="center" width="33%">
+<img src="docs/screenshots/signals.png" alt="Signals" width="300"><br>
+<sub><b>Signals</b> &mdash; Per-signal Off/Spoof/Block with live values</sub>
 </td>
-<td width="33%">
-
-**Onboarding** — Before/after fingerprint comparison
-
-![Onboarding](docs/screenshots/onboarding.png)
-
+<td align="center" width="33%">
+<img src="docs/screenshots/onboarding.png" alt="Onboarding" width="300"><br>
+<sub><b>Onboarding</b> &mdash; Before/after fingerprint comparison</sub>
 </td>
 </tr>
 </table>
 
-> Regenerate: `npx tsx scripts/take-screenshots.ts`
+<br>
 
 ---
 
+<br>
+
+## How It Works
+
+### The Problem
+
+Websites combine **70+ browser signals** into a unique fingerprint that tracks you &mdash; even without cookies. Firefox containers isolate cookies, but your fingerprint is the same everywhere because it comes from real hardware.
+
+### The Solution
+
+Container Shield intercepts fingerprinting APIs and returns **spoofed values unique to each container**.
+
+<table>
+<tr>
+<th></th>
+<th>Without Container Shield</th>
+<th>With Container Shield</th>
+</tr>
+<tr>
+<td><b>Canvas</b></td>
+<td><code>Your real hash</code></td>
+<td><code>#a7f3b2c1</code> <img src="https://img.shields.io/badge/-spoofed-10b981" alt="spoofed"></td>
+</tr>
+<tr>
+<td><b>WebGL GPU</b></td>
+<td><code>Your real GPU</code></td>
+<td><code>RTX 3060</code> <img src="https://img.shields.io/badge/-spoofed-10b981" alt="spoofed"></td>
+</tr>
+<tr>
+<td><b>Screen</b></td>
+<td><code>Your real resolution</code></td>
+<td><code>1920x1080</code> <img src="https://img.shields.io/badge/-spoofed-10b981" alt="spoofed"></td>
+</tr>
+<tr>
+<td><b>Timezone</b></td>
+<td><code>Your real timezone</code></td>
+<td><code>America/New_York</code> <img src="https://img.shields.io/badge/-spoofed-10b981" alt="spoofed"></td>
+</tr>
+<tr>
+<td><b>User Agent</b></td>
+<td><code>Firefox (real)</code></td>
+<td><code>Chrome 125 Win10</code> <img src="https://img.shields.io/badge/-spoofed-10b981" alt="spoofed"></td>
+</tr>
+<tr>
+<td><b>Audio</b></td>
+<td><code>Your real hash</code></td>
+<td><code>#e8c2d91f</code> <img src="https://img.shields.io/badge/-spoofed-10b981" alt="spoofed"></td>
+</tr>
+</table>
+
+Each fingerprint is **deterministic** (same container + domain = same values), **consistent** (all signals match the assigned profile), and **unique** (no two containers share identity).
+
+<br>
+
+### Per-Container Identity
+
+Every Firefox container gets its own fingerprint. Add as many as you need.
+
+<table>
+<tr>
+<td align="center"><img src="https://img.shields.io/badge/-Personal-3b82f6?style=for-the-badge" alt="Personal"><br><sub>Chrome/Win<br>RTX 3060<br>1920x1080<br><code>#a7f3...</code></sub></td>
+<td align="center"><img src="https://img.shields.io/badge/-Work-10b981?style=for-the-badge" alt="Work"><br><sub>Safari/Mac<br>Apple M2<br>2560x1440<br><code>#e2d1...</code></sub></td>
+<td align="center"><img src="https://img.shields.io/badge/-Shopping-f59e0b?style=for-the-badge" alt="Shopping"><br><sub>Firefox/Linux<br>RX 6700 XT<br>1440x900<br><code>#91b4...</code></sub></td>
+<td align="center"><img src="https://img.shields.io/badge/-Banking-ef4444?style=for-the-badge" alt="Banking"><br><sub>Edge/Win<br>RTX 4060<br>1920x1200<br><code>#c8f7...</code></sub></td>
+</tr>
+</table>
+
+<br>
+
+---
+
+<br>
+
 ## Signals Protected
 
-Container Shield spoofs **70+ fingerprinting signals** across 15 categories:
+Container Shield spoofs **70+ fingerprinting signals** across 15 categories.
 
-| Category | Signals | What Sites See |
-|----------|---------|----------------|
-| **Graphics** | Canvas, WebGL, WebGL2, WebGPU, SVG, DOMRect, TextMetrics, OffscreenCanvas, Shaders | Unique canvas hash, spoofed GPU (e.g. RTX 3060), noised geometry |
-| **Audio** | AudioContext, OfflineAudio, Latency, Codecs | Unique audio fingerprint hash, standardized codec responses |
-| **Hardware** | Screen, Orientation, Memory, CPU, Battery, Touch, Sensors, Viewport, Architecture | Profile-matched resolution, core count, memory |
-| **Navigator** | User-Agent, Languages, Plugins, Client Hints, Clipboard, Vibration, Vendor Flavors | Complete browser identity (e.g. "Chrome 125 on Windows 11") |
-| **Timezone** | Intl.DateTimeFormat, Date.getTimezoneOffset | Spoofed timezone (e.g. America/New_York) |
-| **Fonts** | Font Enumeration, CSS Font Detection, Font Preferences | Platform-appropriate font list |
-| **Network** | WebRTC, Connection, Geolocation, WebSocket | Public IP only (no local leak), spoofed connection profile |
-| **Timing** | performance.now(), Memory, Event Loop | Reduced precision, randomized heap, ±jitter |
-| **CSS** | Media Queries | Spoofed prefers-color-scheme, pointer, hover |
-| **Workers** | Dedicated, Shared, Service, AudioWorklet | Preamble injection matches main thread values |
-| **Storage** | StorageEstimate, IndexedDB, WebSQL, Private Mode | Randomized quotas |
-| **Permissions** | Permissions API, Notifications | Consistent default responses |
-| **Devices** | Gamepad, MIDI, Bluetooth, USB, Serial, HID | Empty/blocked device lists |
-| **Other** | Math, Keyboard, Speech, Crypto, Errors, Apple Pay, Intl | Normalized math precision, spoofed voices, timing jitter |
-| **Headers** | User-Agent, Accept-Language, header order | HTTP headers match JS-level spoofing |
+<table>
+<tr><th>Category</th><th>Signals</th><th>What Sites See</th></tr>
+<tr><td><b>Graphics</b></td><td>Canvas, WebGL, WebGL2, WebGPU, SVG, DOMRect, TextMetrics, OffscreenCanvas, Shaders</td><td>Unique canvas hash, spoofed GPU, noised geometry</td></tr>
+<tr><td><b>Audio</b></td><td>AudioContext, OfflineAudio, Latency, Codecs</td><td>Unique audio hash, standardized codec responses</td></tr>
+<tr><td><b>Hardware</b></td><td>Screen, Orientation, Memory, CPU, Battery, Touch, Sensors, Viewport, Architecture</td><td>Profile-matched resolution, core count, memory</td></tr>
+<tr><td><b>Navigator</b></td><td>User-Agent, Languages, Plugins, Client Hints, Clipboard, Vibration, Vendor Flavors</td><td>Complete browser identity (e.g. "Chrome 125 on Windows 11")</td></tr>
+<tr><td><b>Timezone</b></td><td>Intl.DateTimeFormat, Date.getTimezoneOffset</td><td>Spoofed timezone (e.g. America/New_York)</td></tr>
+<tr><td><b>Fonts</b></td><td>Font Enumeration, CSS Font Detection, Font Preferences</td><td>Platform-appropriate font list</td></tr>
+<tr><td><b>Network</b></td><td>WebRTC, Connection, Geolocation, WebSocket</td><td>Public IP only, spoofed connection profile</td></tr>
+<tr><td><b>Timing</b></td><td>performance.now(), Memory, Event Loop</td><td>Reduced precision, randomized heap, jitter</td></tr>
+<tr><td><b>Workers</b></td><td>Dedicated, Shared, Service, AudioWorklet</td><td>Preamble injection matches main thread</td></tr>
+<tr><td><b>Storage</b></td><td>StorageEstimate, IndexedDB, WebSQL, Private Mode</td><td>Randomized quotas</td></tr>
+<tr><td><b>Devices</b></td><td>Gamepad, MIDI, Bluetooth, USB, Serial, HID</td><td>Empty/blocked device lists</td></tr>
+<tr><td><b>Other</b></td><td>Math, Keyboard, Speech, Crypto, Errors, Apple Pay, CSS, Permissions, Intl</td><td>Normalized precision, spoofed voices, jitter</td></tr>
+<tr><td><b>Headers</b></td><td>User-Agent, Accept-Language, header order</td><td>HTTP headers match JS-level spoofing</td></tr>
+</table>
 
 ### Protection Modes
 
 Each signal supports three modes:
 
-| Mode | Behavior | Use Case |
-|------|----------|----------|
-| **Off** | Real values returned | Trusted sites |
-| **Spoof** | Deterministic noise added | Recommended (default) |
-| **Block** | Fake/empty values returned | Maximum privacy |
+<table>
+<tr>
+<td align="center"><img src="https://img.shields.io/badge/Off-64748b?style=for-the-badge" alt="Off"><br><sub>Real values returned</sub></td>
+<td align="center"><img src="https://img.shields.io/badge/Spoof-7c5cfc?style=for-the-badge" alt="Spoof"><br><sub>Deterministic noise (default)</sub></td>
+<td align="center"><img src="https://img.shields.io/badge/Block-ef4444?style=for-the-badge" alt="Block"><br><sub>Fake/empty values returned</sub></td>
+</tr>
+</table>
 
 ### Protection Levels
 
-| Level | Description |
-|-------|-------------|
-| **Off** | No spoofing |
-| **Low** | Light noise, minimal site breakage |
-| **Balanced** | Strong protection + site compatibility (default) |
-| **Strict** | Maximum privacy, may break some sites |
+<table>
+<tr>
+<td align="center"><img src="https://img.shields.io/badge/Off-64748b?style=flat-square" alt="Off"><br><sub>No spoofing</sub></td>
+<td align="center"><img src="https://img.shields.io/badge/Low-22c55e?style=flat-square" alt="Low"><br><sub>Light noise<br>Minimal breakage</sub></td>
+<td align="center"><img src="https://img.shields.io/badge/Balanced-7c5cfc?style=flat-square" alt="Balanced"><br><sub><b>Recommended</b><br>Strong + compatible</sub></td>
+<td align="center"><img src="https://img.shields.io/badge/Strict-ef4444?style=flat-square" alt="Strict"><br><sub>Maximum privacy<br>May break sites</sub></td>
+</tr>
+</table>
+
+<br>
 
 ---
+
+<br>
 
 ## Features
 
-### Per-Container Isolation
+| Feature | Description |
+|---------|-------------|
+| **Per-Container Isolation** | Each container gets a 256-bit seed. All values derived deterministically. |
+| **Real Browser Profiles** | 35+ profiles: Chrome, Firefox, Safari, Edge on Win/Mac/Linux/Android/iOS. |
+| **Fingerprint Monitor** | Real-time dashboard showing which APIs the page accessed and their status. |
+| **Auto-Rotation** | Rotate fingerprints on a schedule (session, hourly, daily, weekly). |
+| **IP Conflict Detection** | Warns when two containers access the same IP address. |
+| **Worker & iFrame Spoofing** | Injects preamble into Workers, patches iFrame contentWindow. |
+| **Header Spoofing** | HTTP headers (UA, Accept-Language, order) match JS-level profile. |
+| **DNS Leak Prevention** | Enables DoH, blocks DNS leak test domains. |
+| **Tracking Blocker** | Blocks known tracking pixels and tracker domains. |
+| **Keyboard Shortcuts** | Toggle protection, rotate fingerprint, add exception. |
+| **Dark Mode** | Follows system preference or manual toggle. |
+| **Export/Import** | Backup and restore all settings. |
 
-Each Firefox container gets a unique 256-bit cryptographic seed. All spoofed values are derived deterministically from this seed — same seed + same domain = same fingerprint, always.
-
-### Real Browser Profiles
-
-35+ profiles from real browsers: Chrome, Firefox, Safari, Edge on Windows, macOS, Linux, Android, iOS. Each profile includes matching UA, platform, screen, GPU, CPU cores, memory, and Client Hints.
-
-### Fingerprint Monitor
-
-Real-time dashboard showing which fingerprinting APIs the current page accessed, whether each was spoofed/blocked/exposed, and recommendations for APIs to enable.
-
-### Auto-Rotation
-
-Optionally rotate fingerprints on a schedule (session, hourly, daily, weekly) or manually with one click.
-
-### IP Conflict Detection
-
-Warns when two containers access the same IP address, preventing cross-container correlation.
-
-### Worker & iFrame Spoofing
-
-Injects spoofer preamble into Web Workers (Dedicated + Shared) and patches iFrame contentWindow/contentDocument so values match the main thread. ServiceWorker registration is blocked with fallback to spoofed SharedWorker.
-
-### Header Spoofing
-
-HTTP headers (User-Agent, Accept-Language, header order) are modified via webRequest to match the JS-level spoofed profile. Tracking pixels and known tracker domains are blocked.
-
-### DNS Leak Prevention
-
-Enables DNS-over-HTTPS and blocks DNS leak test domains to prevent real IP exposure through DNS queries.
-
-### Keyboard Shortcuts
-
-| Shortcut (Mac) | Shortcut (Win/Linux) | Action |
-|---------|---------|--------|
-| `Ctrl+Shift+P` | `Alt+Shift+P` | Toggle protection |
-| `Ctrl+Shift+R` | `Alt+Shift+R` | Rotate fingerprint |
-| `Ctrl+Shift+E` | `Alt+Shift+E` | Toggle site exception |
-| `Ctrl+Shift+C` | `Alt+Shift+C` | Open popup |
+<br>
 
 ---
+
+<br>
+
+## Tested Against
+
+| Site | Result |
+|------|--------|
+| [CreepJS](https://abrahamjuliot.github.io/creepjs/) | Unique fingerprint per container, worker/iframe values match |
+| [fingerprint.com](https://fingerprint.com/demo/) | Different visitor ID per container |
+| [BrowserLeaks](https://browserleaks.com/) | Canvas, WebGL, fonts, screen all spoofed |
+| [AmIUnique](https://amiunique.org/) | Distinct fingerprint per container |
+
+<br>
+
+---
+
+<br>
 
 ## Installation
 
@@ -222,78 +233,76 @@ npm run build
 
 ```bash
 npm run dev             # Dev build (watch mode)
-npm run run:extension   # Launch Firefox with extension loaded
-npm run test            # Unit tests (vitest)
-npm run test:e2e        # E2E tests (playwright + real sites)
-npm run test:real       # Full real extension test on CreepJS/fingerprint.com
+npm run run:extension   # Launch Firefox with extension
+npm run test            # Unit tests (vitest, 215 tests)
+npm run test:real       # Real extension E2E on fingerprinting sites
 npm run type-check      # TypeScript check
-npm run package         # Build + zip for AMO submission
+npm run package         # Build + zip for AMO
 ```
 
 ### Project Structure
 
 ```
 src/
-├── background/         # Background script: containers, settings, headers, IP isolation
-├── content/            # Content script: message bridge (page ↔ background)
-├── inject/             # Page-context spoofers (world: "MAIN", runs before page scripts)
-│   ├── spoofers/       # 70+ API wrappers organized by category
-│   └── monitor/        # Fingerprint access monitoring
-├── popup/              # React popup UI (Dashboard, Signals, Profile, Headers, Rules, Settings)
-├── pages/              # Full-page UIs (onboarding, options, test runner)
-├── lib/                # Shared utilities (crypto, PRNG, profiles, constants)
-└── types/              # TypeScript type definitions
+├── background/         # Container management, settings, headers, IP isolation
+├── content/            # Message bridge (page <-> background)
+├── inject/spoofers/    # 70+ API wrappers (world: "MAIN", runs before page scripts)
+├── popup/              # React UI (Dashboard, Signals, Profile, Headers, Rules, Settings)
+├── pages/              # Onboarding, options, test runner
+└── lib/                # Crypto, PRNG, profiles, GPU lists, constants
 ```
 
----
-
-## Tested Against
-
-Container Shield is verified against real fingerprinting sites:
-
-| Site | Status |
-|------|--------|
-| [CreepJS](https://abrahamjuliot.github.io/creepjs/) | Unique fingerprint per container, worker/iframe values match |
-| [fingerprint.com](https://fingerprint.com/demo/) | Different visitor ID per container |
-| [BrowserLeaks](https://browserleaks.com/) | Canvas, WebGL, fonts, screen all spoofed |
-| [AmIUnique](https://amiunique.org/) | Distinct fingerprint per container |
+<br>
 
 ---
+
+<br>
 
 ## Limitations
 
-Container Shield provides strong JS-level fingerprint protection, but some techniques are outside extension control:
-
 | Limitation | Why | Mitigation |
 |-----------|-----|------------|
-| **TLS/JA3 fingerprinting** | TLS handshake is browser-level, not interceptable by extensions | Use [Camoufox](https://camoufox.com/) for TLS-level protection |
-| **HTTP/2 SETTINGS** | Browser sends unique H2 settings per browser build | None at extension level |
-| **TCP/IP stack** | OS-level TCP window sizes, TTL reveal real OS | VPN or Tor |
-| **IP correlation** | Same IP across containers links them | Use VPN/Tor per container |
-| **Login-based tracking** | Same account in multiple containers = trivially linked | Use different accounts |
-| **System fonts (CSS)** | Some CSS-level font probing bypasses JS interception | Partially mitigated via font preference spoofing |
-| **ServiceWorker injection** | Firefox doesn't allow injecting into SW scripts | Block SW → SharedWorker fallback |
+| **TLS/JA3 fingerprinting** | TLS handshake is browser-level | Use Camoufox for TLS protection |
+| **HTTP/2 SETTINGS** | Browser-level, not interceptable | None at extension level |
+| **TCP/IP stack** | OS-level TCP signatures | VPN or Tor |
+| **IP correlation** | Same IP across containers links them | VPN per container |
+| **Login-based tracking** | Same account = trivially linked | Different accounts per container |
+| **System fonts (CSS)** | Some CSS font probing bypasses JS | Partially mitigated |
+| **ServiceWorker** | Firefox blocks injection into SW scripts | Block SW, fall back to spoofed SharedWorker |
 | **Extension detection** | Sophisticated trackers may detect spoofing | Stealth techniques minimize this |
 
+<br>
+
 ---
+
+<br>
 
 ## Privacy
 
-Container Shield is **100% local**:
-- No data collected
-- No telemetry
-- No external servers contacted
-- All fingerprint generation happens in your browser
-- Open source and auditable
+Container Shield is **100% local**. No data collected, no telemetry, no external servers. All fingerprint generation happens in your browser. Open source and auditable.
 
----
+<br>
+
+## Keyboard Shortcuts
+
+| Mac | Windows/Linux | Action |
+|-----|---------------|--------|
+| `Ctrl+Shift+P` | `Alt+Shift+P` | Toggle protection |
+| `Ctrl+Shift+R` | `Alt+Shift+R` | Rotate fingerprint |
+| `Ctrl+Shift+E` | `Alt+Shift+E` | Toggle site exception |
+| `Ctrl+Shift+C` | `Alt+Shift+C` | Open popup |
+
+<br>
 
 ## License
 
 [GPL-3.0](LICENSE)
 
+<br>
+
 ---
 
 <p align="center">
-  <sub>Built with TypeScript, React, and the Firefox WebExtensions API</sub>
+  <sub>Built with TypeScript, React, and the Firefox WebExtensions API</sub><br>
+  <sub>Regenerate screenshots: <code>npx tsx scripts/take-screenshots.ts</code></sub>
 </p>
