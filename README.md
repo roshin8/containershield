@@ -35,9 +35,9 @@
 Websites fingerprint your browser using 70+ subtle signals — canvas rendering, WebGL GPU info, audio processing, screen dimensions, installed fonts, timezone, and more. This creates a **unique identifier that persists even when you clear cookies**.
 
 ```
-You ──── Container "Personal"  ──► amazon.com sees Fingerprint X
-   └──── Container "Work"      ──► amazon.com sees Fingerprint X  ← SAME! Linked.
-   └──── Container "Shopping"  ──► amazon.com sees Fingerprint X  ← SAME! Linked.
+You ──── Container "Personal"  ──► website.com sees Fingerprint X
+   └──── Container "Work"      ──► website.com sees Fingerprint X  ← SAME! Linked.
+   └──── Container "Shopping"  ──► website.com sees Fingerprint X  ← SAME! Linked.
 ```
 
 Firefox Multi-Account Containers isolate cookies and storage, but **fingerprints are identical** across all containers because they come from your real hardware.
@@ -47,9 +47,9 @@ Firefox Multi-Account Containers isolate cookies and storage, but **fingerprints
 Container Shield intercepts fingerprinting APIs at the JavaScript level and returns **spoofed values unique to each container**.
 
 ```
-You ──── Container "Personal"  ──► amazon.com sees Fingerprint A  (Chrome/Win/RTX 3060)
-   └──── Container "Work"      ──► amazon.com sees Fingerprint B  (Safari/Mac/Apple M2)
-   └──── Container "Shopping"  ──► amazon.com sees Fingerprint C  (Firefox/Linux/RX 6700)
+You ──── Container "Personal"  ──► website.com sees Fingerprint A  (Chrome/Win/RTX 3060)
+   └──── Container "Work"      ──► website.com sees Fingerprint B  (Safari/Mac/Apple M2)
+   └──── Container "Shopping"  ──► website.com sees Fingerprint C  (Firefox/Linux/RX 6700)
 ```
 
 Each fingerprint is:
@@ -87,8 +87,8 @@ Each fingerprint is:
 <tr>
 <td align="center"><img src="docs/screenshots/dashboard.png" alt="Dashboard"><br><sub><b>Dashboard</b></sub></td>
 <td align="center"><img src="docs/screenshots/signals.png" alt="Signals"><br><sub><b>Signals</b></sub></td>
-<td align="center"><img src="docs/screenshots/profile.png" alt="Profile"><br><sub><b>Profile</b></sub></td>
-<td align="center"><img src="docs/screenshots/ip-warning.png" alt="IP Warning"><br><sub><b>IP Conflict</b></sub></td>
+<td align="center"><img src="docs/screenshots/signals-dark.png" alt="Signals (Dark)"><br><sub><b>Signals (Dark Mode)</b></sub></td>
+<td align="center"><img src="docs/screenshots/ip-warning.png" alt="IP Warning"><br><sub><b>IP Conflict Warning</b></sub></td>
 </tr>
 </table>
 

@@ -137,26 +137,27 @@ async function main() {
 
   // Match the real Firefox popup dimensions
   const pages = [
-    { name: 'dashboard', url: 'http://localhost:19876/popup/index.html?tab=dashboard', w: 440, h: 600 },
-    { name: 'signals', url: 'http://localhost:19876/popup/index.html?tab=signals', w: 440, h: 600 },
-    { name: 'profile', url: 'http://localhost:19876/popup/index.html?tab=profile', w: 440, h: 600 },
-    { name: 'ip-warning', url: 'http://localhost:19876/pages/ip-warning.html?ip=192.168.1.100&container=Work&originalContainer=Personal', w: 520, h: 420 },
+    { name: 'dashboard', url: 'http://localhost:19876/popup/index.html?tab=dashboard', w: 440, h: 600, theme: 'light' as const },
+    { name: 'signals', url: 'http://localhost:19876/popup/index.html?tab=signals', w: 440, h: 600, theme: 'light' as const },
+    { name: 'signals-dark', url: 'http://localhost:19876/popup/index.html?tab=signals', w: 440, h: 600, theme: 'dark' as const },
+    { name: 'ip-warning', url: 'http://localhost:19876/pages/ip-warning.html?ip=192.168.1.100&container=Work&originalContainer=Personal', w: 520, h: 420, theme: 'dark' as const },
   ];
 
   for (const p of pages) {
     console.log(`Capturing ${p.name}...`);
+    const theme = (p as any).theme || 'dark';
     const context = await browser.newContext({
       viewport: { width: p.w, height: p.h },
-      colorScheme: 'dark',
+      colorScheme: theme,
       reducedMotion: 'reduce',
     });
     const page = await context.newPage();
 
-    // Force dark mode
-    await page.addInitScript(() => {
-      localStorage.setItem('cs-theme', 'dark');
-      document.documentElement.setAttribute('data-theme', 'dark');
-    });
+    // Set theme before page renders
+    await page.addInitScript((t: string) => {
+      localStorage.setItem('cs-theme', t);
+      document.documentElement.setAttribute('data-theme', t);
+    }, theme);
 
     // Replace webextension-polyfill with mock, matching rolldown's factory pattern
     await page.route('**/browser-polyfill*.js', async (route) => {
