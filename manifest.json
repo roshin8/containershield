@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Container Shield",
-  "version": "0.5.0",
+  "version": "1.0.0",
   "description": "Per-container fingerprint spoofing and privacy protection for Firefox Multi-Account Containers. Protects 50+ fingerprinting APIs.",
 
   "author": "Container Shield Contributors",

@@ -26,7 +26,7 @@ export const STORAGE_KEYS = {
 /**
  * Extension version
  */
-export const EXTENSION_VERSION = '0.5.0';
+export const EXTENSION_VERSION = '1.0.0';
 
 /**
  * Protection level names

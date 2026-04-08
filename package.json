@@ -1,6 +1,6 @@
 {
   "name": "container-shield",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Per-container fingerprint spoofing and privacy protection for Firefox Multi-Account Containers",
   "type": "module",
   "scripts": {

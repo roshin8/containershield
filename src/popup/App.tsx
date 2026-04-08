@@ -48,7 +48,14 @@ export default function App() {
   const [selectedContainer, setSelectedContainer] = useState<string | null>(null);
   const [settings, setSettings] = useState<ContainerSettings>(createDefaultSettings());
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab && ['dashboard', 'signals', 'profile', 'headers', 'rules', 'settings'].includes(tab)) {
+      return tab as TabId;
+    }
+    return 'dashboard';
+  });
   const [highlightedSignal, setHighlightedSignal] = useState<{ category: string; signal: string } | undefined>();
   const [assignedProfile, setAssignedProfile] = useState<AssignedProfile | undefined>();
   const [isDark, setIsDark] = useState(() => {

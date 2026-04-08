@@ -1,337 +1,212 @@
 <p align="center">
-  <img src="public/icons/icon-128.svg" alt="Container Shield Logo" width="128" height="128">
+  <img src="public/icons/icon-128.svg" alt="Container Shield" width="100" height="100">
 </p>
 
 <h1 align="center">Container Shield</h1>
 
 <p align="center">
-  <strong>Per-container fingerprint protection for Firefox</strong>
+  <strong>Per-container fingerprint protection for Firefox Multi-Account Containers</strong>
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#how-it-works">How It Works</a> •
-  <a href="#spoofed-apis">Spoofed APIs</a> •
-  <a href="#development">Development</a>
+  Every container gets a unique browser identity. Sites can't link you across containers.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/APIs%20Protected-50+-blue" alt="APIs Protected">
-  <img src="https://img.shields.io/badge/Firefox-128+-orange" alt="Firefox 128+">
-  <img src="https://img.shields.io/badge/License-GPL--3.0-green" alt="License">
-  <img src="https://img.shields.io/badge/TypeScript-5.0-blue" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Signals_Protected-70+-7c5cfc?style=for-the-badge" alt="Signals Protected">
+  <img src="https://img.shields.io/badge/Firefox-128+-FF7139?style=for-the-badge&logo=firefox-browser&logoColor=white" alt="Firefox 128+">
+  <img src="https://img.shields.io/badge/Manifest-V3-10b981?style=for-the-badge" alt="Manifest V3">
+  <img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge" alt="License">
+</p>
+
+<p align="center">
+  <a href="#the-problem">Problem</a> &nbsp;·&nbsp;
+  <a href="#how-it-works">Solution</a> &nbsp;·&nbsp;
+  <a href="#screenshots">Screenshots</a> &nbsp;·&nbsp;
+  <a href="#signals-protected">Signals</a> &nbsp;·&nbsp;
+  <a href="#installation">Install</a> &nbsp;·&nbsp;
+  <a href="#limitations">Limitations</a>
 </p>
 
 ---
 
-## What is Container Shield?
+## The Problem
 
-Container Shield is a Firefox extension that provides **per-container fingerprint protection** by combining features from [Chameleon](https://github.com/nickersoft/chameleon-ext) and [JShelter](https://jshelter.org/) with Firefox's Multi-Account Containers.
+Websites fingerprint your browser using 70+ subtle signals — canvas rendering, WebGL GPU info, audio processing, screen dimensions, installed fonts, timezone, and more. This creates a **unique identifier that persists even when you clear cookies**.
 
-**The Problem:** Websites use browser fingerprinting to track you across the web, even without cookies. Your canvas rendering, WebGL parameters, audio processing, screen size, and 50+ other signals create a unique identifier.
+```
+You ──── Container "Personal"  ──► amazon.com sees Fingerprint X
+   └──── Container "Work"      ──► amazon.com sees Fingerprint X  ← SAME! Linked.
+   └──── Container "Shopping"  ──► amazon.com sees Fingerprint X  ← SAME! Linked.
+```
 
-**The Solution:** Container Shield gives each Firefox container a unique, cryptographically-isolated fingerprint. Your "Personal" container has one fingerprint, your "Work" container has another—and they cannot be linked together.
+Firefox Multi-Account Containers isolate cookies and storage, but **fingerprints are identical** across all containers because they come from your real hardware.
+
+## How It Works
+
+Container Shield intercepts fingerprinting APIs at the JavaScript level and returns **spoofed values unique to each container**.
+
+```
+You ──── Container "Personal"  ──► amazon.com sees Fingerprint A  (Chrome/Win/RTX 3060)
+   └──── Container "Work"      ──► amazon.com sees Fingerprint B  (Safari/Mac/Apple M2)
+   └──── Container "Shopping"  ──► amazon.com sees Fingerprint C  (Firefox/Linux/RX 6700)
+```
+
+Each fingerprint is:
+- **Deterministic** — same container + same domain = same fingerprint every time
+- **Consistent** — all signals match (a Windows UA gets a Windows screen size, Windows GPU, etc.)
+- **Unique** — no two containers share the same fingerprint
+- **Realistic** — values come from real browser profiles, not random noise
+
+### Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Background Script                                               │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
+│  │Container │ │ Profile  │ │ Header   │ │   IP     │            │
+│  │ Manager  │ │ Manager  │ │ Spoofer  │ │Isolation │            │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │
+├──────────────────────────────────────────────────────────────────┤
+│  Inject Script (world: "MAIN" — runs before page scripts)       │
+│  ┌──────────────────────────────────────────────────────┐        │
+│  │ 70+ API Spoofers: Canvas, WebGL, Audio, Screen,     │        │
+│  │ Navigator, Timezone, Fonts, Workers, iFrames, ...    │        │
+│  └──────────────────────────────────────────────────────┘        │
+├──────────────────────────────────────────────────────────────────┤
+│  Popup UI (React + Tailwind)                                     │
+│  Dashboard │ Signals │ Profile │ Headers │ Rules │ Settings      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Screenshots
+
+<!-- Add screenshots: npm run run:extension → take screenshots → save to docs/screenshots/ -->
+
+<table>
+<tr>
+<td width="50%">
+
+**Dashboard** — Protection status, fingerprint monitor, quick controls
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+</td>
+<td width="50%">
+
+**Signals** — Per-signal Off/Spoof/Block controls with live values
+
+![Signals](docs/screenshots/signals.png)
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Profile** — Assigned browser identity (UA, screen, GPU, timezone)
+
+![Profile](docs/screenshots/profile.png)
+
+</td>
+<td width="50%">
+
+**Onboarding** — First-run welcome with feature overview
+
+![Onboarding](docs/screenshots/onboarding.png)
+
+</td>
+</tr>
+</table>
+
+---
+
+## Signals Protected
+
+Container Shield spoofs **70+ fingerprinting signals** across 15 categories:
+
+| Category | Signals | What Sites See |
+|----------|---------|----------------|
+| **Graphics** | Canvas, WebGL, WebGL2, WebGPU, SVG, DOMRect, TextMetrics, OffscreenCanvas, Shaders | Unique canvas hash, spoofed GPU (e.g. RTX 3060), noised geometry |
+| **Audio** | AudioContext, OfflineAudio, Latency, Codecs | Unique audio fingerprint hash, standardized codec responses |
+| **Hardware** | Screen, Orientation, Memory, CPU, Battery, Touch, Sensors, Viewport, Architecture | Profile-matched resolution, core count, memory |
+| **Navigator** | User-Agent, Languages, Plugins, Client Hints, Clipboard, Vibration, Vendor Flavors | Complete browser identity (e.g. "Chrome 125 on Windows 11") |
+| **Timezone** | Intl.DateTimeFormat, Date.getTimezoneOffset | Spoofed timezone (e.g. America/New_York) |
+| **Fonts** | Font Enumeration, CSS Font Detection, Font Preferences | Platform-appropriate font list |
+| **Network** | WebRTC, Connection, Geolocation, WebSocket | Public IP only (no local leak), spoofed connection profile |
+| **Timing** | performance.now(), Memory, Event Loop | Reduced precision, randomized heap, ±jitter |
+| **CSS** | Media Queries | Spoofed prefers-color-scheme, pointer, hover |
+| **Workers** | Dedicated, Shared, Service, AudioWorklet | Preamble injection matches main thread values |
+| **Storage** | StorageEstimate, IndexedDB, WebSQL, Private Mode | Randomized quotas |
+| **Permissions** | Permissions API, Notifications | Consistent default responses |
+| **Devices** | Gamepad, MIDI, Bluetooth, USB, Serial, HID | Empty/blocked device lists |
+| **Other** | Math, Keyboard, Speech, Crypto, Errors, Apple Pay, Intl | Normalized math precision, spoofed voices, timing jitter |
+| **Headers** | User-Agent, Accept-Language, header order | HTTP headers match JS-level spoofing |
+
+### Protection Modes
+
+Each signal supports three modes:
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| **Off** | Real values returned | Trusted sites |
+| **Spoof** | Deterministic noise added | Recommended (default) |
+| **Block** | Fake/empty values returned | Maximum privacy |
+
+### Protection Levels
+
+| Level | Description |
+|-------|-------------|
+| **Off** | No spoofing |
+| **Low** | Light noise, minimal site breakage |
+| **Balanced** | Strong protection + site compatibility (default) |
+| **Strict** | Maximum privacy, may break some sites |
 
 ---
 
 ## Features
 
-<details>
-<summary><h3>🔐 Per-Container Isolation</h3></summary>
-
-Each Firefox container gets its own cryptographic identity:
+### Per-Container Isolation
 
-| Feature | Description |
-|---------|-------------|
-| **Unique Seeds** | Each container has a 256-bit cryptographic seed used to derive all spoofed values |
-| **Deterministic Spoofing** | Same container + same domain = same fingerprint (no random flickering) |
-| **Profile Uniqueness** | No two containers share the same fingerprint signature |
-| **Cross-Container Unlinkability** | Fingerprints from different containers cannot be correlated |
+Each Firefox container gets a unique 256-bit cryptographic seed. All spoofed values are derived deterministically from this seed — same seed + same domain = same fingerprint, always.
 
-**How seeds work:**
-```
-Container "Personal" → Seed: 0x8f3a2b... → Fingerprint A
-Container "Work"     → Seed: 0x2c7b9e... → Fingerprint B
-Container "Shopping" → Seed: 0x5d1f8c... → Fingerprint C
-```
-
-Each seed generates consistent but unique values for all 50+ spoofed APIs.
+### Real Browser Profiles
 
-</details>
-
-<details>
-<summary><h3>🛡️ 50+ Fingerprinting APIs Protected</h3></summary>
-
-Container Shield intercepts and spoofs over 50 browser APIs used for fingerprinting:
-
-| Category | APIs | Entropy Level |
-|----------|------|---------------|
-| **Graphics** | Canvas, WebGL, WebGL2, WebGPU, SVG, DOMRect, TextMetrics, OffscreenCanvas | High |
-| **Audio** | AudioContext, OfflineAudioContext, Audio Latency, Codec Detection | High |
-| **Hardware** | Screen, Device Memory, CPU Cores, Battery, Sensors, Touch, Media Devices | High |
-| **Navigator** | User-Agent, Platform, Languages, Plugins, Client Hints, Clipboard | High |
-| **Timezone** | Intl.DateTimeFormat, Date.getTimezoneOffset | High |
-| **Fonts** | Font Enumeration, CSS Font Detection | High |
-| **Network** | WebRTC (IP Leak), NetworkInformation | Critical |
-| **Timing** | performance.now() precision | Medium |
-| **Storage** | StorageManager, IndexedDB, WebSQL | Medium |
-| **Devices** | Gamepad, MIDI, Bluetooth, USB, Serial, HID | Medium |
+35+ profiles from real browsers: Chrome, Firefox, Safari, Edge on Windows, macOS, Linux, Android, iOS. Each profile includes matching UA, platform, screen, GPU, CPU cores, memory, and Client Hints.
 
-[See full API list →](#spoofed-apis)
-
-</details>
-
-<details>
-<summary><h3>📊 Real-Time Fingerprint Monitor</h3></summary>
-
-Track exactly which fingerprinting techniques websites are using:
-
-- **Live API Access Log** - See every fingerprinting attempt in real-time
-- **Category Breakdown** - Understand which techniques are used most
-- **Protection Status** - See if each access was blocked, spoofed, or allowed
-- **Script Identification** - Identify which scripts are fingerprinting you
-- **Recommendations** - Get suggestions for APIs you should protect
-
-The monitor helps you:
-1. Identify aggressive tracking sites
-2. Fine-tune your protection settings
-3. Understand modern fingerprinting techniques
-4. Verify that protection is working
-
-</details>
-
-<details>
-<summary><h3>⚙️ Protection Modes</h3></summary>
-
-Three protection modes for each API:
-
-| Mode | Behavior | Use Case |
-|------|----------|----------|
-| **Off** | No protection, real values returned | Trusted sites, debugging |
-| **Noise** | Adds deterministic noise to real values | Recommended for most sites |
-| **Block** | Returns fake/empty values | Maximum privacy, may break sites |
-
-**Noise mode** uses Brave-style "farbling":
-- Canvas pixels get subtle color variations (±1-2 RGB values)
-- WebGL parameters return plausible but different values
-- Audio processing adds imperceptible noise
-- All noise is deterministic—same seed = same noise
+### Fingerprint Monitor
 
-</details>
+Real-time dashboard showing which fingerprinting APIs the current page accessed, whether each was spoofed/blocked/exposed, and recommendations for APIs to enable.
 
-<details>
-<summary><h3>🔄 Automatic Profile Rotation</h3></summary>
+### Auto-Rotation
 
-Automatically regenerate fingerprints on a schedule:
+Optionally rotate fingerprints on a schedule (session, hourly, daily, weekly) or manually with one click.
 
-| Schedule | Description |
-|----------|-------------|
-| **Off** | Fingerprint never changes (maximum consistency) |
-| **Session** | New fingerprint when browser restarts |
-| **Hourly** | Rotate every hour |
-| **Daily** | Rotate every 24 hours |
-| **Weekly** | Rotate every 7 days |
+### IP Conflict Detection
 
-You can also **manually rotate** any container's fingerprint instantly from the popup.
+Warns when two containers access the same IP address, preventing cross-container correlation.
 
-**Why rotate?**
-- Prevents long-term tracking even if fingerprint is captured
-- Fresh identity for new browsing sessions
-- Useful for research or testing
+### Worker & iFrame Spoofing
 
-</details>
+Injects spoofer preamble into Web Workers (Dedicated + Shared) and patches iFrame contentWindow/contentDocument so values match the main thread. ServiceWorker registration is blocked with fallback to spoofed SharedWorker.
 
-<details>
-<summary><h3>👤 Browser Profile Presets</h3></summary>
+### Header Spoofing
 
-**35+ realistic browser profiles** to choose from:
+HTTP headers (User-Agent, Accept-Language, header order) are modified via webRequest to match the JS-level spoofed profile. Tracking pixels and known tracker domains are blocked.
 
-**Desktop:**
-- Chrome 121/122 on Windows 11
-- Chrome 121/122 on macOS Sonoma
-- Firefox 122/123 on Windows 11
-- Firefox 122/123 on Ubuntu Linux
-- Safari 17/17.3 on macOS Sonoma
-- Edge 121/122 on Windows 11
-- Opera 106 on Windows 11
-- Brave 121 on Windows 11/macOS
+### DNS Leak Prevention
 
-**Mobile:**
-- Chrome on Android 14 (Pixel 8)
-- Safari on iOS 17 (iPhone 15)
-- Samsung Internet 23/24 on Galaxy S24
-- Safari on iPadOS 17
+Enables DNS-over-HTTPS and blocks DNS leak test domains to prevent real IP exposure through DNS queries.
 
-Each profile includes:
-- Accurate User-Agent string
-- Matching platform and vendor
-- Realistic screen resolution
-- Appropriate hardware specs (cores, RAM)
-- Full Client Hints support
+### Keyboard Shortcuts
 
-</details>
-
-<details>
-<summary><h3>🌐 Domain Exceptions</h3></summary>
-
-Whitelist sites that break with fingerprint protection:
-
-**Preset Categories:**
-| Category | Examples | Why Whitelist |
-|----------|----------|---------------|
-| **Banking** | chase.com, bankofamerica.com | Fraud detection requires real fingerprint |
-| **Streaming** | netflix.com, hulu.com | DRM may check hardware |
-| **Gaming** | steampowered.com, epicgames.com | Anti-cheat systems |
-| **Video Calls** | zoom.us, meet.google.com | WebRTC needed for calls |
-| **Shopping** | amazon.com, ebay.com | Cart/checkout issues |
-
-**Custom Rules:**
-- Add any domain manually
-- Wildcards supported (`*.example.com`)
-- Per-container exceptions possible
-
-</details>
-
-<details>
-<summary><h3>📈 Statistics Dashboard</h3></summary>
-
-Monitor your protection effectiveness:
-
-- **Total Accesses** - How many fingerprinting attempts detected
-- **Blocked** - APIs that returned fake/empty values
-- **Spoofed** - APIs that returned noised values
-- **Protection Rate** - Percentage of attempts protected
-
-**Views:**
-1. **Overview** - Summary statistics and charts
-2. **By Category** - Breakdown by fingerprinting technique
-3. **By Domain** - Which sites fingerprint most aggressively
-
-</details>
-
-<details>
-<summary><h3>🚨 IP Isolation Warnings</h3></summary>
-
-Protects against IP-based cross-container correlation:
-
-**The Problem:** If you access `192.168.1.100` from your "Personal" container, then access the same IP from your "Work" container, the server could correlate these visits.
-
-**The Solution:** Container Shield tracks IP-to-container mappings and warns you:
-
-```
-⚠️ IP Address Conflict Detected
-
-You're accessing 192.168.1.100 from Container: Work
-
-This IP was previously accessed from:
-Container: Personal (2 hours ago)
-
-[Block] [Allow Once] [Open in Original Container]
-```
-
-Options:
-- **Block** - Cancel navigation
-- **Allow Once** - Proceed with warning logged
-- **Open in Original** - Switch to the container that "owns" this IP
-
-</details>
-
-<details>
-<summary><h3>💾 Settings Management</h3></summary>
-
-Full control over your configuration:
-
-| Feature | Description |
-|---------|-------------|
-| **Export** | Backup all settings to JSON file |
-| **Import** | Restore settings from backup |
-| **Reset** | Restore default settings |
-| **Per-Container** | Different settings for each container |
-| **Per-Signal** | Fine-tune individual APIs |
-
-Settings are stored locally using `browser.storage.local`.
-
-</details>
-
-<details>
-<summary><h3>⌨️ Keyboard Shortcuts</h3></summary>
-
-Quick access via keyboard commands:
-
-| Shortcut | Action |
-|----------|--------|
-| **Alt+Shift+P** | Toggle fingerprint protection for current container |
-| **Alt+Shift+R** | Rotate fingerprint (generate new identity) |
-| **Alt+Shift+E** | Toggle site exception for current domain |
-| **Alt+Shift+C** | Open Container Shield popup |
-
-All shortcuts can be customized via Firefox's add-on shortcuts settings (`about:addons` → ⚙️ → Manage Extension Shortcuts).
-
-</details>
-
-<details>
-<summary><h3>🖱️ Context Menu Integration</h3></summary>
-
-Right-click anywhere on a page to access quick actions:
-
-- **Toggle Protection** - Enable/disable for current site
-- **Rotate Fingerprint** - Generate new identity instantly
-- **Add Site Exception** - Whitelist current domain
-- **Open Options** - Access full settings page
-
-The context menu provides the same functionality as keyboard shortcuts for mouse users.
-
-</details>
-
-<details>
-<summary><h3>🌙 Dark Mode</h3></summary>
-
-Full dark mode support for comfortable viewing:
-
-| Mode | Behavior |
-|------|----------|
-| **Auto** | Follows system preference (`prefers-color-scheme`) |
-| **Light** | Always use light theme |
-| **Dark** | Always use dark theme |
-
-Dark mode applies to:
-- Popup interface
-- Options page
-- Onboarding page
-- IP conflict warnings
-
-</details>
-
-<details>
-<summary><h3>🎯 Toolbar Badge</h3></summary>
-
-Real-time feedback in the toolbar icon:
-
-- **Badge Number** - Shows count of blocked/spoofed API accesses for the current tab
-- **Color Coding**:
-  - 🟢 Green badge = Protection active, APIs spoofed
-  - 🔴 Red badge = APIs were blocked
-  - No badge = No fingerprinting detected on this page
-
-Click the icon to see detailed breakdown by category.
-
-</details>
-
-<details>
-<summary><h3>🚀 First-Run Onboarding</h3></summary>
-
-New users are greeted with a comprehensive onboarding page:
-
-1. **Welcome** - Overview of Container Shield's purpose
-2. **How It Works** - Explanation of per-container isolation
-3. **Quick Setup** - Recommended initial settings
-4. **Keyboard Shortcuts** - Learn the quick access commands
-5. **Testing** - Links to verify your protection
-
-The onboarding page only shows once on first install.
-
-</details>
+| Shortcut (Mac) | Shortcut (Win/Linux) | Action |
+|---------|---------|--------|
+| `Ctrl+Shift+P` | `Alt+Shift+P` | Toggle protection |
+| `Ctrl+Shift+R` | `Alt+Shift+R` | Rotate fingerprint |
+| `Ctrl+Shift+E` | `Alt+Shift+E` | Toggle site exception |
+| `Ctrl+Shift+C` | `Alt+Shift+C` | Open popup |
 
 ---
 
@@ -340,934 +215,94 @@ The onboarding page only shows once on first install.
 ### From Source
 
 ```bash
-# Clone the repository
 git clone https://github.com/roshin8/containershield.git
 cd containershield
-
-# Install dependencies
 npm install
-
-# Build for production
 npm run build
 ```
 
 ### Load in Firefox
 
-1. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`
-2. Click **"Load Temporary Add-on"**
-3. Navigate to the `dist/` folder
-4. Select `manifest.json`
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **Load Temporary Add-on**
+3. Select `dist/manifest.json`
 
-### Permanent Installation
-
-For permanent installation, the extension needs to be signed by Mozilla or installed in Firefox Developer/Nightly with `xpinstall.signatures.required` set to `false`.
-
-### Package for Distribution
+### Development
 
 ```bash
-# Create AMO-ready package
-./scripts/package.sh
-
-# Output:
-# packages/containershield-0.3.0.zip  (for AMO submission)
-# packages/containershield-0.3.0.xpi  (for self-distribution)
+npm run dev             # Dev build (watch mode)
+npm run run:extension   # Launch Firefox with extension loaded
+npm run test            # Unit tests (vitest)
+npm run test:e2e        # E2E tests (playwright + real sites)
+npm run test:real       # Full real extension test on CreepJS/fingerprint.com
+npm run type-check      # TypeScript check
+npm run package         # Build + zip for AMO submission
 ```
 
-To submit to Firefox Add-ons (AMO):
-1. Create account at https://addons.mozilla.org/developers/
-2. Upload the `.zip` file
-3. Wait for review and signing
+### Project Structure
+
+```
+src/
+├── background/         # Background script: containers, settings, headers, IP isolation
+├── content/            # Content script: message bridge (page ↔ background)
+├── inject/             # Page-context spoofers (world: "MAIN", runs before page scripts)
+│   ├── spoofers/       # 70+ API wrappers organized by category
+│   └── monitor/        # Fingerprint access monitoring
+├── popup/              # React popup UI (Dashboard, Signals, Profile, Headers, Rules, Settings)
+├── pages/              # Full-page UIs (onboarding, options, test runner)
+├── lib/                # Shared utilities (crypto, PRNG, profiles, constants)
+└── types/              # TypeScript type definitions
+```
 
 ---
 
-## How It Works
+## Tested Against
 
-### Architecture Overview
+Container Shield is verified against real fingerprinting sites:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        BROWSER LEVEL                            │
-├─────────────────────────────────────────────────────────────────┤
-│  Background Script (Service Worker)                             │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐               │
-│  │ Container   │ │ Profile     │ │ Settings    │               │
-│  │ Manager     │ │ Manager     │ │ Store       │               │
-│  └─────────────┘ └─────────────┘ └─────────────┘               │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐               │
-│  │ Header      │ │ IP          │ │ Profile     │               │
-│  │ Spoofer     │ │ Isolation   │ │ Rotation    │               │
-│  └─────────────┘ └─────────────┘ └─────────────┘               │
-├─────────────────────────────────────────────────────────────────┤
-│                         TAB LEVEL                               │
-├─────────────────────────────────────────────────────────────────┤
-│  Inject Script (world: "MAIN") ► Page Context                  │
-│  Content Script (ISOLATED) ► Message Bridge                    │
-│                              ┌─────────────────────────┐        │
-│                              │ 50+ API Spoofers        │        │
-│                              │ • Graphics (Canvas,WebGL)│        │
-│                              │ • Audio (AudioContext)  │        │
-│                              │ • Hardware (Screen,CPU) │        │
-│                              │ • Navigator (UA,Langs)  │        │
-│                              │ • Timezone (Intl,Date)  │        │
-│                              │ • Network (WebRTC)      │        │
-│                              │ • ... and more          │        │
-│                              └─────────────────────────┘        │
-├─────────────────────────────────────────────────────────────────┤
-│                        POPUP UI (React)                         │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐               │
-│  │ Container   │ │ Protection  │ │ Statistics  │               │
-│  │ Selector    │ │ Settings    │ │ Dashboard   │               │
-│  └─────────────┘ └─────────────┘ └─────────────┘               │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Fingerprint Generation Flow
-
-```
-┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│  Container Seed  │────►│  Domain + API    │────►│  Spoofed Value   │
-│  (256-bit)       │     │  (deterministic) │     │  (consistent)    │
-└──────────────────┘     └──────────────────┘     └──────────────────┘
-
-Example:
-┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│ Seed: 0x8f3a...  │────►│ example.com +    │────►│ Canvas hash:     │
-│ (Personal)       │     │ canvas.toDataURL │     │ 0x7d2f...        │
-└──────────────────┘     └──────────────────┘     └──────────────────┘
-```
-
-### Collision Prevention
-
-The Profile Manager ensures no two containers share the same fingerprint signature:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    PROFILE UNIQUENESS MATRIX                    │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  User Agents (25) × Screen Sizes (30) × CPU Cores (6)          │
-│  × RAM Options (5) × Timezones (13) × Languages (14)           │
-│                                                                 │
-│  = ~8,190,000 unique combinations                              │
-│                                                                 │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Container A: Chrome/Win/1920x1080/8cores/16GB/UTC-5/en-US     │
-│  Container B: Firefox/Mac/2560x1440/4cores/8GB/UTC+1/de-DE     │
-│  Container C: Safari/Mac/1440x900/8cores/8GB/UTC+0/en-GB       │
-│                                                                 │
-│  ✓ All combinations guaranteed unique                          │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### API Interception Method
-
-Container Shield uses `world: "MAIN"` content script injection to wrap JavaScript APIs **before** page scripts run:
-
-```javascript
-// Original API
-HTMLCanvasElement.prototype.toDataURL = function() { ... }
-
-// Wrapped API (injected at document_start)
-HTMLCanvasElement.prototype.toDataURL = function() {
-  const original = originalToDataURL.call(this);
-  return addNoise(original, containerSeed);
-}
-```
-
-This approach:
-- ✅ Runs before any page script
-- ✅ Cannot be detected by page scripts
-- ✅ Wraps native prototypes
-- ✅ Maintains API compatibility
+| Site | Status |
+|------|--------|
+| [CreepJS](https://abrahamjuliot.github.io/creepjs/) | Unique fingerprint per container, worker/iframe values match |
+| [fingerprint.com](https://fingerprint.com/demo/) | Different visitor ID per container |
+| [BrowserLeaks](https://browserleaks.com/) | Canvas, WebGL, fonts, screen all spoofed |
+| [AmIUnique](https://amiunique.org/) | Distinct fingerprint per container |
 
 ---
 
-## Spoofed APIs
+## Limitations
 
-<details>
-<summary><h3>🎨 Graphics (9 APIs)</h3></summary>
+Container Shield provides strong JS-level fingerprint protection, but some techniques are outside extension control:
 
-| API | Methods Spoofed | How It Works |
-|-----|-----------------|--------------|
-| **Canvas 2D** | `toDataURL()`, `toBlob()`, `getImageData()` | Adds ±1-2 noise to RGB pixel values using Brave-style farbling |
-| **WebGL** | `getParameter()`, `getExtension()` | Spoofs `UNMASKED_VENDOR_WEBGL` and `UNMASKED_RENDERER_WEBGL` |
-| **WebGL2** | Same as WebGL | Handles WebGL2-specific extensions |
-| **WebGPU** | `requestAdapter()` | Spoofs adapter info and capabilities |
-| **SVG** | SVG filter rendering | Modifies SVG filter output |
-| **DOMRect** | `getBoundingClientRect()`, `getClientRects()` | Adds sub-pixel noise to dimensions |
-| **TextMetrics** | `measureText()` | Varies width measurements slightly |
-| **OffscreenCanvas** | `convertToBlob()` | Applies same noise as Canvas 2D |
-| **WebGL Shaders** | Shader compilation | Normalizes shader precision |
-
-**Canvas Noise Example:**
-```
-Original pixel:  RGB(128, 128, 128)
-Spoofed pixel:   RGB(127, 129, 128)  ← Imperceptible but unique
-```
-
-</details>
-
-<details>
-<summary><h3>🔊 Audio (4 APIs)</h3></summary>
-
-| API | Methods Spoofed | How It Works |
-|-----|-----------------|--------------|
-| **AudioContext** | `createOscillator()`, `createDynamicsCompressor()`, `createAnalyser()` | Adds noise to `getFloatFrequencyData()` output |
-| **OfflineAudioContext** | `startRendering()`, `getChannelData()` | Modifies rendered audio buffer |
-| **Audio Latency** | `baseLatency`, `outputLatency` | Returns consistent spoofed values |
-| **Codec Detection** | `canPlayType()` | Varies codec support slightly |
-
-**Audio Fingerprint:**
-```
-Original:  [-0.0234, 0.0456, -0.0123, ...]
-Spoofed:   [-0.0235, 0.0455, -0.0124, ...]  ← Different but valid
-```
-
-</details>
-
-<details>
-<summary><h3>💻 Hardware (9 APIs)</h3></summary>
-
-| API | Methods Spoofed | How It Works |
-|-----|-----------------|--------------|
-| **Screen** | `width`, `height`, `availWidth`, `availHeight`, `colorDepth`, `pixelDepth` | Returns profile-assigned values |
-| **Screen Frame** | `screenX`, `screenY`, `outerWidth`, `outerHeight` | Consistent with screen dimensions |
-| **Orientation** | `screen.orientation.type`, `angle` | Matches device profile |
-| **Device Memory** | `navigator.deviceMemory` | 2, 4, 8, or 16 GB |
-| **Hardware Concurrency** | `navigator.hardwareConcurrency` | 2, 4, 6, 8, 12, or 16 cores |
-| **Battery** | `navigator.getBattery()` | Returns consistent level/charging state |
-| **Media Devices** | `enumerateDevices()` | Limits and renames devices |
-| **Touch** | `navigator.maxTouchPoints` | 0 for desktop, 5 for mobile |
-| **Sensors** | Accelerometer, Gyroscope, etc. | Blocks or returns consistent values |
-
-</details>
-
-<details>
-<summary><h3>🧭 Navigator (6 APIs)</h3></summary>
-
-| API | Methods Spoofed | How It Works |
-|-----|-----------------|--------------|
-| **User-Agent** | `navigator.userAgent`, `appVersion`, `platform`, `vendor` | Full browser profile |
-| **Languages** | `navigator.language`, `languages` | Array like `['en-US', 'en']` |
-| **Plugins** | `navigator.plugins`, `mimeTypes` | Empty or minimal plugin list |
-| **Client Hints** | `navigator.userAgentData.getHighEntropyValues()` | Full UA-CH support |
-| **Clipboard** | `clipboard.read()`, `readText()` | Permission check spoofing |
-| **Vibration** | `navigator.vibrate()` | Returns true without vibrating |
-
-**Client Hints Example:**
-```javascript
-await navigator.userAgentData.getHighEntropyValues([
-  'platform', 'platformVersion', 'architecture', 'model', 'uaFullVersion'
-]);
-// Returns consistent, profile-matched values
-```
-
-</details>
-
-<details>
-<summary><h3>🕐 Timezone (2 APIs)</h3></summary>
-
-| API | Methods Spoofed | How It Works |
-|-----|-----------------|--------------|
-| **Intl** | `Intl.DateTimeFormat().resolvedOptions().timeZone` | Returns profile timezone |
-| **Date** | `getTimezoneOffset()`, `toLocaleString()` | Offset matches Intl timezone |
-
-**Supported Timezones:**
-- America/New_York (UTC-5)
-- America/Chicago (UTC-6)
-- America/Denver (UTC-7)
-- America/Los_Angeles (UTC-8)
-- Europe/London (UTC+0)
-- Europe/Paris (UTC+1)
-- Europe/Berlin (UTC+1)
-- Asia/Tokyo (UTC+9)
-- And more...
-
-</details>
-
-<details>
-<summary><h3>🔤 Fonts (2 APIs)</h3></summary>
-
-| API | Methods Spoofed | How It Works |
-|-----|-----------------|--------------|
-| **Font Enumeration** | Canvas text measurement, `document.fonts` | Limits detected fonts |
-| **CSS Font Detection** | Font-family availability | Blocks or limits probing |
-
-**Common fingerprinting fonts:**
-- Arial, Helvetica, Times New Roman (always available)
-- Calibri, Cambria (Windows-specific)
-- Helvetica Neue, San Francisco (macOS-specific)
-- Ubuntu, DejaVu Sans (Linux-specific)
-
-Container Shield ensures consistent font availability per profile.
-
-</details>
-
-<details>
-<summary><h3>🌐 Network (2 APIs)</h3></summary>
-
-| API | Methods Spoofed | How It Works |
-|-----|-----------------|--------------|
-| **WebRTC** | `RTCPeerConnection` ICE candidates | Blocks local IP leak or returns spoofed IPs |
-| **Connection** | `navigator.connection` | Spoofs `effectiveType`, `downlink`, `rtt` |
-
-**WebRTC Modes:**
-- **Off** - Real IPs exposed (dangerous!)
-- **Public Only** - Blocks local/private IPs, allows public
-- **Block** - Disables WebRTC entirely
-
-</details>
-
-<details>
-<summary><h3>⏱️ Timing & Other (10+ APIs)</h3></summary>
-
-| Category | API | How It Works |
-|----------|-----|--------------|
-| **Timing** | `performance.now()` | Reduces precision to 100μs |
-| **CSS** | `matchMedia()` | Spoofs prefers-color-scheme, reduced-motion |
-| **Speech** | `speechSynthesis.getVoices()` | Returns consistent voice list |
-| **Permissions** | `navigator.permissions.query()` | Consistent permission states |
-| **Storage** | `navigator.storage.estimate()` | Spoofed quota/usage |
-| **Math** | `Math.tan()`, `Math.sin()` | Handles edge case precision |
-| **Keyboard** | `navigator.keyboard.getLayoutMap()` | Blocks or returns consistent layout |
-| **Devices** | Gamepad, MIDI, Bluetooth, USB, Serial, HID | Returns empty device lists |
-| **Rendering** | Emoji, MathML | Normalizes rendering differences |
-| **Payment** | `ApplePaySession.canMakePayments()` | Consistent availability |
-
-</details>
+| Limitation | Why | Mitigation |
+|-----------|-----|------------|
+| **TLS/JA3 fingerprinting** | TLS handshake is browser-level, not interceptable by extensions | Use [Camoufox](https://camoufox.com/) for TLS-level protection |
+| **HTTP/2 SETTINGS** | Browser sends unique H2 settings per browser build | None at extension level |
+| **TCP/IP stack** | OS-level TCP window sizes, TTL reveal real OS | VPN or Tor |
+| **IP correlation** | Same IP across containers links them | Use VPN/Tor per container |
+| **Login-based tracking** | Same account in multiple containers = trivially linked | Use different accounts |
+| **System fonts (CSS)** | Some CSS-level font probing bypasses JS interception | Partially mitigated via font preference spoofing |
+| **ServiceWorker injection** | Firefox doesn't allow injecting into SW scripts | Block SW → SharedWorker fallback |
+| **Extension detection** | Sophisticated trackers may detect spoofing | Stealth techniques minimize this |
 
 ---
 
-## Website Compatibility
-
-<details>
-<summary><h3>⚠️ What Can Break Websites</h3></summary>
-
-Some spoofing techniques can cause websites to malfunction:
-
-#### High Risk of Breaking
-
-| Spoofed API | What Breaks | Examples |
-|-------------|-------------|----------|
-| **WebRTC (Block)** | Video/audio calls, P2P connections | Zoom, Google Meet, Discord, Teams |
-| **Canvas (Block)** | CAPTCHAs, image editors, games | reCAPTCHA, hCaptcha, Photopea |
-| **WebGL (Block)** | 3D graphics, maps, games | Google Maps 3D, Three.js sites |
-| **MediaDevices (Block)** | Camera/microphone access | Video calls, QR scanners |
-| **Clipboard (Block)** | Copy/paste functionality | "Copy to clipboard" buttons |
-
-#### Medium Risk
-
-| Spoofed API | What Breaks | Why |
-|-------------|-------------|-----|
-| **Screen dimensions** | Responsive layouts | Site may serve wrong layout for spoofed resolution |
-| **User-Agent** | Feature detection | Site serves mobile version to desktop UA |
-| **Timezone** | Scheduling, calendars | Appointments display wrong times |
-| **Client Hints** | Modern sites | UA-CH dependent features fail |
-| **Gamepad/MIDI** | Browser games, music apps | Controllers won't be detected |
-
-#### Low Risk (Usually Safe)
-
-| Spoofed API | Why It's Safe |
-|-------------|---------------|
-| **Canvas (Noise)** | Imperceptible ±1-2 RGB pixel changes |
-| **Audio (Noise)** | Inaudible frequency variations |
-| **Fonts** | Slightly different text measurements |
-| **performance.now()** | Timing slightly less precise |
-| **Math functions** | Only affects edge cases |
-
-#### Common Breakage Scenarios
-
-**Banking Sites:**
-```
-Symptom:  Account locked, extra verification, transactions blocked
-Cause:    Fraud detection flags spoofed fingerprint as suspicious
-Solution: Add bank domains to exceptions
-```
-
-**Streaming (Netflix, Hulu, Disney+):**
-```
-Symptom:  "Can't play this title", lower quality, errors
-Cause:    DRM (Widevine) checks hardware consistency
-Solution: Whitelist streaming domains
-```
-
-**E-commerce Checkout:**
-```
-Symptom:  Payment fails, infinite loading, "try again"
-Cause:    Bot detection (Stripe, PayPal) flags inconsistencies
-Solution: Add checkout domains to exceptions
-```
-
-**Video Conferencing:**
-```
-Symptom:  "Can't access camera", "Connection failed"
-Cause:    WebRTC blocked = no audio/video possible
-Solution: Set WebRTC to "Public Only" or whitelist
-```
-
-**Google Services:**
-```
-Symptom:  Endless CAPTCHA loops, "verify you're human"
-Cause:    reCAPTCHA scores spoofed browsers as bot-like
-Solution: Whitelist google.com, gstatic.com
-```
-
-</details>
-
-<details>
-<summary><h3>🔍 How Websites Detect Spoofing</h3></summary>
-
-Sophisticated fingerprinting scripts don't just collect data—they also detect if values are being spoofed. Here's how they do it and how Container Shield defends against it:
-
-#### 1. Consistency Checks
-
-Websites cross-reference multiple APIs to find contradictions:
-
-```javascript
-// Detection: User-Agent says iPhone but screen is 1920x1080?
-if (navigator.userAgent.includes('iPhone') && screen.width > 500) {
-  console.log('Spoofing detected: Screen too large for iPhone');
-}
-
-// Detection: 16 CPU cores but only 2GB RAM?
-if (navigator.hardwareConcurrency > 8 && navigator.deviceMemory < 4) {
-  console.log('Spoofing detected: Impossible hardware combination');
-}
-```
-
-**Container Shield defense:** Profile Manager assigns realistic, internally-consistent profiles. iPhone UA gets iPhone screen size, RAM, and CPU cores.
-
-#### 2. Impossible Values
-
-Some values only exist in specific combinations:
-
-```javascript
-// deviceMemory only returns: 0.25, 0.5, 1, 2, 4, 8
-// Returning 3 or 6 = obvious spoofing
-if (![0.25, 0.5, 1, 2, 4, 8].includes(navigator.deviceMemory)) {
-  console.log('Spoofing detected: Invalid deviceMemory');
-}
-```
-
-**Container Shield defense:** Only returns values that real browsers return.
-
-#### 3. Canvas Consistency
-
-If canvas noise is random, multiple reads will differ:
-
-```javascript
-// Read canvas hash twice
-const hash1 = canvas.toDataURL();
-const hash2 = canvas.toDataURL();
-
-if (hash1 !== hash2) {
-  console.log('Spoofing detected: Canvas values inconsistent');
-}
-```
-
-**Container Shield defense:** Noise is deterministic. Same seed + same domain = same noise. Multiple reads return identical results.
-
-#### 4. Prototype & Function Inspection
-
-Scripts check if native functions were modified:
-
-```javascript
-// Check if toDataURL was wrapped
-const fn = HTMLCanvasElement.prototype.toDataURL;
-if (fn.toString().includes('[native code]') === false) {
-  console.log('Spoofing detected: toDataURL was modified');
-}
-
-// Check prototype chain
-if (canvas.toDataURL !== HTMLCanvasElement.prototype.toDataURL) {
-  console.log('Spoofing detected: Prototype mismatch');
-}
-```
-
-**Container Shield defense:** Wrapped functions preserve `toString()` output and prototype chain integrity.
-
-#### 5. Timing Analysis
-
-Spoofed APIs may be slower than native ones:
-
-```javascript
-// Native canvas should be fast
-const start = performance.now();
-for (let i = 0; i < 100; i++) {
-  canvas.toDataURL();
-}
-const elapsed = performance.now() - start;
-
-if (elapsed > 500) {  // Too slow?
-  console.log('Spoofing detected: Canvas operations unusually slow');
-}
-```
-
-**Container Shield defense:** Minimal overhead in hot paths. Noise is computed efficiently.
-
-#### 6. Error Fingerprinting
-
-Stack traces can reveal extension presence:
-
-```javascript
-try {
-  throw new Error();
-} catch (e) {
-  if (e.stack.includes('extension://') || e.stack.includes('moz-extension://')) {
-    console.log('Spoofing detected: Extension found in stack trace');
-  }
-}
-```
-
-**Container Shield defense:** Stack trace spoofer normalizes filenames and line numbers.
-
-#### 7. Feature Detection Contradictions
-
-Blocking an API vs spoofing it has different signatures:
-
-```javascript
-// If WebGL is blocked, getContext returns null
-const gl = canvas.getContext('webgl');
-if (gl === null && navigator.userAgent.includes('Chrome')) {
-  console.log('Spoofing detected: Chrome should support WebGL');
-}
-
-// If we spoof WebGL vendor but getContext fails:
-if (gl === null && somewhereWeReturnedAVendorString) {
-  console.log('Spoofing detected: Contradictory WebGL state');
-}
-```
-
-**Container Shield defense:** "Noise" mode modifies values but keeps APIs functional. "Block" mode is consistent (returns null/undefined everywhere).
-
-#### 8. Lie Detection (CreepJS technique)
-
-Advanced scripts detect "lies" - values that are technically valid but statistically unlikely:
-
-```javascript
-// Real browsers have consistent renderer/vendor pairs
-const validPairs = [
-  ['Google Inc.', 'ANGLE (Intel'],
-  ['Google Inc.', 'ANGLE (NVIDIA'],
-  ['Apple Inc.', 'Apple GPU'],
-  // ...
-];
-
-const vendor = gl.getParameter(gl.VENDOR);
-const renderer = gl.getParameter(debugExt.UNMASKED_RENDERER_WEBGL);
-
-if (!validPairs.some(([v, r]) => vendor.includes(v) && renderer.includes(r))) {
-  console.log('Spoofing detected: Invalid vendor/renderer pair');
-}
-```
-
-**Container Shield defense:** GPU combinations are taken from real browser data.
-
-#### Detection Summary
-
-| Detection Method | How Sites Use It | Container Shield Defense |
-|------------------|------------------|--------------------------|
-| Consistency checks | Cross-reference UA, screen, hardware | Realistic profile bundles |
-| Impossible values | Check for invalid enum values | Only valid values used |
-| Canvas consistency | Multiple reads should match | Deterministic noise |
-| Prototype inspection | Check native function signatures | Preserve `toString()` |
-| Timing analysis | Spoofed APIs may be slower | Efficient implementation |
-| Stack traces | Look for extension paths | Stack normalization |
-| Feature detection | Blocked vs spoofed signatures | Consistent API states |
-| Lie detection | Statistical analysis of values | Real-world value sets |
-
-</details>
-
-<details>
-<summary><h3>🛠️ Troubleshooting Broken Sites</h3></summary>
-
-When a website breaks, follow these steps:
-
-#### Step 1: Confirm It's the Extension
-
-1. Open the site in a **new container with protection disabled**
-2. If it works → Container Shield is the cause
-3. If still broken → Different issue
-
-#### Step 2: Check the Fingerprint Monitor
-
-1. Click the Container Shield icon
-2. Go to **Monitor** tab
-3. See which APIs the site accessed
-4. Look for **blocked** (red) entries
-
-#### Step 3: Try Less Aggressive Settings
-
-```
-Current Setting    →    Try Instead
-─────────────────────────────────────
-Block              →    Noise
-Noise              →    Off (for that API)
-WebRTC: Block      →    WebRTC: Public Only
-```
-
-#### Step 4: Add Domain Exception
-
-1. Click Container Shield icon
-2. Go to **Exceptions** tab
-3. Add the domain (e.g., `example.com`)
-4. Reload the page
-
-#### Step 5: Use Preset Categories
-
-For common site types, enable preset exceptions:
-
-| If broken site is... | Enable preset... |
-|---------------------|------------------|
-| Bank, financial | Banking |
-| Netflix, Hulu, etc. | Streaming |
-| Zoom, Meet, Teams | Video Conferencing |
-| Amazon, eBay, etc. | Shopping |
-| Steam, Epic Games | Gaming |
-
-#### Safe Default Settings
-
-These settings rarely break sites:
-
-```
-✅ Recommended (rarely breaks):
-   Graphics:     Noise
-   Audio:        Noise
-   Hardware:     Noise
-   Navigator:    Noise
-   Timezone:     Noise
-   Fonts:        Noise
-   Network:      WebRTC: Public Only, Connection: Noise
-   Timing:       Noise
-
-⚠️ Use with caution (may break):
-   WebRTC:       Block
-   Canvas:       Block
-   WebGL:        Block
-   MediaDevices: Block
-   Clipboard:    Block
-```
-
-</details>
-
----
-
-## Project Structure
-
-<details>
-<summary>Click to expand full project structure</summary>
-
-```
-containershield/
-├── src/
-│   ├── background/                    # Background service worker
-│   │   ├── index.ts                   # Entry point, event listeners
-│   │   ├── container-manager.ts       # Container detection & lifecycle
-│   │   ├── profile-manager.ts         # Ensures unique profiles per container
-│   │   ├── profile-rotation.ts        # Automatic fingerprint rotation
-│   │   ├── settings-store.ts          # Per-container settings CRUD
-│   │   ├── message-handler.ts         # Extension message routing
-│   │   ├── header-spoofer.ts          # HTTP header modification (User-Agent, etc.)
-│   │   ├── ip-isolation.ts            # Cross-container IP warnings
-│   │   ├── badge-manager.ts           # Toolbar badge with blocked/spoofed count
-│   │   ├── context-menu.ts            # Right-click context menu integration
-│   │   └── keyboard-shortcuts.ts      # Keyboard command handlers
-│   │
-│   ├── content/                       # Content script (ISOLATED world)
-│   │   └── index.ts                   # Injects page script with config
-│   │
-│   ├── inject/                        # Page context (MAIN world)
-│   │   ├── index.ts                   # Spoofer initialization
-│   │   ├── monitor/
-│   │   │   └── fingerprint-monitor.ts # Tracks API access attempts
-│   │   └── spoofers/                  # 50+ fingerprint spoofers
-│   │       ├── graphics/
-│   │       │   ├── canvas.ts          # Canvas 2D spoofing
-│   │       │   ├── webgl.ts           # WebGL vendor/renderer
-│   │       │   ├── webgl2.ts          # WebGL2 extensions
-│   │       │   ├── webgpu.ts          # WebGPU adapter info
-│   │       │   ├── svg.ts             # SVG filter fingerprint
-│   │       │   ├── domrect.ts         # Element dimensions
-│   │       │   ├── text-metrics.ts    # Text measurement
-│   │       │   ├── webgl-shaders.ts   # Shader compilation
-│   │       │   └── offscreen.ts       # OffscreenCanvas
-│   │       ├── audio/
-│   │       │   ├── audio-context.ts   # AudioContext fingerprint
-│   │       │   ├── offline-audio.ts   # OfflineAudioContext
-│   │       │   └── audio-latency.ts   # Latency properties
-│   │       ├── hardware/
-│   │       │   ├── screen.ts          # Screen dimensions
-│   │       │   ├── screen-frame.ts    # Window frame
-│   │       │   ├── screen-orientation.ts
-│   │       │   ├── device.ts          # CPU/RAM
-│   │       │   ├── battery.ts         # Battery API
-│   │       │   ├── media-devices.ts   # Camera/mic enumeration
-│   │       │   ├── touch.ts           # Touch support
-│   │       │   └── sensors.ts         # Motion sensors
-│   │       ├── navigator/
-│   │       │   ├── user-agent.ts      # UA, platform, vendor
-│   │       │   ├── clipboard.ts       # Clipboard API
-│   │       │   └── vibration.ts       # Vibration API
-│   │       ├── timezone/
-│   │       │   └── intl.ts            # Intl + Date timezone
-│   │       ├── fonts/
-│   │       │   ├── font-enum.ts       # Font enumeration
-│   │       │   └── css-fonts.ts       # CSS font detection
-│   │       ├── network/
-│   │       │   ├── webrtc.ts          # WebRTC IP leak
-│   │       │   └── connection.ts      # NetworkInformation
-│   │       ├── timing/
-│   │       │   └── performance.ts     # performance.now()
-│   │       ├── storage/
-│   │       │   ├── storage-estimate.ts
-│   │       │   ├── indexeddb.ts
-│   │       │   └── websql.ts
-│   │       ├── devices/
-│   │       │   ├── gamepad.ts
-│   │       │   ├── midi.ts
-│   │       │   ├── bluetooth.ts
-│   │       │   └── usb-serial.ts      # USB, Serial, HID
-│   │       └── [12 more categories...]
-│   │
-│   ├── popup/                         # React popup UI
-│   │   ├── index.html
-│   │   ├── main.tsx                   # React entry point
-│   │   ├── App.tsx                    # Main component
-│   │   ├── components/
-│   │   │   ├── ContainerSelector.tsx  # Container dropdown
-│   │   │   ├── ProtectionLevel.tsx    # Off/Minimal/Balanced/Strict
-│   │   │   ├── CategoryToggle.tsx     # Category on/off switches
-│   │   │   ├── SignalList.tsx         # Individual API toggles
-│   │   │   ├── ProfilePresets.tsx     # Browser profile selection
-│   │   │   ├── ProfileRotation.tsx    # Rotation schedule
-│   │   │   ├── DomainExceptions.tsx   # Site whitelist
-│   │   │   ├── StatisticsDashboard.tsx
-│   │   │   ├── SettingsManager.tsx    # Export/import/reset
-│   │   │   ├── FingerprintMonitor.tsx # Live API access log
-│   │   │   ├── PerDomainRules.tsx     # Per-domain custom rules
-│   │   │   └── ErrorBoundary.tsx
-│   │   └── hooks/
-│   │       ├── useContainers.ts       # Container management hook
-│   │       ├── useSettings.ts         # Settings management hook
-│   │       └── useDarkMode.ts         # Dark mode preference hook
-│   │
-│   ├── pages/                         # Standalone extension pages
-│   │   ├── onboarding.html            # First-run welcome page
-│   │   ├── options.html               # Full settings page
-│   │   ├── options.tsx                # Options React component
-│   │   ├── ip-warning.html            # IP conflict warning page
-│   │   └── ip-warning.tsx             # IP warning React component
-│   │
-│   ├── lib/
-│   │   ├── crypto.ts                  # PRNG (xorshift128+), SHA-256
-│   │   ├── farbling.ts                # Brave-style noise generation
-│   │   ├── logger.ts                  # Configurable logging
-│   │   ├── validation.ts              # Input validation
-│   │   ├── constants.ts               # Shared constants
-│   │   └── profiles/
-│   │       ├── index.ts               # Profile manager
-│   │       ├── user-agents.ts         # 35+ browser UA strings
-│   │       └── screen-sizes.ts        # 30+ screen resolutions
-│   │
-│   ├── constants/
-│   │   ├── messages.ts                # Message type constants
-│   │   └── config.ts                  # Default configuration
-│   │
-│   └── types/
-│       ├── index.ts                   # Shared types
-│       ├── settings.ts                # Settings interfaces
-│       └── firefox.d.ts               # Firefox WebExtension types
-│
-├── tests/
-│   ├── unit/                          # Vitest unit tests
-│   │   ├── crypto.test.ts
-│   │   ├── farbling.test.ts
-│   │   ├── validation.test.ts
-│   │   └── logger.test.ts
-│   └── e2e/                           # Playwright E2E tests
-│       └── fingerprint-sites.test.ts
-│
-├── public/
-│   └── icons/
-│       ├── icon.svg                   # Main icon
-│       ├── icon-48.svg
-│       ├── icon-96.svg
-│       └── icon-128.svg
-│
-├── scripts/
-│   └── package.sh                     # AMO packaging script (.zip/.xpi)
-│
-├── manifest.json                      # Firefox WebExtension manifest v2
-├── vite.config.ts                     # Vite build configuration
-├── tsconfig.json                      # TypeScript configuration
-├── tailwind.config.js                 # Tailwind CSS configuration
-├── playwright.config.ts               # Playwright test configuration
-└── package.json
-```
-
-</details>
-
----
-
-## Development
-
-### Prerequisites
-
-- Node.js 18+
-- npm 9+
-- Firefox 128+ (Manifest V3 with `world: "MAIN"` support)
-
-### Commands
-
-```bash
-# Install dependencies
-npm install
-
-# Development build
-npm run dev
-
-# Production build
-npm run build
-
-# Type checking
-npm run type-check
-
-# Run unit tests (vitest)
-npm run test
-
-# Run E2E tests (Playwright)
-npm run test:e2e
-
-# Run REAL extension E2E on fingerprinting sites (headed)
-npm run test:real
-
-# Run real E2E headless (for CI)
-npm run test:real:headless
-
-# Run extension in Firefox with web-ext
-npm run run:extension
-
-# Package for AMO submission
-npm run package
-```
-
-### Architecture (MV3)
-
-```
-manifest.json (Manifest V3)
-├── content_scripts[0]: inject/index.js (world: "MAIN", document_start)
-│   └── Runs in page context BEFORE any page scripts
-│   └── Generates deterministic profile from domain seed
-│   └── Initializes 50+ spoofers
-│
-├── content_scripts[1]: content/index.js (ISOLATED world)
-│   └── Message bridge: page ↔ background
-│
-├── background.scripts: background/index.js (event page)
-│   └── Settings, containers, header spoofing, SW injection
-│
-└── action: popup/index.html (React UI)
-    └── 6 tabs: Dashboard, Signals, Profile, Headers, Rules, Settings
-```
-
-### Known Limitations
-
-| Signal | Can spoof? | Why not? |
-|--------|:----------:|----------|
-| TLS/JA3/JA4 fingerprint | No | TLS handshake is in the browser's C++ network stack |
-| HTTP/2 SETTINGS frames | No | Sent by browser engine before JS runs |
-| CPU cache timing | No | Hardware-level side-channel attack |
-| Font text measurement | Partial | `offsetWidth` differences can't be masked without breaking layout |
-| CSS @media real viewport | Partial | `getPropertyValue` intercepted but browser engine uses real values |
-
-For full TLS/H2/TCP spoofing, consider [Camoufox](https://camoufox.com) (modified Firefox fork).
-
-### Testing Your Protection
-
-Test the extension against real fingerprinting sites:
-
-| Site | What It Tests |
-|------|---------------|
-| [CreepJS](https://abrahamjuliot.github.io/creepjs/) | Comprehensive fingerprint analysis |
-| [BrowserLeaks](https://browserleaks.com/) | Individual API tests |
-| [AmIUnique](https://amiunique.org/) | Browser uniqueness score |
-| [FingerprintJS](https://fingerprintjs.github.io/fingerprintjs/) | Commercial fingerprinting |
-| [Cover Your Tracks](https://coveryourtracks.eff.org/) | EFF's tracking test |
-
----
-
-## Tech Stack
-
-| Technology | Purpose |
-|------------|---------|
-| **TypeScript 5** | Type-safe development |
-| **React 18** | Popup UI components |
-| **Vite 5** | Fast builds and HMR |
-| **Tailwind CSS** | Utility-first styling |
-| **webextension-polyfill** | Cross-browser compatibility |
-| **Vitest** | Unit testing |
-| **Playwright** | E2E testing |
-
----
-
-## Contributing
-
-Contributions are welcome! Please see our contributing guidelines:
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
-
-### Areas for Contribution
-
-- [x] ~~Additional browser profiles~~ (35+ profiles now included)
-- [ ] E2E tests against fingerprinting sites (CreepJS, BrowserLeaks)
-- [ ] Firefox Add-ons signing and publishing
-- [ ] Chrome/Edge port (Manifest V3)
-- [ ] More spoofing APIs (WebGPU, Speech Synthesis)
-- [ ] Bug fixes and testing
-- [ ] Translations/i18n support
+## Privacy
+
+Container Shield is **100% local**:
+- No data collected
+- No telemetry
+- No external servers contacted
+- All fingerprint generation happens in your browser
+- Open source and auditable
 
 ---
 
 ## License
 
-This project is licensed under the **GPL-3.0 License** - see the [LICENSE](LICENSE) file for details.
-
-This is the same license used by:
-- [Chameleon](https://github.com/nickersoft/chameleon-ext)
-- [JShelter](https://jshelter.org/)
-
----
-
-## Acknowledgments
-
-| Project | Contribution |
-|---------|--------------|
-| [Chameleon](https://github.com/nickersoft/chameleon-ext) | Header spoofing techniques |
-| [JShelter](https://jshelter.org/) | JavaScript API wrapping patterns |
-| [Brave Browser](https://brave.com/) | Farbling algorithms |
-| [FingerprintJS](https://fingerprint.com/) | Fingerprinting research |
-| [Mozilla](https://mozilla.org/) | Multi-Account Containers |
-
----
-
-## Disclaimer
-
-This extension is intended for:
-- **Privacy protection** - Preventing unwanted tracking
-- **Security testing** - Authorized penetration testing
-- **Research** - Understanding fingerprinting techniques
-- **Education** - Learning about browser privacy
-
-Use responsibly and in accordance with applicable laws. The developers are not responsible for misuse.
+[GPL-3.0](LICENSE)
 
 ---
 
 <p align="center">
-  Made with ❤️ for privacy
+  <sub>Built with TypeScript, React, and the Firefox WebExtensions API</sub>
 </p>
