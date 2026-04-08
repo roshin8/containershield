@@ -85,16 +85,23 @@ Each fingerprint is:
 
 <table>
 <tr>
-<td width="40%">
+<td width="33%">
 
-**Signals Tab** — Per-signal Off/Spoof/Block controls with live spoofed values
+**Dashboard** — Protection status, spoofed profile, fingerprint monitor
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+</td>
+<td width="33%">
+
+**Signals** — Per-signal Off/Spoof/Block with live values
 
 ![Signals](docs/screenshots/signals.png)
 
 </td>
-<td width="60%">
+<td width="33%">
 
-**Onboarding** — First-run page with before/after fingerprint comparison
+**Onboarding** — Before/after fingerprint comparison
 
 ![Onboarding](docs/screenshots/onboarding.png)
 
@@ -102,7 +109,7 @@ Each fingerprint is:
 </tr>
 </table>
 
-> Generate screenshots: `npx tsx scripts/take-screenshots.ts`
+> Regenerate: `npx tsx scripts/take-screenshots.ts`
 
 ---
 
