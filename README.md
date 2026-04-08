@@ -83,42 +83,26 @@ Each fingerprint is:
 
 ## Screenshots
 
-<!-- Add screenshots: npm run run:extension → take screenshots → save to docs/screenshots/ -->
-
 <table>
 <tr>
-<td width="50%">
+<td width="40%">
 
-**Dashboard** — Protection status, fingerprint monitor, quick controls
-
-![Dashboard](docs/screenshots/dashboard.png)
-
-</td>
-<td width="50%">
-
-**Signals** — Per-signal Off/Spoof/Block controls with live values
+**Signals Tab** — Per-signal Off/Spoof/Block controls with live spoofed values
 
 ![Signals](docs/screenshots/signals.png)
 
 </td>
-</tr>
-<tr>
-<td width="50%">
+<td width="60%">
 
-**Profile** — Assigned browser identity (UA, screen, GPU, timezone)
-
-![Profile](docs/screenshots/profile.png)
-
-</td>
-<td width="50%">
-
-**Onboarding** — First-run welcome with feature overview
+**Onboarding** — First-run page with before/after fingerprint comparison
 
 ![Onboarding](docs/screenshots/onboarding.png)
 
 </td>
 </tr>
 </table>
+
+> Generate screenshots: `npx tsx scripts/take-screenshots.ts`
 
 ---
 
