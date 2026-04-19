@@ -30,7 +30,19 @@ export class ContainerManager {
     // Listen for tab changes
     this.setupTabListeners();
 
-    console.log('[ContainerManager] Initialized with', this.containers.size, 'containers');
+    // Pre-populate tab-container cache with all existing tabs.
+    // Without this, getContainerForTabSync returns null after service worker
+    // restarts, which breaks seed cookie injection for existing tabs.
+    try {
+      const tabs = await browser.tabs.query({});
+      for (const tab of tabs) {
+        if (tab.id && tab.cookieStoreId) {
+          this.tabContainers.set(tab.id, tab.cookieStoreId);
+        }
+      }
+    } catch {}
+
+    console.log('[ContainerManager] Initialized with', this.containers.size, 'containers,', this.tabContainers.size, 'tabs');
   }
 
   /**
@@ -95,8 +107,8 @@ export class ContainerManager {
       await this.autoProtectContainer(identity.cookieStoreId, identity.name);
     });
 
-    // Container updated
-    browser.contextualIdentities.onUpdated.addListener((changeInfo) => {
+    // Container updated (e.g. renamed)
+    browser.contextualIdentities.onUpdated.addListener(async (changeInfo) => {
       const identity = changeInfo.contextualIdentity;
       this.containers.set(identity.cookieStoreId, {
         cookieStoreId: identity.cookieStoreId,
@@ -106,7 +118,20 @@ export class ContainerManager {
         icon: identity.icon,
       });
 
-      console.log('[ContainerManager] Container updated:', identity.name);
+      // Update container name in IP records so warnings show the current name
+      try {
+        const ipDatabase = this.settingsStore.getIPDatabase();
+        let updated = false;
+        for (const [key, record] of Object.entries(ipDatabase.ipRecords)) {
+          if (record.containerId === identity.cookieStoreId && record.containerName !== identity.name) {
+            ipDatabase.ipRecords[key] = { ...record, containerName: identity.name };
+            updated = true;
+          }
+        }
+        if (updated) {
+          await this.settingsStore.updateIPDatabase({ ipRecords: ipDatabase.ipRecords });
+        }
+      } catch {}
     });
 
     // Container removed
@@ -198,6 +223,14 @@ export class ContainerManager {
     } catch (error) {
       console.error('[ContainerManager] Auto-protect failed:', error);
     }
+  }
+
+  /**
+   * Synchronous container lookup from cache (for webRequest blocking handlers)
+   * Returns null if tab isn't cached yet.
+   */
+  getContainerForTabSync(tabId: number): string | null {
+    return this.tabContainers.get(tabId) ?? null;
   }
 
   /**

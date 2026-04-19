@@ -103,17 +103,41 @@ export default function App() {
   const loadAssignedProfile = useCallback(async () => {
     if (!selectedContainer) return;
     try {
-      // Try to get the ACTUAL profile from the inject script (stored per-tab)
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
+        // Try stored inject profile first
         const stored = await browser.storage.local.get(`activeProfile:${tab.id}`);
         const active = stored[`activeProfile:${tab.id}`];
         if (active?.profile) {
           setAssignedProfile(active.profile);
           return;
         }
+        // If not in storage yet, read actual spoofed values from the page
+        // This avoids falling back to the background's (different) profile system
+        try {
+          const pageValues = await browser.tabs.sendMessage(tab.id, { type: 'EXEC_READ_VALUES' }) as Record<string, any> | null;
+          if (pageValues?.ua) {
+            setAssignedProfile({
+              userAgent: {
+                id: '', name: pageValues.ua.substring(0, 40),
+                userAgent: pageValues.ua, platform: pageValues.platform || '',
+                vendor: pageValues.vendor || '', appVersion: '', mobile: false,
+                platformName: '', platformVersion: '',
+              },
+              screen: {
+                width: pageValues.screenW || 0, height: pageValues.screenH || 0,
+                availWidth: pageValues.screenW || 0, availHeight: (pageValues.screenH || 0) - 40,
+                colorDepth: 24, pixelDepth: 24, devicePixelRatio: 1,
+              },
+              hardwareConcurrency: pageValues.cores || 0,
+              timezoneOffset: pageValues.tzo ?? 0,
+              languages: [],
+            });
+            return;
+          }
+        } catch { /* content script not ready */ }
       }
-      // Fallback to background's assigned profile
+      // Last resort: background's assigned profile
       const profile = await browser.runtime.sendMessage({ type: MSG_GET_ASSIGNED_PROFILE, containerId: selectedContainer }) as AssignedProfile | null;
       setAssignedProfile(profile || undefined);
     } catch { setAssignedProfile(undefined); }

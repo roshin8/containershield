@@ -1,235 +1,201 @@
 /**
- * IP Isolation - Tracks IP addresses per container and warns on conflicts.
+ * IP Isolation - Detects when multiple containers share the same public IP.
  *
- * Supports both raw IP navigation and domain-based tracking:
- * - Tracked domains get their IP resolved via DNS before navigation
- * - If the resolved IP was used in another container, warn/block
+ * If Container A and Container B both browse with the same public IP address,
+ * websites can correlate those sessions as belonging to the same person.
+ * This module detects that and warns the user.
+ *
+ * How it works:
+ * 1. On main_frame navigation, detect the user's public IP for the container
+ * 2. Store the mapping: containerId → publicIP
+ * 3. If another container already has the same publicIP, show a warning
  */
 
 import browser from 'webextension-polyfill';
 import type { SettingsStore } from './settings-store';
 import type { ContainerManager } from './container-manager';
 import type { IPRecord } from '@/types';
-import { IP_PATTERNS, MAX_IP_URL_HISTORY } from '@/lib/constants';
+
+/** Public IP echo services (lightweight, return plain text or JSON) */
+const IP_SERVICES = [
+  { url: 'https://api.ipify.org?format=json', parse: (d: any) => d.ip },
+  { url: 'https://httpbin.org/ip', parse: (d: any) => d.origin?.split(',')[0]?.trim() },
+];
 
 export class IPIsolation {
   private settingsStore: SettingsStore;
   private containerManager: ContainerManager;
-  // Cache DNS lookups (domain -> IP) for 5 minutes
-  private dnsCache: Map<string, { ip: string; expires: number }> = new Map();
+
+  /** Cache: containerId → { ip, expires } */
+  private ipCache: Map<string, { ip: string; expires: number }> = new Map();
+
+  /** Containers temporarily allowed (user clicked "Allow Once") */
+  private allowedContainers: Set<string> = new Set();
+
+  /** Containers permanently allowed to share IPs (user clicked "Always Allow") */
+  private alwaysAllowedContainers: Set<string> = new Set();
+
+  /** Tabs currently being checked (avoid duplicate checks) */
+  private checking: Set<number> = new Set();
 
   constructor(settingsStore: SettingsStore, containerManager: ContainerManager) {
     this.settingsStore = settingsStore;
     this.containerManager = containerManager;
   }
 
-  // Domains temporarily allowed (user clicked "Allow Once")
-  private allowedOnce: Set<string> = new Set();
-
   async init(): Promise<void> {
-    // Use webRequest.onBeforeRequest with blocking to intercept tracked domain requests
-    browser.webRequest.onBeforeRequest.addListener(
-      (details) => this.handleBeforeRequest(details),
-      { urls: ['<all_urls>'], types: ['main_frame'] },
-      ['blocking']
-    );
+    // Load persisted always-allowed containers
+    try {
+      const stored = await browser.storage.local.get('ipAlwaysAllowedContainers');
+      if (Array.isArray(stored.ipAlwaysAllowedContainers)) {
+        this.alwaysAllowedContainers = new Set(stored.ipAlwaysAllowedContainers);
+      }
+    } catch {}
 
-    // Listen for "allow once" messages from warning page
+    // Check public IP on every main_frame navigation
+    browser.webNavigation.onCommitted.addListener((details) => {
+      if (details.frameId !== 0) return; // top frame only
+      this.checkPublicIP(details.tabId, details.url);
+    });
+
+    // Listen for messages from warning page
     browser.runtime.onMessage.addListener((message) => {
       if ((message as any).type === 'IP_ALLOW_ONCE') {
-        const { ip, url, containerId, containerName } = message as any;
-        this.allowedOnce.add(ip);
-        this.recordIPAccess(ip, containerId, containerName, url);
-        // Clear the allowance after 10 seconds
-        setTimeout(() => this.allowedOnce.delete(ip), 10000);
+        const { containerId } = message as any;
+        this.allowedContainers.add(containerId);
+        setTimeout(() => this.allowedContainers.delete(containerId), 30000);
+        return Promise.resolve({ success: true });
+      }
+      if ((message as any).type === 'IP_ALWAYS_ALLOW') {
+        const { containerId } = message as any;
+        this.alwaysAllowedContainers.add(containerId);
+        browser.storage.local.set({
+          ipAlwaysAllowedContainers: [...this.alwaysAllowedContainers],
+        }).catch(() => {});
         return Promise.resolve({ success: true });
       }
       return false;
     });
   }
 
-  isIPAddress(hostname: string): boolean {
-    return IP_PATTERNS.IPV4.test(hostname) || IP_PATTERNS.IPV6.test(hostname);
-  }
-
-  isLocalIP(ip: string): boolean {
-    return IP_PATTERNS.LOCAL_IPV4.test(ip);
-  }
-
-  isLocalhostIP(ip: string): boolean {
-    return IP_PATTERNS.LOCALHOST.test(ip);
-  }
-
   /**
-   * Resolve domain to IP using DNS via fetch to a public DNS API.
-   * Cached for 5 minutes to avoid excessive lookups.
+   * Fetch the user's public IP address.
+   * Cached per container for 5 minutes (containers may use different proxies).
    */
-  private async resolveDomain(domain: string): Promise<string | null> {
-    // Check cache
-    const cached = this.dnsCache.get(domain);
+  private async fetchPublicIP(containerId: string): Promise<string | null> {
+    const cached = this.ipCache.get(containerId);
     if (cached && cached.expires > Date.now()) {
       return cached.ip;
     }
 
-    try {
-      // Use DNS-over-HTTPS (Cloudflare)
-      const response = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`, {
-        headers: { 'Accept': 'application/dns-json' },
-      });
-      const data = await response.json();
-      const answer = data.Answer?.find((a: any) => a.type === 1); // Type 1 = A record
-      if (answer?.data) {
-        this.dnsCache.set(domain, { ip: answer.data, expires: Date.now() + 5 * 60 * 1000 });
-        return answer.data;
+    for (const service of IP_SERVICES) {
+      try {
+        const response = await fetch(service.url);
+        const data = await response.json();
+        const ip = service.parse(data);
+        if (ip && typeof ip === 'string') {
+          this.ipCache.set(containerId, { ip, expires: Date.now() + 5 * 60 * 1000 });
+          return ip;
+        }
+      } catch {
+        // Try next service
       }
-    } catch {
-      // DNS lookup failed - skip IP check
     }
     return null;
   }
 
   /**
-   * Check if a domain is in the tracked domains list
+   * Check the user's public IP for this container and warn if another
+   * container shares the same IP (identity correlation risk).
    */
-  private isTrackedDomain(hostname: string): boolean {
-    const ipDatabase = this.settingsStore.getIPDatabase();
-    const trackedDomains = ipDatabase.trackedDomains || [];
-    return trackedDomains.some(d => {
-      if (d.startsWith('*.')) {
-        return hostname.endsWith(d.slice(1)) || hostname === d.slice(2);
-      }
-      return hostname === d;
-    });
-  }
-
-  /**
-   * Handle request before it's sent. Returns { cancel: true } to block,
-   * or { redirectUrl: ... } to show warning page, or {} to allow.
-   */
-  private handleBeforeRequest(
-    details: browser.WebRequest.OnBeforeRequestDetailsType
-  ): browser.WebRequest.BlockingResponse | void {
-    if (details.tabId === -1) return;
+  private async checkPublicIP(tabId: number, url: string): Promise<void> {
+    if (this.checking.has(tabId)) return;
+    this.checking.add(tabId);
 
     try {
-      const url = new URL(details.url);
-      const hostname = url.hostname;
-
       // Skip extension pages
-      if (url.protocol === 'moz-extension:' || url.protocol === 'chrome-extension:') return;
+      if (url.startsWith('moz-extension:') || url.startsWith('about:')) return;
 
       const ipDatabase = this.settingsStore.getIPDatabase();
       const settings = ipDatabase.settings;
       if (!settings.enabled) return;
 
-      // Only check tracked domains and raw IPs
-      const isIP = this.isIPAddress(hostname);
-      const isTracked = this.isTrackedDomain(hostname);
-      if (!isIP && !isTracked) return;
+      const containerId = await this.containerManager.getContainerForTab(tabId);
+      if (this.allowedContainers.has(containerId)) return;
+      if (this.alwaysAllowedContainers.has(containerId)) return;
 
-      // For tracked domains, we need async DNS resolution.
-      // webRequest blocking can't be async, so we use a two-phase approach:
-      // Phase 1: Resolve DNS and check conflict (async, in background)
-      // Phase 2: If conflict, redirect to warning page
-      this.checkAndHandleConflict(details, hostname, isIP);
+      // Fetch our public IP
+      const publicIP = await this.fetchPublicIP(containerId);
+      if (!publicIP) return;
 
-      // Can't block synchronously for DNS resolution, so we let the first request through
-      // and handle conflicts via redirect on subsequent loads.
-      // For raw IPs, we can check synchronously.
-      if (isIP) {
-        if (this.isLocalhostIP(hostname) && !settings.trackLocalhostIPs) return;
-        if (this.isLocalIP(hostname) && !settings.trackLocalIPs) return;
-        if (ipDatabase.exceptions.includes(hostname)) return;
-        if (this.allowedOnce.has(hostname)) return;
+      // Skip if this IP is permanently allowed
+      if (ipDatabase.exceptions.includes(publicIP)) return;
 
-        const existingRecord = ipDatabase.ipRecords[hostname];
-        // We need containerId which is async - can't get it synchronously
-        // Fall through to async handler
-      }
-    } catch {
-      // Don't block on errors
-    }
-  }
-
-  /**
-   * Async conflict check - runs after the initial request.
-   * If conflict found, redirects the tab to the warning page.
-   */
-  private async checkAndHandleConflict(
-    details: browser.WebRequest.OnBeforeRequestDetailsType,
-    hostname: string,
-    isIP: boolean
-  ): Promise<void> {
-    try {
-      const ipDatabase = this.settingsStore.getIPDatabase();
-      const settings = ipDatabase.settings;
-
-      let ipToCheck: string | null = null;
-
-      if (isIP) {
-        ipToCheck = hostname;
-      } else {
-        ipToCheck = await this.resolveDomain(hostname);
-      }
-
-      if (!ipToCheck) return;
-      if (this.allowedOnce.has(ipToCheck)) return;
-      if (this.isLocalhostIP(ipToCheck) && !settings.trackLocalhostIPs) return;
-      if (this.isLocalIP(ipToCheck) && !settings.trackLocalIPs) return;
-      if (ipDatabase.exceptions.includes(ipToCheck)) return;
-
-      const containerId = await this.containerManager.getContainerForTab(details.tabId);
-      const containerName = this.containerManager.getContainerName(containerId);
-      const existingRecord = ipDatabase.ipRecords[ipToCheck];
+      // Check if this IP is already claimed by a DIFFERENT container
+      const ipKey = `pub:${publicIP}`;
+      const existingRecord = ipDatabase.ipRecords[ipKey];
 
       if (existingRecord && existingRecord.containerId !== containerId) {
-        // CONFLICT - redirect to warning page which blocks until user decides
+        // CONFLICT — same public IP used in multiple containers
+        const containerName = this.containerManager.getContainerName(containerId);
+        const originalContainerName = this.containerManager.getContainerName(existingRecord.containerId)
+          || existingRecord.containerName;
+
         const warningUrl = browser.runtime.getURL(
           `pages/ip-warning.html?${new URLSearchParams({
-            ip: ipToCheck,
-            domain: hostname,
-            url: details.url,
+            ip: publicIP,
+            domain: new URL(url).hostname,
+            url,
             currentContainer: containerName,
             currentContainerId: containerId,
-            originalContainer: existingRecord.containerName,
+            originalContainer: originalContainerName,
             originalContainerId: existingRecord.containerId,
             lastAccessed: existingRecord.lastAccessed.toString(),
           }).toString()}`
         );
-        await browser.tabs.update(details.tabId, { url: warningUrl });
+        await browser.tabs.update(tabId, { url: warningUrl });
+      } else if (!existingRecord) {
+        // No record — claim this IP for this container
+        await this.recordIPAccess(ipKey, publicIP, containerId, url);
       } else {
-        // No conflict - record this access
-        await this.recordIPAccess(ipToCheck, containerId, containerName, details.url);
+        // Same container — update access time
+        await this.recordIPAccess(ipKey, publicIP, containerId, url);
       }
     } catch (error) {
-      console.error('[IPIsolation] Conflict check error:', error);
+      console.error('[IPIsolation] Public IP check error:', error);
+    } finally {
+      this.checking.delete(tabId);
     }
   }
 
-  async recordIPAccess(ip: string, containerId: string, containerName: string, url: string): Promise<void> {
+  private async recordIPAccess(
+    key: string, ip: string, containerId: string, url: string
+  ): Promise<void> {
+    const containerName = this.containerManager.getContainerName(containerId);
     const ipDatabase = this.settingsStore.getIPDatabase();
-    const existing = ipDatabase.ipRecords[ip];
+    const existing = ipDatabase.ipRecords[key];
     const urls = existing?.urls || [];
     urls.unshift(url);
 
     await this.settingsStore.updateIPDatabase({
       ipRecords: {
         ...ipDatabase.ipRecords,
-        [ip]: {
+        [key]: {
           ip, containerId, containerName,
           firstAccessed: existing?.firstAccessed || Date.now(),
           lastAccessed: Date.now(),
           accessCount: (existing?.accessCount || 0) + 1,
-          urls: urls.slice(0, MAX_IP_URL_HISTORY),
+          urls: urls.slice(0, 10),
         },
       },
     });
   }
 
-
-  checkIPConflict(ip: string, containerId: string): { hasConflict: boolean; originalRecord?: IPRecord } {
+  checkIPConflict(
+    ip: string, containerId: string
+  ): { hasConflict: boolean; originalRecord?: IPRecord } {
     const ipDatabase = this.settingsStore.getIPDatabase();
-    const record = ipDatabase.ipRecords[ip];
+    const record = ipDatabase.ipRecords[`pub:${ip}`];
     if (record && record.containerId !== containerId) {
       return { hasConflict: true, originalRecord: record };
     }
@@ -238,8 +204,15 @@ export class IPIsolation {
 
   async clearIPRecord(ip: string): Promise<void> {
     const ipDatabase = this.settingsStore.getIPDatabase();
-    const { [ip]: _, ...remaining } = ipDatabase.ipRecords;
+    // Clear by key (pub:ip) or raw ip
+    const keyToRemove = ipDatabase.ipRecords[`pub:${ip}`] ? `pub:${ip}` : ip;
+    const { [keyToRemove]: _, ...remaining } = ipDatabase.ipRecords;
     await this.settingsStore.updateIPDatabase({ ipRecords: remaining });
+  }
+
+  async clearAllRecords(): Promise<void> {
+    await this.settingsStore.updateIPDatabase({ ipRecords: {} });
+    this.ipCache.clear();
   }
 
   async addException(ip: string): Promise<void> {
@@ -251,7 +224,9 @@ export class IPIsolation {
 
   async removeException(ip: string): Promise<void> {
     const ipDatabase = this.settingsStore.getIPDatabase();
-    await this.settingsStore.updateIPDatabase({ exceptions: ipDatabase.exceptions.filter(e => e !== ip) });
+    await this.settingsStore.updateIPDatabase({
+      exceptions: ipDatabase.exceptions.filter(e => e !== ip),
+    });
   }
 
   async addTrackedDomain(domain: string): Promise<void> {
@@ -265,16 +240,22 @@ export class IPIsolation {
   async removeTrackedDomain(domain: string): Promise<void> {
     const ipDatabase = this.settingsStore.getIPDatabase();
     const tracked = ipDatabase.trackedDomains || [];
-    await this.settingsStore.updateIPDatabase({ trackedDomains: tracked.filter(d => d !== domain) } as any);
+    await this.settingsStore.updateIPDatabase({
+      trackedDomains: tracked.filter(d => d !== domain),
+    } as any);
   }
 
   async reassignIP(ip: string, newContainerId: string): Promise<void> {
     const ipDatabase = this.settingsStore.getIPDatabase();
-    const record = ipDatabase.ipRecords[ip];
+    const key = `pub:${ip}`;
+    const record = ipDatabase.ipRecords[key];
     if (record) {
       const containerName = this.containerManager.getContainerName(newContainerId);
       await this.settingsStore.updateIPDatabase({
-        ipRecords: { ...ipDatabase.ipRecords, [ip]: { ...record, containerId: newContainerId, containerName } },
+        ipRecords: {
+          ...ipDatabase.ipRecords,
+          [key]: { ...record, containerId: newContainerId, containerName },
+        },
       });
     }
   }

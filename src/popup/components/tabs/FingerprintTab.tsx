@@ -81,32 +81,23 @@ export default function FingerprintTab({ settings, onSaveSettings, assignedProfi
     onSaveSettings({ profile: { ...settings.profile, ...updates } });
   };
 
-  const randomizeAll = () => {
-    const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
-    const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-    const simplePrng = { nextInt: randInt, nextFloat: () => Math.random() };
-
-    const ua = getRandomProfile(simplePrng);
-    const screen = getScreenForUserAgent(simplePrng, ua.mobile, ua.platformName);
-
-    const languages = ['en-US', 'en-GB', 'de-DE', 'fr-FR', 'es-ES', 'ja-JP', 'zh-CN', 'ko-KR', 'pt-BR', 'ru-RU'];
-    const timezones = ['-480', '-420', '-360', '-300', '0', '60', '120', '-540', '480'];
-    const cores = [4, 6, 8, 12, 16];
-    const memory = [4, 8, 16];
-
-    onSaveSettings({
-      profile: {
-        mode: 'preset',
-        userAgent: ua.userAgent,
-        platform: ua.platform,
-        language: pick(languages),
-        timezone: pick(timezones),
-        screen: { width: screen.width, height: screen.height },
-        hardwareConcurrency: pick(cores),
-        deviceMemory: pick(memory),
-        gpu: undefined,
-      },
-    });
+  const randomizeAll = async () => {
+    try {
+      // Rotate the container's entropy seed — this changes the cookie
+      // injected by the background, which the inject script reads to
+      // generate a new deterministic profile.
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      const containerInfo = await browser.runtime.sendMessage({ type: 'GET_CONTAINER_INFO', tabId: tab?.id });
+      if (containerInfo?.containerId) {
+        await browser.runtime.sendMessage({ type: 'ROTATE_NOW' });
+      }
+      // Reload the page so the inject script picks up the new seed cookie
+      if (tab?.id) {
+        await browser.tabs.reload(tab.id);
+        // Close the popup — it will show the new profile when reopened
+        window.close();
+      }
+    } catch {}
   };
 
   return (
@@ -124,11 +115,11 @@ export default function FingerprintTab({ settings, onSaveSettings, assignedProfi
             Randomize
           </button>
         </div>
-        {settings.profile?.userAgent && (
+        {assignedProfile?.userAgent && (
           <div style={{ fontSize: '10px', color: 'var(--text-muted)', padding: '6px 8px', background: 'var(--bg-elevated)', borderRadius: '4px', lineHeight: '1.6' }}>
-            <div><b style={{color:'var(--text-secondary)'}}>UA:</b> {settings.profile.userAgent.substring(0, 70)}...</div>
-            <div><b style={{color:'var(--text-secondary)'}}>Platform:</b> {settings.profile.platform} | <b style={{color:'var(--text-secondary)'}}>Screen:</b> {settings.profile.screen ? `${settings.profile.screen.width}x${settings.profile.screen.height}` : 'Auto'} | <b style={{color:'var(--text-secondary)'}}>Lang:</b> {settings.profile.language || 'Auto'}</div>
-            <div><b style={{color:'var(--text-secondary)'}}>CPU:</b> {settings.profile.hardwareConcurrency || 'Auto'} | <b style={{color:'var(--text-secondary)'}}>RAM:</b> {settings.profile.deviceMemory ? settings.profile.deviceMemory + 'GB' : 'Auto'} | <b style={{color:'var(--text-secondary)'}}>TZ:</b> {settings.profile.timezone || 'Auto'}</div>
+            <div><b style={{color:'var(--text-secondary)'}}>UA:</b> {(assignedProfile.userAgent.userAgent || assignedProfile.userAgent.name || '').substring(0, 70)}{(assignedProfile.userAgent.userAgent || '').length > 70 ? '...' : ''}</div>
+            <div><b style={{color:'var(--text-secondary)'}}>Platform:</b> {assignedProfile.userAgent.platform || assignedProfile.userAgent.platformName || 'Auto'} | <b style={{color:'var(--text-secondary)'}}>Screen:</b> {assignedProfile.screen ? `${assignedProfile.screen.width}x${assignedProfile.screen.height}` : 'Auto'} | <b style={{color:'var(--text-secondary)'}}>Lang:</b> {assignedProfile.languages?.[0] || 'Auto'}</div>
+            <div><b style={{color:'var(--text-secondary)'}}>CPU:</b> {assignedProfile.hardwareConcurrency || 'Auto'} | <b style={{color:'var(--text-secondary)'}}>RAM:</b> {assignedProfile.deviceMemory ? assignedProfile.deviceMemory + 'GB' : 'Auto'} | <b style={{color:'var(--text-secondary)'}}>TZ:</b> {assignedProfile.timezoneOffset !== undefined ? `UTC${assignedProfile.timezoneOffset <= 0 ? '+' : '-'}${Math.abs(assignedProfile.timezoneOffset / 60)}` : 'Auto'}</div>
           </div>
         )}
       </div>

@@ -52,7 +52,6 @@ function IPWarningPage() {
 
   const handleAllowOnce = async () => {
     if (!params) return;
-    // Tell background to allow this IP temporarily and record it
     await browser.runtime.sendMessage({
       type: 'IP_ALLOW_ONCE',
       ip: params.ip,
@@ -60,7 +59,16 @@ function IPWarningPage() {
       containerId: params.currentContainerId,
       containerName: params.currentContainer,
     });
-    // Navigate to original URL
+    window.location.href = params.url;
+  };
+
+  const handleAlwaysAllow = async () => {
+    if (!params) return;
+    // Permanently allow this container to share IPs without warnings
+    await browser.runtime.sendMessage({
+      type: 'IP_ALWAYS_ALLOW',
+      containerId: params.currentContainerId,
+    });
     window.location.href = params.url;
   };
 
@@ -106,7 +114,7 @@ function IPWarningPage() {
       {/* Content */}
       <div style={{ padding: '20px 24px' }}>
         <p style={{ fontSize: '13px', color: '#9898b0', marginBottom: '16px' }}>
-          <strong style={{ fontFamily: 'monospace', color: '#e8e8f0' }}>{params.domain}</strong> resolves to IP <strong style={{ fontFamily: 'monospace' }}>{params.ip}</strong> which was already used in another container.
+          Your public IP <strong style={{ fontFamily: 'monospace', color: '#e8e8f0' }}>{params.ip}</strong> is shared with another container. Websites can use this to link your identities across containers.
         </p>
 
         <div style={{
@@ -133,33 +141,42 @@ function IPWarningPage() {
           borderRadius: '8px', padding: '12px 16px', fontSize: '12px',
           color: '#9898b0', lineHeight: '1.5',
         }}>
-          <strong>Why this matters:</strong> The server at {params.domain} can see your IP address. If you visit from multiple containers, the server can link those visits together, defeating container isolation.
+          <strong>Why this matters:</strong> Both containers are browsing with the same IP address. Any website you visit in both can correlate those sessions as the same person. Use a different VPN/proxy per container to avoid this.
         </div>
       </div>
 
       {/* Actions */}
       <div style={{
         padding: '16px 24px', borderTop: '1px solid #2a2a3e',
-        display: 'flex', gap: '8px',
+        display: 'flex', flexDirection: 'column', gap: '8px',
       }}>
-        <button onClick={handleBlock} style={{
-          flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 500, fontSize: '13px',
-          background: '#1f1f2b', color: '#e8e8f0', border: '1px solid #2a2a3e',
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={handleBlock} style={{
+            flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 500, fontSize: '13px',
+            background: '#1f1f2b', color: '#e8e8f0', border: '1px solid #2a2a3e',
+            cursor: 'pointer',
+          }}>
+            Block
+          </button>
+          <button onClick={handleAllowOnce} style={{
+            flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 500, fontSize: '13px',
+            background: '#d97706', color: 'white', border: 'none', cursor: 'pointer',
+          }}>
+            Allow Once
+          </button>
+          <button onClick={handleOpenInOriginal} style={{
+            flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 500, fontSize: '13px',
+            background: '#7c5cfc', color: 'white', border: 'none', cursor: 'pointer',
+          }}>
+            Open in {params.originalContainer}
+          </button>
+        </div>
+        <button onClick={handleAlwaysAllow} style={{
+          width: '100%', padding: '8px', borderRadius: '8px', fontWeight: 500, fontSize: '12px',
+          background: 'transparent', color: '#606078', border: '1px solid #2a2a3e',
           cursor: 'pointer',
         }}>
-          Block
-        </button>
-        <button onClick={handleAllowOnce} style={{
-          flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 500, fontSize: '13px',
-          background: '#d97706', color: 'white', border: 'none', cursor: 'pointer',
-        }}>
-          Allow Once
-        </button>
-        <button onClick={handleOpenInOriginal} style={{
-          flex: 1, padding: '10px', borderRadius: '8px', fontWeight: 500, fontSize: '13px',
-          background: '#7c5cfc', color: 'white', border: 'none', cursor: 'pointer',
-        }}>
-          Open in {params.originalContainer}
+          Always allow for {params.currentContainer}
         </button>
       </div>
     </div>

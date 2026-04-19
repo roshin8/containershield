@@ -24,14 +24,33 @@ initStealth();
 
 const FALLBACK_SALT = ':containershield:fallback';
 
-// Old DESKTOP_SCREENS and LOCALE_TIMEZONE_PAIRS removed — now defined inside generateProfile
-// with platform-specific variants
+/**
+ * Read the per-container seed injected by the background via Set-Cookie header.
+ * Firefox containers isolate cookies, so each container gets its own seed.
+ * Returns null if no seed cookie is present (fallback to domain-only seed).
+ */
+function readContainerSeed(): string | null {
+  try {
+    const match = document.cookie.match(/(?:^|;\s*)_csid=([A-Za-z0-9+/=]+)/);
+    return match?.[1] || null;
+  } catch {
+    return null;
+  }
+}
 
-function generateSeed(domain: string): string {
+function generateSeed(domain: string, containerSeed?: string | null): string {
   const bytes = new Uint8Array(32);
+  // Mix domain + salt
   const domainBytes = new TextEncoder().encode(domain + FALLBACK_SALT);
   for (let i = 0; i < domainBytes.length; i++) {
     bytes[i % 32] ^= domainBytes[i];
+  }
+  // Mix container seed (makes profiles unique per container)
+  if (containerSeed) {
+    const seedBytes = new TextEncoder().encode(containerSeed);
+    for (let i = 0; i < seedBytes.length; i++) {
+      bytes[i % 32] ^= seedBytes[i];
+    }
   }
   if (bytes.every(b => b === 0)) bytes[0] = 1;
 
@@ -149,9 +168,12 @@ function allSpoofersDisabled(settings: SpooferSettings): boolean {
   return true;
 }
 
-// Build config deterministically from domain
+// Build config deterministically from domain + container seed (if available).
+// The container seed comes from a cookie injected by the background via Set-Cookie header.
+// Firefox containers isolate cookies, so each container gets a unique seed.
 const domain = window.location.hostname || 'unknown';
-const seed = generateSeed(domain);
+const containerSeed = readContainerSeed();
+const seed = generateSeed(domain, containerSeed);
 const config: InjectConfig = {
   containerId: 'fallback',
   domain,
@@ -168,14 +190,17 @@ if (allSpoofersDisabled(config.settings)) {
 }
 
 // Post the generated profile to the content script (ISOLATED world)
-// so the popup can display the actual spoofed values
+// so the popup can display the actual spoofed values.
+// Only post from the TOP frame — iframes have different domains and would
+// overwrite the main page's profile with a different one on each refresh.
 try {
-  // Send profile + worker preamble to background (for popup display + SW injection)
   const workerPreamble = buildWorkerPreamble(config.assignedProfile);
-  window.postMessage({
-    type: 'CONTAINER_SHIELD_ACTIVE_PROFILE',
-    profile: config.assignedProfile,
-    domain,
-    workerPreamble,
-  }, '*');
+  if (window === window.top) {
+    window.postMessage({
+      type: 'CONTAINER_SHIELD_ACTIVE_PROFILE',
+      profile: config.assignedProfile,
+      domain,
+      workerPreamble,
+    }, '*');
+  }
 } catch {}

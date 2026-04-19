@@ -339,6 +339,7 @@ export interface IPIsolationSettings {
   warnOnly: boolean;
   trackLocalIPs: boolean;
   trackLocalhostIPs: boolean;
+  trackAllDomains: boolean;
   maxUrlHistory: number;
   autoProtectNewContainers: boolean;
   similarityThreshold: number;
@@ -519,6 +520,7 @@ export function createDefaultIPSettings(): IPIsolationSettings {
     warnOnly: false,
     trackLocalIPs: true,
     trackLocalhostIPs: false,
+    trackAllDomains: true,
     maxUrlHistory: 10,
     autoProtectNewContainers: true,
     similarityThreshold: 30,

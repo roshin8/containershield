@@ -159,6 +159,51 @@ export class HeaderSpoofer {
       { urls: ['<all_urls>'] },
       ['blocking', 'requestHeaders']
     );
+
+    // Inject container seed as a cookie via response headers.
+    // This is the ONLY way to pass per-container config to the inject script
+    // synchronously (cookies are available before any JS runs, and Firefox
+    // containers isolate cookie jars so each container gets its own seed).
+    browser.webRequest.onHeadersReceived.addListener(
+      (details) => this.injectSeedCookie(details),
+      { urls: ['<all_urls>'], types: ['main_frame'] },
+      ['blocking', 'responseHeaders']
+    );
+  }
+
+  /**
+   * Inject container seed cookie into response headers for main_frame requests.
+   * The inject script reads this cookie synchronously to generate per-container profiles.
+   */
+  private injectSeedCookie(
+    details: browser.WebRequest.OnHeadersReceivedDetailsType
+  ): browser.WebRequest.BlockingResponse {
+    const containerId = this.containerManager.getContainerForTabSync(details.tabId);
+    if (!containerId) {
+      // Cache miss — populate cache async so the NEXT navigation works.
+      // This can happen right after service worker restart if tabs.query
+      // hasn't completed yet.
+      this.containerManager.getContainerForTab(details.tabId).catch(() => {});
+      return {};
+    }
+
+    const entropy = this.settingsStore.getEntropy(containerId);
+    if (!entropy?.seed) {
+      // Entropy not yet generated — trigger it async for next navigation
+      this.settingsStore.ensureContainerSettings(containerId).catch(() => {});
+      return {};
+    }
+
+    // Use first 16 chars of the base64 seed (enough entropy, shorter cookie)
+    const seedPrefix = entropy.seed.substring(0, 16);
+
+    const headers = details.responseHeaders || [];
+    headers.push({
+      name: 'Set-Cookie',
+      value: `_csid=${seedPrefix}; SameSite=Strict; Path=/; Max-Age=86400`,
+    });
+
+    return { responseHeaders: headers };
   }
 
   /** Update blocked domains list (called from message handler) */

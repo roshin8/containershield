@@ -38,8 +38,10 @@ window.addEventListener('message', async (event) => {
     } catch {}
   }
 
-  // Forward the inject script's active profile + worker preamble to background
-  if (type === 'CONTAINER_SHIELD_ACTIVE_PROFILE') {
+  // Forward the inject script's active profile + worker preamble to background.
+  // Only accept from the top frame — iframes generate different profiles
+  // per-domain and would overwrite the main page's profile non-deterministically.
+  if (type === 'CONTAINER_SHIELD_ACTIVE_PROFILE' && window === window.top) {
     try {
       await browser.runtime.sendMessage({
         type: 'ACTIVE_PROFILE',
