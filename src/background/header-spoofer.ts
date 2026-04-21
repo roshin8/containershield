@@ -160,50 +160,81 @@ export class HeaderSpoofer {
       ['blocking', 'requestHeaders']
     );
 
-    // Inject container seed as a cookie via response headers.
-    // This is the ONLY way to pass per-container config to the inject script
-    // synchronously (cookies are available before any JS runs, and Firefox
-    // containers isolate cookie jars so each container gets its own seed).
-    browser.webRequest.onHeadersReceived.addListener(
-      (details) => this.injectSeedCookie(details),
-      { urls: ['<all_urls>'], types: ['main_frame'] },
-      ['blocking', 'responseHeaders']
-    );
+    // Set container cookies BEFORE navigation starts.
+    // onBeforeNavigate fires before the request is sent, so the cookie
+    // is available when the inject script runs at document_start.
+    browser.webNavigation.onBeforeNavigate.addListener(async (details) => {
+      if (details.frameId !== 0) return; // top frame only
+      if (details.url.startsWith('about:') || details.url.startsWith('moz-extension:')) return;
+      try {
+        const tab = await browser.tabs.get(details.tabId);
+        const containerId = tab.cookieStoreId || 'firefox-default';
+        await this.settingsStore.ensureContainerSettings(containerId);
+        await this.setContainerCookies(containerId, details.url, tab.cookieStoreId || 'firefox-default');
+      } catch (e) {
+        console.error('[HeaderSpoofer] onCommitted cookie set failed:', e);
+      }
+    });
   }
 
   /**
-   * Inject container seed cookie into response headers for main_frame requests.
-   * The inject script reads this cookie synchronously to generate per-container profiles.
+   * Set container seed + settings cookies via browser.cookies API.
+   * Called from handleBeforeSendHeaders for main_frame requests.
+   * Uses browser.cookies.set() because onHeadersReceived has tabId=-1 in Firefox MV3.
    */
-  private injectSeedCookie(
-    details: browser.WebRequest.OnHeadersReceivedDetailsType
-  ): browser.WebRequest.BlockingResponse {
-    const containerId = this.containerManager.getContainerForTabSync(details.tabId);
-    if (!containerId) {
-      // Cache miss — populate cache async so the NEXT navigation works.
-      // This can happen right after service worker restart if tabs.query
-      // hasn't completed yet.
-      this.containerManager.getContainerForTab(details.tabId).catch(() => {});
-      return {};
-    }
-
+  private async setContainerCookies(
+    containerId: string, url: string, cookieStoreId: string
+  ): Promise<void> {
     const entropy = this.settingsStore.getEntropy(containerId);
-    if (!entropy?.seed) {
-      // Entropy not yet generated — trigger it async for next navigation
-      this.settingsStore.ensureContainerSettings(containerId).catch(() => {});
-      return {};
-    }
+    if (!entropy?.seed) return;
 
-    // Use first 16 chars of the base64 seed (enough entropy, shorter cookie)
+    const parsedUrl = new URL(url);
+    const domain = parsedUrl.hostname;
+    const cookieUrl = `${parsedUrl.protocol}//${domain}`;
+
+    // 1. Container seed cookie (for per-container profile generation)
     const seedPrefix = entropy.seed.substring(0, 16);
-
-    const headers = details.responseHeaders || [];
-    headers.push({
-      name: 'Set-Cookie',
-      value: `_csid=${seedPrefix}; SameSite=Strict; Path=/; Max-Age=86400`,
+    await browser.cookies.set({
+      url: cookieUrl,
+      name: '_csid',
+      value: seedPrefix,
+      path: '/',
+      sameSite: 'strict',
+      expirationDate: Math.floor(Date.now() / 1000) + 86400,
+      storeId: cookieStoreId,
     });
 
-    return { responseHeaders: headers };
+    // 2. Settings cookie: encode non-default spoofer modes
+    const settings = this.settingsStore.getSettingsForDomain(containerId, domain);
+    const overrides: string[] = [];
+
+    if (!settings.enabled) {
+      overrides.push('_disabled');
+    } else {
+      for (const [category, signals] of Object.entries(settings.spoofers)) {
+        if (typeof signals !== 'object' || signals === null) continue;
+        for (const [signal, mode] of Object.entries(signals as Record<string, string>)) {
+          if (mode !== 'noise') {
+            overrides.push(`${category}.${signal}:${mode}`);
+          }
+        }
+      }
+    }
+
+    if (overrides.length > 0) {
+      await browser.cookies.set({
+        url: cookieUrl,
+        name: '_cscfg',
+        value: encodeURIComponent(overrides.join(',')),
+        path: '/',
+        sameSite: 'strict',
+        expirationDate: Math.floor(Date.now() / 1000) + 86400,
+        storeId: cookieStoreId,
+      });
+    } else {
+      // Clear old overrides
+      await browser.cookies.remove({ url: cookieUrl, name: '_cscfg', storeId: cookieStoreId }).catch(() => {});
+    }
   }
 
   /** Update blocked domains list (called from message handler) */

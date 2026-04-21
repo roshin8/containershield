@@ -38,6 +38,42 @@ function readContainerSeed(): string | null {
   }
 }
 
+/**
+ * Read user's spoofer settings injected by the background via Set-Cookie.
+ * Format: "category.signal:mode,..." — only non-default (non-'noise') values.
+ * Returns null if no settings cookie (use defaults).
+ */
+function readSettingsOverrides(): { disabled: boolean; overrides: Map<string, string> } | null {
+  try {
+    const match = document.cookie.match(/(?:^|;\s*)_cscfg=([^;]+)/);
+    if (!match?.[1]) return null;
+    const raw = decodeURIComponent(match[1]);
+    if (raw === '_disabled') return { disabled: true, overrides: new Map() };
+    const overrides = new Map<string, string>();
+    for (const entry of raw.split(',')) {
+      const [path, mode] = entry.split(':');
+      if (path && mode) overrides.set(path, mode);
+    }
+    return { disabled: false, overrides };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Apply user setting overrides to default spoofer settings.
+ */
+function applyOverrides(defaults: SpooferSettings, overrides: Map<string, string>): SpooferSettings {
+  const settings = JSON.parse(JSON.stringify(defaults)) as Record<string, Record<string, string>>;
+  for (const [path, mode] of overrides) {
+    const [category, signal] = path.split('.');
+    if (category && signal && settings[category]) {
+      settings[category][signal] = mode;
+    }
+  }
+  return settings as unknown as SpooferSettings;
+}
+
 function generateSeed(domain: string, containerSeed?: string | null): string {
   const bytes = new Uint8Array(32);
   // Mix domain + salt
@@ -174,16 +210,25 @@ function allSpoofersDisabled(settings: SpooferSettings): boolean {
 const domain = window.location.hostname || 'unknown';
 const containerSeed = readContainerSeed();
 const seed = generateSeed(domain, containerSeed);
+
+// Read user's spoofer settings (which signals are off/block/noise).
+// Injected by the background via _cscfg cookie.
+const settingsData = readSettingsOverrides();
+const defaultSpoofers = createDefaultSettings().spoofers;
+const spooferSettings = settingsData?.overrides?.size
+  ? applyOverrides(defaultSpoofers, settingsData.overrides)
+  : defaultSpoofers;
+
 const config: InjectConfig = {
   containerId: 'fallback',
   domain,
   seed,
-  settings: createDefaultSettings().spoofers,
+  settings: spooferSettings,
   profile: { mode: 'random' as const },
   assignedProfile: generateProfile(seed),
 };
 
-if (allSpoofersDisabled(config.settings)) {
+if (settingsData?.disabled || allSpoofersDisabled(config.settings)) {
   initFingerprintMonitor();
 } else {
   initializeSpoofers(config);

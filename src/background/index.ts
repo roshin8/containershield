@@ -69,10 +69,11 @@ async function init(): Promise<void> {
 }
 
 async function checkFirstRun(): Promise<void> {
-  const { onboardingComplete } = await browser.storage.local.get('onboardingComplete');
-  if (!onboardingComplete) {
-    await browser.tabs.create({ url: browser.runtime.getURL('pages/onboarding.html') });
-  }
+  // Temporarily disabled during development
+  // const { onboardingComplete } = await browser.storage.local.get('onboardingComplete');
+  // if (!onboardingComplete) {
+  //   await browser.tabs.create({ url: browser.runtime.getURL('pages/onboarding.html') });
+  // }
 }
 
 /** Listen for test runner open requests */
