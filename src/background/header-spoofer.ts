@@ -195,6 +195,8 @@ export class HeaderSpoofer {
     const cookieUrl = `${parsedUrl.protocol}//${domain}`;
 
     // 1. Container seed cookie (for per-container profile generation)
+    // Short expiry (10s) — inject script reads at document_start then deletes.
+    // Short-lived cookies minimize exposure to server-side bot detection.
     const seedPrefix = entropy.seed.substring(0, 16);
     await browser.cookies.set({
       url: cookieUrl,
@@ -202,7 +204,7 @@ export class HeaderSpoofer {
       value: seedPrefix,
       path: '/',
       sameSite: 'strict',
-      expirationDate: Math.floor(Date.now() / 1000) + 86400,
+      expirationDate: Math.floor(Date.now() / 1000) + 10,
       storeId: cookieStoreId,
     });
 
@@ -230,7 +232,7 @@ export class HeaderSpoofer {
         value: encodeURIComponent(overrides.join(',')),
         path: '/',
         sameSite: 'strict',
-        expirationDate: Math.floor(Date.now() / 1000) + 86400,
+        expirationDate: Math.floor(Date.now() / 1000) + 10,
         storeId: cookieStoreId,
       });
     } else {

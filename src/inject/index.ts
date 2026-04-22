@@ -280,6 +280,14 @@ const seed = generateSeed(domain, containerSeed);
 // Read user's spoofer settings (which signals are off/block/noise).
 // Injected by the background via _cscfg cookie.
 const settingsData = readSettingsOverrides();
+
+// Delete config cookies immediately so they're not sent with subsequent
+// requests (search, AJAX, etc.). Sites can detect unknown cookies and
+// flag the session as bot traffic.
+try {
+  document.cookie = '_csid=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+  document.cookie = '_cscfg=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+} catch {}
 const defaultSpoofers = createDefaultSettings().spoofers;
 const spooferSettings = settingsData?.overrides?.size
   ? applyOverrides(defaultSpoofers, settingsData.overrides)

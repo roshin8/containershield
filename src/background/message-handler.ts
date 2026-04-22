@@ -219,7 +219,7 @@ export class MessageHandler {
             await browser.cookies.set({
               url: cookieUrl, name: '_cscfg',
               value: encodeURIComponent(overrides.join(',')),
-              path: '/', expirationDate: Math.floor(Date.now() / 1000) + 86400,
+              path: '/', expirationDate: Math.floor(Date.now() / 1000) + 10,
               storeId: containerId,
             });
           } else {
@@ -860,7 +860,7 @@ export class MessageHandler {
         name: '_csid',
         value: seedPrefix,
         path: '/',
-        expirationDate: Math.floor(Date.now() / 1000) + 86400,
+        expirationDate: Math.floor(Date.now() / 1000) + 10,
         storeId: containerId,
       });
 
