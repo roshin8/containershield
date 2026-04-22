@@ -17,63 +17,37 @@ export function initErrorSpoofer(mode: ProtectionMode, prng: PRNG): void {
 
   const OriginalError = window.Error;
 
-  // Create a proxy for the Error constructor
-  window.Error = function (message?: string): Error {
-    const error = new OriginalError(message);
-
-    if (mode === 'block') {
-      // Remove stack trace entirely
-      Object.defineProperty(error, 'stack', {
-        value: `Error: ${message || ''}`,
-        writable: true,
-        configurable: true,
-      });
-    } else if (mode === 'noise') {
-      // Normalize stack trace format
-      const originalStack = error.stack;
-      if (originalStack) {
-        const normalizedStack = normalizeStackTrace(originalStack);
-        Object.defineProperty(error, 'stack', {
-          value: normalizedStack,
-          writable: true,
-          configurable: true,
+  // Instead of replacing window.Error (which breaks sites that check
+  // error constructor identity or inspect stacks), intercept the stack
+  // property via Error.prototype. This normalizes stacks without
+  // changing how errors are constructed.
+  const originalStackDesc = Object.getOwnPropertyDescriptor(OriginalError.prototype, 'stack');
+  if (originalStackDesc) {
+    Object.defineProperty(OriginalError.prototype, 'stack', {
+      get() {
+        const raw = originalStackDesc.get ? originalStackDesc.get.call(this) : undefined;
+        if (!raw || typeof raw !== 'string') return raw;
+        if (mode === 'block') return `Error: ${this.message || ''}`;
+        return normalizeStackTrace(raw);
+      },
+      set(val) {
+        // Allow sites to set stack (some frameworks do this)
+        Object.defineProperty(this, 'stack', {
+          value: val, writable: true, configurable: true,
         });
-      }
-    }
-
-    return error;
-  } as ErrorConstructor;
-
-  // Copy prototype and static methods
-  window.Error.prototype = OriginalError.prototype;
-  Object.setPrototypeOf(window.Error, OriginalError);
-
-  // Also spoof captureStackTrace if it exists (V8-specific)
-  if ('captureStackTrace' in OriginalError) {
-    (window.Error as any).captureStackTrace = function (
-      targetObject: object,
-      constructorOpt?: Function
-    ): void {
-      logAccess('Error.captureStackTrace', { spoofed: true, value: 'modified' });
-      (OriginalError as any).captureStackTrace(targetObject, constructorOpt);
-
-      if (mode === 'block') {
-        (targetObject as any).stack = 'Error';
-      } else if (mode === 'noise') {
-        const stack = (targetObject as any).stack;
-        if (stack) {
-          (targetObject as any).stack = normalizeStackTrace(stack);
-        }
-      }
-    };
+      },
+      configurable: true,
+    });
   }
 
-  // Spoof stackTraceLimit
-  Object.defineProperty(window.Error, 'stackTraceLimit', {
-    value: 10, // Common value
-    writable: true,
-    configurable: true,
-  });
+  // Spoof stackTraceLimit if it exists (V8-specific)
+  if ('stackTraceLimit' in OriginalError) {
+    Object.defineProperty(OriginalError, 'stackTraceLimit', {
+      value: 10,
+      writable: true,
+      configurable: true,
+    });
+  }
 
 }
 

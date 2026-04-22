@@ -76,18 +76,31 @@ function applyOverrides(defaults: SpooferSettings, overrides: Map<string, string
 
 function generateSeed(domain: string, containerSeed?: string | null): string {
   const bytes = new Uint8Array(32);
-  // Mix domain + salt
-  const domainBytes = new TextEncoder().encode(domain + FALLBACK_SALT);
-  for (let i = 0; i < domainBytes.length; i++) {
-    bytes[i % 32] ^= domainBytes[i];
-  }
-  // Mix container seed (makes profiles unique per container)
+
   if (containerSeed) {
+    // Container seed available: use it in the FIRST 16 bytes (PRNG state0/state1)
+    // and domain in the LAST 16 bytes. This ensures different containers
+    // get completely different PRNG states even for the same domain.
     const seedBytes = new TextEncoder().encode(containerSeed);
     for (let i = 0; i < seedBytes.length; i++) {
-      bytes[i % 32] ^= seedBytes[i];
+      bytes[i % 16] ^= seedBytes[i];
+    }
+    const domainBytes = new TextEncoder().encode(domain + FALLBACK_SALT);
+    for (let i = 0; i < domainBytes.length; i++) {
+      bytes[16 + (i % 16)] ^= domainBytes[i];
+    }
+    // Also mix domain into first half to differentiate across domains
+    for (let i = 0; i < domainBytes.length; i++) {
+      bytes[i % 16] ^= domainBytes[i] * 31;
+    }
+  } else {
+    // Fallback: domain-only seed (no container differentiation)
+    const domainBytes = new TextEncoder().encode(domain + FALLBACK_SALT);
+    for (let i = 0; i < domainBytes.length; i++) {
+      bytes[i % 32] ^= domainBytes[i];
     }
   }
+
   if (bytes.every(b => b === 0)) bytes[0] = 1;
 
   let binary = '';
@@ -97,44 +110,97 @@ function generateSeed(domain: string, containerSeed?: string | null): string {
   return btoa(binary);
 }
 
-// Platform-specific screen sizes
+// Platform-specific screen sizes (common real-world resolutions)
 const WINDOWS_SCREENS = [
+  { w: 1280, h: 720, dpr: 1 },
+  { w: 1280, h: 800, dpr: 1 },
+  { w: 1280, h: 1024, dpr: 1 },
   { w: 1366, h: 768, dpr: 1 },
   { w: 1440, h: 900, dpr: 1 },
   { w: 1536, h: 864, dpr: 1.25 },
   { w: 1600, h: 900, dpr: 1 },
+  { w: 1600, h: 1200, dpr: 1 },
   { w: 1680, h: 1050, dpr: 1 },
+  { w: 1920, h: 1080, dpr: 1 },
+  { w: 1920, h: 1080, dpr: 1.25 },
+  { w: 1920, h: 1080, dpr: 1.5 },
   { w: 1920, h: 1200, dpr: 1 },
+  { w: 2560, h: 1080, dpr: 1 },
   { w: 2560, h: 1440, dpr: 1 },
+  { w: 2560, h: 1440, dpr: 1.25 },
+  { w: 3440, h: 1440, dpr: 1 },
+  { w: 3840, h: 2160, dpr: 1.5 },
+  { w: 3840, h: 2160, dpr: 2 },
 ] as const;
 
 const MAC_SCREENS = [
+  { w: 1280, h: 800, dpr: 2 },
   { w: 1440, h: 900, dpr: 2 },
   { w: 1512, h: 982, dpr: 2 },
   { w: 1680, h: 1050, dpr: 2 },
   { w: 1728, h: 1117, dpr: 2 },
   { w: 1800, h: 1169, dpr: 2 },
+  { w: 1920, h: 1080, dpr: 2 },
+  { w: 1920, h: 1200, dpr: 2 },
+  { w: 2560, h: 1440, dpr: 2 },
   { w: 2560, h: 1600, dpr: 2 },
+  { w: 3024, h: 1964, dpr: 2 },
+  { w: 3456, h: 2234, dpr: 2 },
 ] as const;
 
 const LINUX_SCREENS = [
+  { w: 1280, h: 720, dpr: 1 },
+  { w: 1280, h: 1024, dpr: 1 },
   { w: 1366, h: 768, dpr: 1 },
+  { w: 1600, h: 900, dpr: 1 },
   { w: 1920, h: 1080, dpr: 1 },
+  { w: 1920, h: 1200, dpr: 1 },
+  { w: 2560, h: 1080, dpr: 1 },
   { w: 2560, h: 1440, dpr: 1 },
   { w: 3440, h: 1440, dpr: 1 },
+  { w: 3840, h: 2160, dpr: 1 },
 ] as const;
 
-// Language-timezone pairs matched to common locales for each language
+// Language-timezone pairs matched to common locales
 const LOCALE_TIMEZONE_PAIRS = [
-  { lang: ['en-US', 'en'], tz: -300 },
-  { lang: ['en-US', 'en'], tz: -480 },
-  { lang: ['en-US', 'en'], tz: -360 },
-  { lang: ['en-GB', 'en'], tz: 0 },
-  { lang: ['de-DE', 'de', 'en'], tz: 60 },
-  { lang: ['fr-FR', 'fr', 'en'], tz: 60 },
-  { lang: ['ja-JP', 'ja'], tz: 540 },
-  { lang: ['es-ES', 'es', 'en'], tz: 60 },
-  { lang: ['pt-BR', 'pt', 'en'], tz: -180 },
+  { lang: ['en-US', 'en'], tz: -300 },   // US Eastern
+  { lang: ['en-US', 'en'], tz: -360 },   // US Central
+  { lang: ['en-US', 'en'], tz: -420 },   // US Mountain
+  { lang: ['en-US', 'en'], tz: -480 },   // US Pacific
+  { lang: ['en-CA', 'en'], tz: -300 },   // Canada Eastern
+  { lang: ['en-GB', 'en'], tz: 0 },      // UK
+  { lang: ['en-AU', 'en'], tz: 600 },    // Australia Eastern
+  { lang: ['en-NZ', 'en'], tz: 720 },    // New Zealand
+  { lang: ['en-IN', 'en'], tz: 330 },    // India
+  { lang: ['en-SG', 'en'], tz: 480 },    // Singapore
+  { lang: ['de-DE', 'de', 'en'], tz: 60 },   // Germany
+  { lang: ['de-AT', 'de', 'en'], tz: 60 },   // Austria
+  { lang: ['fr-FR', 'fr', 'en'], tz: 60 },   // France
+  { lang: ['fr-CA', 'fr', 'en'], tz: -300 }, // French Canada
+  { lang: ['es-ES', 'es', 'en'], tz: 60 },   // Spain
+  { lang: ['es-MX', 'es', 'en'], tz: -360 }, // Mexico
+  { lang: ['es-AR', 'es', 'en'], tz: -180 }, // Argentina
+  { lang: ['pt-BR', 'pt', 'en'], tz: -180 }, // Brazil
+  { lang: ['pt-PT', 'pt', 'en'], tz: 0 },    // Portugal
+  { lang: ['it-IT', 'it', 'en'], tz: 60 },   // Italy
+  { lang: ['nl-NL', 'nl', 'en'], tz: 60 },   // Netherlands
+  { lang: ['pl-PL', 'pl', 'en'], tz: 60 },   // Poland
+  { lang: ['sv-SE', 'sv', 'en'], tz: 60 },   // Sweden
+  { lang: ['da-DK', 'da', 'en'], tz: 60 },   // Denmark
+  { lang: ['nb-NO', 'nb', 'en'], tz: 60 },   // Norway
+  { lang: ['fi-FI', 'fi', 'en'], tz: 120 },  // Finland
+  { lang: ['ru-RU', 'ru', 'en'], tz: 180 },  // Russia Moscow
+  { lang: ['uk-UA', 'uk', 'en'], tz: 120 },  // Ukraine
+  { lang: ['tr-TR', 'tr', 'en'], tz: 180 },  // Turkey
+  { lang: ['ja-JP', 'ja'], tz: 540 },         // Japan
+  { lang: ['ko-KR', 'ko', 'en'], tz: 540 },  // South Korea
+  { lang: ['zh-CN', 'zh', 'en'], tz: 480 },   // China
+  { lang: ['zh-TW', 'zh', 'en'], tz: 480 },   // Taiwan
+  { lang: ['th-TH', 'th', 'en'], tz: 420 },   // Thailand
+  { lang: ['vi-VN', 'vi', 'en'], tz: 420 },   // Vietnam
+  { lang: ['id-ID', 'id', 'en'], tz: 420 },   // Indonesia
+  { lang: ['ar-SA', 'ar', 'en'], tz: 180 },   // Saudi Arabia
+  { lang: ['he-IL', 'he', 'en'], tz: 120 },   // Israel
 ] as const;
 
 function generateProfile(seed: string): AssignedProfileData {
@@ -188,8 +254,8 @@ function generateProfile(seed: string): AssignedProfileData {
       colorDepth: isMac ? 30 : 24, pixelDepth: isMac ? 30 : 24,
       devicePixelRatio: scr.dpr,
     },
-    hardwareConcurrency: pick(isMac ? [8, 10, 12] as const : [4, 8, 12, 16] as const),
-    deviceMemory: isFirefox ? undefined : pick([4, 8] as const), // Firefox doesn't expose deviceMemory
+    hardwareConcurrency: pick(isMac ? [8, 10, 12, 14, 16, 24] as const : [2, 4, 6, 8, 12, 16, 24, 32] as const),
+    deviceMemory: isFirefox ? undefined : pick([2, 4, 8, 16, 32] as const),
     timezoneOffset: locale.tz,
     languages: [...locale.lang],
   };

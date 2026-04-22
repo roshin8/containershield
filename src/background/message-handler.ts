@@ -172,6 +172,9 @@ export class MessageHandler {
       case 'GET_SIGNAL_VALUES':
         return this.handleGetSignalValues(message as any);
 
+      case 'ROTATE_AND_SET_COOKIE':
+        return this.handleRotateAndSetCookie(message as any);
+
       default:
         return null;
       }
@@ -192,6 +195,39 @@ export class MessageHandler {
   private async handleSetSettings(message: import('@/types').SetSettingsMessage) {
     const { containerId, settings } = message;
     await this.settingsStore.updateContainerSettings(containerId, settings);
+    // Refresh settings cookies for all tabs in this container so the
+    // inject script picks up the new settings on next page load.
+    try {
+      const tabs = await browser.tabs.query({ cookieStoreId: containerId });
+      for (const tab of tabs) {
+        if (tab.id && tab.url && !tab.url.startsWith('about:')) {
+          const domain = new URL(tab.url).hostname;
+          const updated = this.settingsStore.getSettingsForDomain(containerId, domain);
+          const overrides: string[] = [];
+          if (!updated.enabled) {
+            overrides.push('_disabled');
+          } else {
+            for (const [cat, signals] of Object.entries(updated.spoofers)) {
+              if (typeof signals !== 'object' || signals === null) continue;
+              for (const [sig, mode] of Object.entries(signals as Record<string, string>)) {
+                if (mode !== 'noise') overrides.push(`${cat}.${sig}:${mode}`);
+              }
+            }
+          }
+          const cookieUrl = `${new URL(tab.url).protocol}//${domain}`;
+          if (overrides.length > 0) {
+            await browser.cookies.set({
+              url: cookieUrl, name: '_cscfg',
+              value: encodeURIComponent(overrides.join(',')),
+              path: '/', expirationDate: Math.floor(Date.now() / 1000) + 86400,
+              storeId: containerId,
+            });
+          } else {
+            await browser.cookies.remove({ url: cookieUrl, name: '_cscfg', storeId: containerId }).catch(() => {});
+          }
+        }
+      }
+    } catch {}
     return { success: true };
   }
 
@@ -791,5 +827,48 @@ export class MessageHandler {
     }
 
     return vals;
+  }
+
+  /**
+   * Rotate entropy for the current tab's container and set the cookie
+   * immediately, so the inject script reads the new seed on reload.
+   */
+  private async handleRotateAndSetCookie(message: { tabId: number }): Promise<{ success: boolean }> {
+    try {
+      const tab = await browser.tabs.get(message.tabId);
+      if (!tab.url || !tab.cookieStoreId) {
+        console.error('[MessageHandler] ROTATE: no url or cookieStoreId', tab.url, tab.cookieStoreId);
+        return { success: false };
+      }
+
+      const containerId = tab.cookieStoreId;
+      await this.settingsStore.rotateEntropy(containerId);
+
+      const entropy = this.settingsStore.getEntropy(containerId);
+      if (!entropy?.seed) {
+        console.error('[MessageHandler] ROTATE: no entropy after rotation');
+        return { success: false };
+      }
+
+      const parsedUrl = new URL(tab.url);
+      const domain = parsedUrl.hostname;
+      const cookieUrl = `${parsedUrl.protocol}//${domain}`;
+      const seedPrefix = entropy.seed.substring(0, 16);
+
+      await browser.cookies.set({
+        url: cookieUrl,
+        name: '_csid',
+        value: seedPrefix,
+        path: '/',
+        expirationDate: Math.floor(Date.now() / 1000) + 86400,
+        storeId: containerId,
+      });
+
+      console.log(`[MessageHandler] ROTATE: set _csid=${seedPrefix.substring(0, 6)}... for ${domain} in ${containerId}`);
+      return { success: true };
+    } catch (e) {
+      console.error('[MessageHandler] ROTATE failed:', e);
+      return { success: false };
+    }
   }
 }

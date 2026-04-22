@@ -12,11 +12,6 @@ import { DNSProtection } from './dns-protection';
 export const DEFAULT_TRACKING_DOMAINS = [
   'device-metrics-us.amazon.com',
   'device-metrics-us-2.amazon.com',
-  'unagi.amazon.com',
-  'unagi-na.amazon.com',
-  'fls-na.amazon.com',
-  'fls-eu.amazon.com',
-  'csm-e.amazon.com',
 ];
 
 /**
@@ -160,21 +155,28 @@ export class HeaderSpoofer {
       ['blocking', 'requestHeaders']
     );
 
-    // Set container cookies BEFORE navigation starts.
-    // onBeforeNavigate fires before the request is sent, so the cookie
-    // is available when the inject script runs at document_start.
-    browser.webNavigation.onBeforeNavigate.addListener(async (details) => {
-      if (details.frameId !== 0) return; // top frame only
-      if (details.url.startsWith('about:') || details.url.startsWith('moz-extension:')) return;
+    // Set container cookies on tab updates (loading state).
+    // This fires when a tab starts navigating, before the page loads.
+    browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+      if (changeInfo.status !== 'loading' || !tab.url || !tab.cookieStoreId) return;
+      if (tab.url.startsWith('about:') || tab.url.startsWith('moz-extension:')) return;
       try {
-        const tab = await browser.tabs.get(details.tabId);
-        const containerId = tab.cookieStoreId || 'firefox-default';
+        const containerId = tab.cookieStoreId;
         await this.settingsStore.ensureContainerSettings(containerId);
-        await this.setContainerCookies(containerId, details.url, tab.cookieStoreId || 'firefox-default');
-      } catch (e) {
-        console.error('[HeaderSpoofer] onCommitted cookie set failed:', e);
-      }
+        await this.setContainerCookies(containerId, tab.url, containerId);
+      } catch {}
     });
+  }
+
+  /**
+   * Set cookies for the current active tab (called when settings change).
+   */
+  async refreshCookiesForTab(tabId: number): Promise<void> {
+    try {
+      const tab = await browser.tabs.get(tabId);
+      if (!tab.url || !tab.cookieStoreId) return;
+      await this.setContainerCookies(tab.cookieStoreId, tab.url, tab.cookieStoreId);
+    } catch {}
   }
 
   /**
@@ -271,32 +273,19 @@ export class HeaderSpoofer {
         return {};
       }
 
-      // Check if the inject script has posted an active profile for this tab
-      // (the inject script generates its own profile from domain seed — HTTP headers must match)
-      let effectiveProfile: Record<string, any> = { ...settings.profile };
-      try {
-        const stored = await browser.storage.local.get(`activeProfile:${details.tabId}`) as Record<string, any>;
-        const active = stored[`activeProfile:${details.tabId}`];
-        if (active?.profile?.userAgent) {
-          effectiveProfile = {
-            ...effectiveProfile,
-            userAgent: active.profile.userAgent.userAgent,
-            language: active.profile.userAgent.languages?.[0] ?
-              active.profile.userAgent.languages.join(',') : effectiveProfile.language,
-          };
-        }
-      } catch {}
-
-      // Modify headers using the effective profile (synced with inject script)
+      // Don't spoof User-Agent or Accept-Language headers.
+      // The JS-level spoofing (navigator.userAgent etc.) is sufficient for
+      // fingerprinting protection. Spoofing HTTP headers causes mismatches
+      // with TLS fingerprint, HTTP/2 settings, and header ordering that
+      // sophisticated servers (Amazon, Cloudflare) detect → 503 blocks.
+      // Only apply non-UA header modifications (ETag, DNT, X-Forwarded-For, Via).
+      const safeProfile: Record<string, any> = { ...settings.profile, userAgent: undefined, language: undefined };
       const headers = this.modifyHeaders(
         details.requestHeaders || [],
         settings.headers,
-        effectiveProfile
+        safeProfile
       );
-
-      // Reorder headers to match spoofed browser's typical order
-      const reordered = this.reorderHeaders(headers, effectiveProfile);
-      return { requestHeaders: reordered };
+      return { requestHeaders: headers };
     } catch {
       return {};
     }

@@ -1,52 +1,57 @@
 /**
  * Keyboard Cadence Spoofer
  *
- * Typing rhythm/cadence is a behavioral fingerprint. This adds random
- * delays between keystrokes to normalize timing patterns.
- * Chameleon uses a minimum 30ms delay.
+ * Typing rhythm/cadence is a behavioral fingerprint. Instead of delaying
+ * events (which breaks site functionality), we add noise to performance.now()
+ * readings during keyboard event processing. Fingerprinters that measure
+ * inter-keystroke timing via performance.now() get noisy data.
  */
 
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
-import { overrideMethod } from '@/lib/stealth';
 import { logAccess } from '../../monitor/fingerprint-monitor';
 
 export function initKeyboardCadenceSpoofer(mode: ProtectionMode, prng: PRNG): void {
   if (mode === 'off') return;
 
-  const minDelay = 30; // ms - Chameleon default
-  const maxJitter = 15; // additional random jitter
+  const maxJitter = mode === 'block' ? 30 : 15;
+  let inKeyboardHandler = false;
 
-  // Intercept keyboard events to normalize timing
-  const keyEvents = new Set(['keydown', 'keyup', 'keypress']);
-  let lastEventTime = 0;
+  // During keyboard event handling, performance.now() returns a jittered value.
+  // This makes inter-keystroke timing measurements unreliable for fingerprinting
+  // without interfering with event dispatch or listener execution.
+  const origPerformanceNow = performance.now.bind(performance);
+  const origNow = performance.now;
+  let jitterOffset = 0;
 
-  overrideMethod(EventTarget.prototype, 'addEventListener', (original, thisArg, args) => {
-    const type = args[0] as string;
-    let listener = args[1] as any;
-    const options = args[2];
-
-    if (keyEvents.has(type) && typeof listener === 'function') {
-      logAccess('KeyboardEvent.timing', { spoofed: true, value: `±${maxJitter}ms jitter` });
-      const originalListener = listener;
-      listener = function(this: any, event: Event) {
-        const now = performance.now();
-        const elapsed = now - lastEventTime;
-
-        // If events come too fast, add the timestamp noise
-        if (elapsed < minDelay && lastEventTime > 0) {
-          const kbEvent = event as KeyboardEvent;
-          Object.defineProperty(kbEvent, 'timeStamp', {
-            value: lastEventTime + minDelay + (prng.nextFloat() * maxJitter),
-            writable: false,
-          });
-        }
-
-        lastEventTime = now;
-        return originalListener.call(this, event);
-      };
-    }
-
-    return original.call(thisArg, type, listener, options);
+  Object.defineProperty(performance, 'now', {
+    value: function now(): number {
+      const real = origPerformanceNow();
+      if (inKeyboardHandler) {
+        return real + jitterOffset;
+      }
+      return real;
+    },
+    writable: true,
+    configurable: true,
   });
+
+  // Wrap keyboard event dispatch to set the jitter flag
+  const keyEvents = new Set(['keydown', 'keyup', 'keypress']);
+  const origDispatchEvent = EventTarget.prototype.dispatchEvent;
+
+  document.addEventListener('keydown', () => {
+    jitterOffset = (prng.nextFloat() - 0.5) * 2 * maxJitter;
+    inKeyboardHandler = true;
+    // Reset after microtask (all synchronous handlers will have run)
+    Promise.resolve().then(() => { inKeyboardHandler = false; });
+  }, true); // capture phase - fires before any site handlers
+
+  document.addEventListener('keyup', () => {
+    jitterOffset = (prng.nextFloat() - 0.5) * 2 * maxJitter;
+    inKeyboardHandler = true;
+    Promise.resolve().then(() => { inKeyboardHandler = false; });
+  }, true);
+
+  logAccess('KeyboardEvent.timing', { spoofed: true, value: `±${maxJitter}ms jitter` });
 }

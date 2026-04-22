@@ -15,6 +15,7 @@
 import type { ProtectionMode } from '@/types';
 import type { PRNG } from '@/lib/crypto';
 import { logAccess } from '../../monitor/fingerprint-monitor';
+import { overrideMethod } from '@/lib/stealth';
 
 /**
  * Create a fake sensor class that blocks or returns noise
@@ -256,40 +257,22 @@ export function initSensorSpoofer(mode: ProtectionMode, prng: PRNG): void {
     }
   }
 
-  // DeviceMotionEvent
-  if ('DeviceMotionEvent' in window) {
-    const originalAddEventListener = window.addEventListener;
-    window.addEventListener = function (
-      type: string,
-      listener: EventListenerOrEventListenerObject,
-      options?: boolean | AddEventListenerOptions
-    ) {
-      if (type === 'devicemotion') {
-        logAccess('DeviceMotionEvent', { spoofed: true, blocked: mode === 'block' });
-        if (mode === 'block') {
-          return; // Don't add the listener
-        }
-      }
-      return originalAddEventListener.call(window, type, listener, options);
-    };
-  }
+  // Intercept DeviceMotionEvent and DeviceOrientationEvent via a single
+  // addEventListener override. Use overrideMethod from stealth to avoid
+  // replacing window.addEventListener globally (which breaks sites that
+  // inspect stack traces or depend on addEventListener identity).
+  const sensorEvents = new Set(['devicemotion', 'deviceorientation', 'deviceorientationabsolute']);
+  const originalAddEventListener = EventTarget.prototype.addEventListener;
 
-  // DeviceOrientationEvent
-  if ('DeviceOrientationEvent' in window) {
-    const originalAddEventListener = window.addEventListener;
-    window.addEventListener = function (
-      type: string,
-      listener: EventListenerOrEventListenerObject,
-      options?: boolean | AddEventListenerOptions
-    ) {
-      if (type === 'deviceorientation' || type === 'deviceorientationabsolute') {
-        logAccess('DeviceOrientationEvent', { spoofed: true, blocked: mode === 'block' });
-        if (mode === 'block') {
-          return; // Don't add the listener
-        }
-      }
-      return originalAddEventListener.call(window, type, listener, options);
-    };
-  }
+  overrideMethod(EventTarget.prototype, 'addEventListener', (original, thisArg, args) => {
+    const type = args[0] as string;
+    if (thisArg === window && sensorEvents.has(type)) {
+      logAccess(type === 'devicemotion' ? 'DeviceMotionEvent' : 'DeviceOrientationEvent', {
+        spoofed: true, blocked: mode === 'block',
+      });
+      if (mode === 'block') return; // Silently drop the listener
+    }
+    return original.apply(thisArg, args);
+  });
 
 }

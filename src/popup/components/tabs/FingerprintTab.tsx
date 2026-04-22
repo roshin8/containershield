@@ -83,20 +83,15 @@ export default function FingerprintTab({ settings, onSaveSettings, assignedProfi
 
   const randomizeAll = async () => {
     try {
-      // Rotate the container's entropy seed — this changes the cookie
-      // injected by the background, which the inject script reads to
-      // generate a new deterministic profile.
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-      const containerInfo = await browser.runtime.sendMessage({ type: 'GET_CONTAINER_INFO', tabId: tab?.id });
-      if (containerInfo?.containerId) {
-        await browser.runtime.sendMessage({ type: 'ROTATE_NOW' });
-      }
-      // Reload the page so the inject script picks up the new seed cookie
-      if (tab?.id) {
-        await browser.tabs.reload(tab.id);
-        // Close the popup — it will show the new profile when reopened
-        window.close();
-      }
+      if (!tab?.id || !tab.url) return;
+      // Rotate entropy and set cookie in one message (synchronous before reload)
+      await browser.runtime.sendMessage({
+        type: 'ROTATE_AND_SET_COOKIE',
+        tabId: tab.id,
+      });
+      await browser.tabs.reload(tab.id);
+      window.close();
     } catch {}
   };
 
