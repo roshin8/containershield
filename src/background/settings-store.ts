@@ -11,6 +11,7 @@ import type {
 } from '@/types';
 import { createDefaultSettings, createDefaultIPSettings } from '@/types/settings';
 import { generateSeed, uint8ArrayToBase64 } from '@/lib/crypto';
+import { unregisterProfile } from './profile-manager';
 import { STORAGE_KEYS, EXTENSION_VERSION } from '@/lib/constants';
 
 export class SettingsStore {
@@ -268,6 +269,10 @@ export class SettingsStore {
       createdAt: this.storage.entropy[containerId]?.createdAt || Date.now(),
       rotatedAt: Date.now(),
     };
+
+    // Clear the cached profile so ensureUniqueProfile generates a new one
+    // from the new seed instead of returning the stale cached profile.
+    unregisterProfile(containerId);
 
     await this.save();
   }
