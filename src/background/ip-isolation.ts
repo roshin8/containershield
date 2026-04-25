@@ -66,6 +66,9 @@ export class IPIsolation {
         setTimeout(() => this.allowedContainers.delete(containerId), 30000);
         return Promise.resolve({ success: true });
       }
+      if ((message as any).type === 'IP_RECHECK') {
+        return this.handleRecheck(message as any);
+      }
       if ((message as any).type === 'IP_ALWAYS_ALLOW') {
         const { containerId } = message as any;
         this.alwaysAllowedContainers.add(containerId);
@@ -76,6 +79,37 @@ export class IPIsolation {
       }
       return false;
     });
+  }
+
+  /**
+   * Re-check the user's public IP after they claim to have changed it.
+   * Clears the IP cache, fetches fresh, and checks for conflict.
+   */
+  private async handleRecheck(
+    message: { containerId: string; url: string }
+  ): Promise<{ conflict: boolean; newIP?: string; oldIP?: string }> {
+    const { containerId } = message;
+
+    // Clear cached IP so we fetch fresh
+    this.ipCache.delete(containerId);
+
+    const newIP = await this.fetchPublicIP(containerId);
+    if (!newIP) return { conflict: false };
+
+    const ipDatabase = this.settingsStore.getIPDatabase();
+    const ipKey = `pub:${newIP}`;
+    const existingRecord = ipDatabase.ipRecords[ipKey];
+
+    if (existingRecord && existingRecord.containerId !== containerId) {
+      // Still conflicting
+      return { conflict: true, newIP, oldIP: existingRecord.ip };
+    }
+
+    // No conflict — record this new IP for this container and clean up old record
+    const containerName = this.containerManager.getContainerName(containerId);
+    await this.recordIPAccess(ipKey, newIP, containerId, message.url);
+
+    return { conflict: false, newIP };
   }
 
   /**

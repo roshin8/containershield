@@ -15,6 +15,8 @@ interface ConflictParams {
 
 function IPWarningPage() {
   const [params, setParams] = useState<ConflictParams | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [retryResult, setRetryResult] = useState<string | null>(null);
 
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
@@ -39,6 +41,34 @@ function IPWarningPage() {
     if (hrs > 0) return `${hrs}h ago`;
     if (mins > 0) return `${mins}m ago`;
     return 'just now';
+  };
+
+  const handleRetry = async () => {
+    if (!params) return;
+    setRetrying(true);
+    setRetryResult(null);
+    try {
+      // Ask background to re-check the public IP for this container
+      const result = await browser.runtime.sendMessage({
+        type: 'IP_RECHECK',
+        containerId: params.currentContainerId,
+        url: params.url,
+      }) as { conflict: boolean; newIP?: string; oldIP?: string };
+
+      if (!result.conflict) {
+        // IP changed, no conflict anymore - navigate to the original URL
+        setRetryResult(`IP changed to ${result.newIP}. Redirecting...`);
+        setTimeout(() => { window.location.href = params.url; }, 1000);
+      } else {
+        setRetryResult(`Still conflicting. Your IP is ${result.newIP || params.ip}.`);
+        if (result.newIP && result.newIP !== params.ip) {
+          setParams({ ...params, ip: result.newIP });
+        }
+      }
+    } catch {
+      setRetryResult('Check failed. Try again.');
+    }
+    setRetrying(false);
   };
 
   const handleBlock = () => {
@@ -171,13 +201,31 @@ function IPWarningPage() {
             Open in {params.originalContainer}
           </button>
         </div>
-        <button onClick={handleAlwaysAllow} style={{
-          width: '100%', padding: '8px', borderRadius: '8px', fontWeight: 500, fontSize: '12px',
-          background: 'transparent', color: '#606078', border: '1px solid #2a2a3e',
-          cursor: 'pointer',
-        }}>
-          Always allow for {params.currentContainer}
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={handleRetry} disabled={retrying} style={{
+            flex: 1, padding: '8px', borderRadius: '8px', fontWeight: 500, fontSize: '12px',
+            background: '#10B981', color: 'white', border: 'none',
+            cursor: retrying ? 'wait' : 'pointer', opacity: retrying ? 0.6 : 1,
+          }}>
+            {retrying ? 'Checking...' : 'Retry (I changed my IP)'}
+          </button>
+          <button onClick={handleAlwaysAllow} style={{
+            flex: 1, padding: '8px', borderRadius: '8px', fontWeight: 500, fontSize: '12px',
+            background: 'transparent', color: '#606078', border: '1px solid #2a2a3e',
+            cursor: 'pointer',
+          }}>
+            Always allow for {params.currentContainer}
+          </button>
+        </div>
+        {retryResult && (
+          <div style={{
+            fontSize: '12px', padding: '8px 12px', borderRadius: '6px',
+            background: retryResult.includes('Redirecting') ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+            color: retryResult.includes('Redirecting') ? '#10B981' : '#EF4444',
+          }}>
+            {retryResult}
+          </div>
+        )}
       </div>
     </div>
   );
