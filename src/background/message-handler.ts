@@ -175,6 +175,9 @@ export class MessageHandler {
       case 'ROTATE_AND_SET_COOKIE':
         return this.handleRotateAndSetCookie(message as any);
 
+      case 'IP_RECHECK':
+        return this.ipIsolation.handleRecheck(message as any);
+
       default:
         return null;
       }

@@ -85,7 +85,7 @@ export class IPIsolation {
    * Re-check the user's public IP after they claim to have changed it.
    * Clears the IP cache, fetches fresh, and checks for conflict.
    */
-  private async handleRecheck(
+  async handleRecheck(
     message: { containerId: string; url: string }
   ): Promise<{ conflict: boolean; newIP?: string; oldIP?: string }> {
     const { containerId } = message;
