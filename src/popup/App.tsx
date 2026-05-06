@@ -105,18 +105,11 @@ export default function App() {
     try {
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
-        // Try stored inject profile first
-        const stored = await browser.storage.local.get(`activeProfile:${tab.id}`);
-        const active = stored[`activeProfile:${tab.id}`];
-        if (active?.profile) {
-          setAssignedProfile(active.profile);
-          return;
-        }
-        // If not in storage yet, read actual spoofed values from the page
-        // This avoids falling back to the background's (different) profile system
+        // Read actual spoofed values directly from the page via content script.
+        // This is the most reliable source — reads what the page actually sees.
         try {
           const pageValues = await browser.tabs.sendMessage(tab.id, { type: 'EXEC_READ_VALUES' }) as Record<string, any> | null;
-          if (pageValues?.ua) {
+          if (pageValues?.ua && pageValues.ua !== '') {
             setAssignedProfile({
               userAgent: {
                 id: '', name: pageValues.ua.substring(0, 40),
@@ -136,14 +129,30 @@ export default function App() {
             return;
           }
         } catch { /* content script not ready */ }
+
+        // Fallback: stored profile from inject script
+        try {
+          const stored = await browser.storage.local.get(`activeProfile:${tab.id}`);
+          const active = stored[`activeProfile:${tab.id}`];
+          if (active?.profile) {
+            setAssignedProfile(active.profile);
+            return;
+          }
+        } catch {}
       }
       // Last resort: background's assigned profile
       const profile = await browser.runtime.sendMessage({ type: MSG_GET_ASSIGNED_PROFILE, containerId: selectedContainer }) as AssignedProfile | null;
       setAssignedProfile(profile || undefined);
     } catch { setAssignedProfile(undefined); }
+
   }, [selectedContainer]);
 
-  useEffect(() => { loadAssignedProfile(); }, [loadAssignedProfile]);
+  useEffect(() => {
+    loadAssignedProfile();
+    // Retry after 1.5s in case the inject script hasn't posted yet
+    const retry = setTimeout(loadAssignedProfile, 1500);
+    return () => clearTimeout(retry);
+  }, [loadAssignedProfile]);
 
   const saveSettings = useCallback(async (updates: Partial<ContainerSettings>) => {
     if (!selectedContainer) return;
